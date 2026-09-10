@@ -1,0 +1,39 @@
+# Render Blueprint — API FastAPI (plano free)
+# https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: erp-ml-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: DATABASE_URL
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: REDIS_URL
+        value: redis://localhost:6379/0
+      - key: CORS_ORIGINS
+        value: https://erp-ml-six.vercel.app,http://localhost:3000
+      - key: ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "1440"
+      - key: SIENGE_SUBDOMAIN
+        sync: false
+      - key: SIENGE_USER
+        sync: false
+      - key: SIENGE_PASS
+        sync: false
+      - key: AZURE_TENANT_ID
+        sync: false
+      - key: AZURE_CLIENT_ID
+        sync: false

@@ -9,8 +9,8 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str
     
-    # Redis
-    REDIS_URL: str
+    # Redis (filas / cache futuro). No plano free pode ficar local dummy.
+    REDIS_URL: str = "redis://localhost:6379/0"
     
     # JWT Auth
     SECRET_KEY: str

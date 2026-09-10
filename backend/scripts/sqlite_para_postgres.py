@@ -31,6 +31,77 @@ def _sqlite_url_from_path(path: Path) -> str:
     return f"sqlite:///{path.resolve().as_posix()}"
 
 
+def _sanitize_pg_value(value: object) -> object:
+    """Postgres JSON rejeita Infinity/NaN; SQLite às vezes guarda isso em texto/float."""
+    import math
+
+    if isinstance(value, float) and (math.isinf(value) or math.isnan(value)):
+        return None
+    if isinstance(value, dict):
+        return {k: _sanitize_pg_value(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_sanitize_pg_value(v) for v in value]
+    if isinstance(value, str) and ("Infinity" in value or "NaN" in value):
+        return (
+            value.replace("-Infinity", "null")
+            .replace("Infinity", "null")
+            .replace("NaN", "null")
+        )
+    return value
+
+
+def _drop_foreign_keys(pg_engine) -> list[tuple[str, str]]:
+    """Remove FKs (Neon não permite session_replication_role). Retorna (table, conname)."""
+    dropped: list[tuple[str, str]] = []
+    with pg_engine.begin() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT c.conrelid::regclass::text AS table_name, c.conname
+                FROM pg_constraint c
+                JOIN pg_namespace n ON n.oid = c.connamespace
+                WHERE c.contype = 'f' AND n.nspname = 'public'
+                ORDER BY c.conname
+                """
+            )
+        ).all()
+        for table_name, conname in rows:
+            conn.execute(text(f'ALTER TABLE {table_name} DROP CONSTRAINT IF EXISTS "{conname}"'))
+            dropped.append((table_name, conname))
+    return dropped
+
+
+def _delete_orphan_produto_plano(pg_engine) -> int:
+    with pg_engine.begin() as conn:
+        result = conn.execute(
+            text(
+                """
+                DELETE FROM produto_plano_financeiro ppf
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM cost_centers cc WHERE cc.id = ppf.produto_id
+                )
+                OR NOT EXISTS (
+                    SELECT 1 FROM planos_financeiros pf WHERE pf.id = ppf.plano_financeiro_id
+                )
+                """
+            )
+        )
+        return result.rowcount or 0
+
+
+def _recreate_foreign_keys(pg_engine, tables) -> None:
+    from sqlalchemy.schema import AddConstraint
+
+    for table in tables:
+        for fk in table.foreign_key_constraints:
+            try:
+                with pg_engine.begin() as conn:
+                    conn.execute(AddConstraint(fk))
+            except Exception as exc:
+                msg = str(exc).split("\n")[0]
+                print(f"  aviso FK {table.name}.{fk.name}: {msg}", flush=True)
+
+
 def _reset_sequences(pg_engine, table_names: list[str]) -> None:
     with pg_engine.begin() as conn:
         for name in table_names:
@@ -68,16 +139,35 @@ def copy_data(sqlite_url: str, postgres_url: str) -> dict[str, int]:
             if inspect(pg_engine).has_table(table.name):
                 pg_conn.execute(text(f'TRUNCATE TABLE "{table.name}" RESTART IDENTITY CASCADE'))
 
+    dropped = _drop_foreign_keys(pg_engine)
+    print(f"FKs temporariamente removidas: {len(dropped)}", flush=True)
+
+    sqlite_insp = inspect(sqlite_engine)
     with sqlite_engine.connect() as src, pg_engine.begin() as dst:
         for table in tables:
-            if not inspect(sqlite_engine).has_table(table.name):
+            if not sqlite_insp.has_table(table.name):
                 counts[table.name] = 0
                 continue
-            rows = src.execute(select(table)).mappings().all()
+            # Só colunas que existem no SQLite (modelo pode estar à frente do .db local).
+            src_col_names = {c["name"] for c in sqlite_insp.get_columns(table.name)}
+            cols = [c for c in table.c if c.name in src_col_names]
+            if not cols:
+                counts[table.name] = 0
+                continue
+            rows = src.execute(select(*cols)).mappings().all()
             counts[table.name] = len(rows)
+            print(f"  {table.name}: {len(rows)} linhas", flush=True)
             if rows:
-                dst.execute(table.insert(), [dict(r) for r in rows])
+                payload = [
+                    {k: _sanitize_pg_value(v) for k, v in dict(r).items()}
+                    for r in rows
+                ]
+                dst.execute(table.insert(), payload)
 
+    orphan_ppf = _delete_orphan_produto_plano(pg_engine)
+    if orphan_ppf:
+        print(f"Removidas {orphan_ppf} linhas órfãs em produto_plano_financeiro", flush=True)
+    _recreate_foreign_keys(pg_engine, tables)
     _reset_sequences(pg_engine, [t.name for t in tables])
 
     alembic_cfg = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
