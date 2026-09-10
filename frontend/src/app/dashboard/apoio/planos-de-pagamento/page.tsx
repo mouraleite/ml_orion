@@ -1,0 +1,225 @@
+"use client";
+
+import { useEffect, useState } from"react";
+import { Button } from"@/components/ui/Button";
+import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
+import { apoioService } from"@/services/apoio";
+import { Save, AlertCircle, RefreshCw, Plus } from"lucide-react";
+
+export default function PlanosDePagamentoPage() {
+ const [plans, setPlans] = useState<any[]>([]);
+ const [isLoading, setIsLoading] = useState(true);
+ const [isSaving, setIsSaving] = useState(false);
+ const [message, setMessage] = useState("");
+
+ const fetchData = async () => {
+ setIsLoading(true);
+ try {
+ const data = await apoioService.getPlanosPagamento();
+ setPlans(data);
+ } catch (e) {
+ console.error(e);
+ } finally {
+ setIsLoading(false);
+ }
+ };
+
+ useEffect(() => {
+ fetchData();
+ }, []);
+
+ const handleSeed = async () => {
+ setIsLoading(true);
+ try {
+ const data = await apoioService.seedPlanosPagamento();
+ setPlans(data);
+ } catch (e) {
+ console.error(e);
+ } finally {
+ setIsLoading(false);
+ }
+ };
+
+ const handleSaveAll = async () => {
+ setIsSaving(true);
+ setMessage("");
+ try {
+ // Create, update, or delete plans based on current state vs DB state.
+ // To keep it simple, we can delete all existing and recreate them, OR
+ // we can do proper sync. Since we have IDs, we update existing, create new, and delete missing.
+ 
+ const dbPlans = await apoioService.getPlanosPagamento();
+ 
+ // Delete missing
+ const stateIds = plans.map(p => p.id).filter(id => id);
+ const toDelete = dbPlans.filter(p => !stateIds.includes(p.id));
+ for (const p of toDelete) {
+ await apoioService.deletePlanoPagamento(p.id);
+ }
+ 
+ // Update or create
+ for (const p of plans) {
+ if (p.id) {
+ await apoioService.updatePlanoPagamento(p.id, { nome: p.nome, condicoes_json: p.condicoes_json || p.condicoes });
+ } else {
+ await apoioService.createPlanoPagamento({ nome: p.nome, condicoes_json: p.condicoes_json || p.condicoes });
+ }
+ }
+ 
+ setMessage("Planos salvos com sucesso!");
+ setTimeout(() => setMessage(""), 3000);
+ await fetchData();
+ } catch (error) {
+ alert("Erro ao salvar planos.");
+ } finally {
+ setIsSaving(false);
+ }
+ };
+
+ if (isLoading) {
+ return <AppLoadingState />;
+ }
+
+ return (
+ <div className="p-8 max-w-[1600px] animate-in fade-in duration-300">
+ <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+ <div>
+ <h1 className="text-2xl font-bold text-slate-800">Planos de Pagamento</h1>
+ <p className="text-slate-500 text-sm mt-1">Gerencie os templates globais de planos de pagamento e suas condições.</p>
+ </div>
+ 
+ <div className="flex items-center gap-3">
+ {plans.length === 0 && (
+ <Button variant="outline" onClick={handleSeed} className="flex items-center gap-2">
+ <RefreshCw className="w-4 h-4" /> Semear Planos Padrão
+ </Button>
+ )}
+ <Button variant="outline" onClick={() => setPlans([...plans, { nome:"Novo Plano", condicoes_json: [{nome:"Sinal", perc: 100}] }])} className="flex items-center gap-2 border-dashed">
+ <Plus className="w-4 h-4" /> Novo Plano
+ </Button>
+ {message && <span className="text-sm text-green-600 font-medium">{message}</span>}
+ <Button onClick={handleSaveAll} disabled={isSaving} className="flex items-center gap-2">
+ <Save className="w-4 h-4" /> {isSaving ?"Salvando..." :"Salvar Alterações"}
+ </Button>
+ </div>
+ </div>
+
+ <div className="flex flex-wrap gap-6 items-stretch">
+ {plans.map((plano, pIdx) => {
+ const conds = plano.condicoes_json || plano.condicoes || [];
+ const totalPerc = conds.reduce((s: number, c: any) => s + (Number(c.perc) || 0), 0);
+ const isTotalValid = Math.abs(totalPerc - 100) < 0.01;
+
+ return (
+ <div key={pIdx} className="w-[320px] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+ <div className="bg-slate-50 px-4 py-3 border-b flex justify-between items-center gap-2 min-h-[64px]">
+ <textarea 
+ className="font-bold text-slate-700 bg-transparent border-none outline-none focus:ring-1 focus:ring-brand-green rounded px-1 w-full text-sm leading-tight resize-none"
+ value={plano.nome}
+ rows={2}
+ onChange={(e) => {
+ const newPlans = [...plans];
+ newPlans[pIdx].nome = e.target.value;
+ setPlans(newPlans);
+ }}
+ placeholder="Nome do Plano"
+ />
+ <button onClick={() => setPlans(plans.filter((_, i) => i !== pIdx))} className="text-red-400 hover:text-red-600 shrink-0" title="Excluir Plano">&times;</button>
+ </div>
+ <div className="p-4 flex-1 space-y-3">
+ {conds.map((cond: any, cIdx: number) => (
+ <div key={cIdx} className="flex flex-col gap-1 border-b border-slate-100 pb-2 mb-2 last:border-0 last:pb-0 last:mb-0">
+ <div className="flex gap-2 items-center">
+ <input 
+ className="ml-input flex-1 text-sm py-1.5 px-2 border rounded" 
+ value={cond.nome}
+ placeholder="Condição"
+ onChange={(e) => {
+ const newPlans = [...plans];
+ (newPlans[pIdx].condicoes_json || newPlans[pIdx].condicoes)[cIdx].nome = e.target.value;
+ setPlans(newPlans);
+ }}
+ />
+ <div className="relative w-20 shrink-0">
+ <input 
+ type="number" step="0.1"
+ className="ml-input text-sm py-1.5 pl-2 pr-6 border rounded w-full" 
+ value={cond.perc}
+ onChange={(e) => {
+ const newPlans = [...plans];
+ (newPlans[pIdx].condicoes_json || newPlans[pIdx].condicoes)[cIdx].perc = parseFloat(e.target.value) || 0;
+ setPlans(newPlans);
+ }}
+ />
+ <span className="absolute right-2 top-1.5 text-xs text-slate-400">%</span>
+ </div>
+ <button onClick={() => {
+ const newPlans = [...plans];
+ if (newPlans[pIdx].condicoes_json) {
+ newPlans[pIdx].condicoes_json = newPlans[pIdx].condicoes_json.filter((_: any, i: number) => i !== cIdx);
+ } else if (newPlans[pIdx].condicoes) {
+ newPlans[pIdx].condicoes = newPlans[pIdx].condicoes.filter((_: any, i: number) => i !== cIdx);
+ }
+ setPlans(newPlans);
+ }} className="text-slate-400 hover:text-red-500 font-bold">&times;</button>
+ </div>
+ <div className="flex gap-4 items-center text-xs text-slate-500 ml-1">
+ <label className="flex items-center gap-1 cursor-pointer hover:text-slate-700">
+ <input type="checkbox" checked={cond.aplica_juros !== false} onChange={(e) => {
+ const newPlans = [...plans];
+ (newPlans[pIdx].condicoes_json || newPlans[pIdx].condicoes)[cIdx].aplica_juros = e.target.checked;
+ setPlans(newPlans);
+ }} />
+ Aplica Juros
+ </label>
+ <label className="flex items-center gap-1 cursor-pointer hover:text-slate-700">
+ <input type="checkbox" checked={cond.aplica_correcao !== false} onChange={(e) => {
+ const newPlans = [...plans];
+ (newPlans[pIdx].condicoes_json || newPlans[pIdx].condicoes)[cIdx].aplica_correcao = e.target.checked;
+ setPlans(newPlans);
+ }} />
+ Aplica Correção
+ </label>
+ </div>
+ </div>
+ ))}
+ 
+ <Button variant="outline" size="sm" className="w-full text-xs py-1.5 h-8 border-dashed mt-2" onClick={() => {
+ const newPlans = [...plans];
+ const targetArr = newPlans[pIdx].condicoes_json || newPlans[pIdx].condicoes;
+ targetArr.push({ nome:"Nova Condição", perc: 0 });
+ setPlans(newPlans);
+ }}>+ Condição</Button>
+ 
+ </div>
+ 
+ <div className="p-4 border-t bg-slate-50 flex flex-col gap-2">
+ <div className="flex justify-between items-center text-sm">
+ <span className="font-semibold text-slate-500">Soma Total:</span>
+ <span className={`font-bold ${isTotalValid ? 'text-green-600' : 'text-red-500'}`}>
+ {Number(totalPerc.toFixed(2))}%
+ </span>
+ </div>
+ {!isTotalValid && (
+ <div className="flex items-center gap-1 text-xs text-red-500 bg-red-50 p-2 rounded border border-red-100">
+ <AlertCircle className="w-3 h-3 shrink-0" />
+ <span>A soma das porcentagens deve ser exatamente 100%.</span>
+ </div>
+ )}
+ </div>
+ </div>
+ );
+ })}
+ 
+ <div className="w-[320px] flex items-center justify-center border-2 border-dashed border-slate-300 rounded-xl bg-slate-50/50 hover:bg-slate-100 transition-colors cursor-pointer min-h-[250px]" onClick={() => {
+ setPlans([...plans, { nome: `Novo Plano ${plans.length + 1}`, condicoes_json: [] }]);
+ }}>
+ <div className="text-center text-slate-500 font-medium">
+ <div className="text-3xl mb-2">+</div>
+ Adicionar Plano
+ </div>
+ </div>
+ </div>
+ </div>
+ );
+}

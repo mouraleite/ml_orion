@@ -1,0 +1,579 @@
+{
+  "capturado_em": "2026-08-28T20:11:34.862571+00:00",
+  "fonte": "sqlite:///./viabilidades.db",
+  "contagens": {
+    "orcamento_itens": 939,
+    "orcamento_venda_itens": 223,
+    "forecast_itens": 6755,
+    "forecast_venda_itens": 1109,
+    "actual_transactions": 381973,
+    "phase_actuals": 0,
+    "viability_revenues": 5,
+    "viability_constructions": 5,
+    "viability_expenses": 5,
+    "phase_taxes": 5
+  },
+  "somas": {
+    "orcamento_itens": {
+      "jan": 14380104.2,
+      "fev": 17058387.1,
+      "mar": 20849933.81,
+      "abr": 80807275.91,
+      "mai": 23382066.05,
+      "jun": 72017874.91,
+      "jul": 25995032.52,
+      "ago": 23804313.48,
+      "set": 26574226.21,
+      "out": 33656759.99,
+      "nov": 23096288.59,
+      "dez": 20915517.61,
+      "total_anual": 382537780.38
+    },
+    "orcamento_venda_itens": {
+      "ticket_medio": 26605148.70270421,
+      "numero_vendas": 1157.0,
+      "vgv": 177138772.8895762
+    },
+    "forecast_itens": {
+      "jan": 96699525.22,
+      "fev": 107419356.09,
+      "mar": 128055967.8,
+      "abr": 266556804.68,
+      "mai": 148441104.32,
+      "jun": 265742399.69,
+      "jul": 147675804.2,
+      "ago": 244996087.15,
+      "set": 319811039.6,
+      "out": 168905800.45,
+      "nov": 176756565.04999998,
+      "dez": 142234244.97,
+      "total_anual": 2213294699.22
+    },
+    "forecast_venda_itens": {
+      "ticket_medio": 128428287.19767469,
+      "numero_vendas": 5569.0,
+      "vgv": 849545959.9748853
+    },
+    "actual_transactions": {
+      "value": 1499355671.348645
+    },
+    "phase_actuals": {
+      "valor_realizado": 0.0
+    },
+    "viability_revenues": {
+      "vgv_total": 129736794.0,
+      "taxa_juros_vendas": 30.0
+    },
+    "viability_constructions": {
+      "custo_obras": 45869740.0,
+      "custo_projetos": 3.73,
+      "aquisicao_area": 4422120.0,
+      "adm_obras": 0.0
+    },
+    "viability_expenses": {
+      "marketing_valor": 16.0,
+      "comercial_valor": 18.0,
+      "comissao_corretagem_valor": 10.0,
+      "adm_valor": 6.0
+    },
+    "phase_taxes": {
+      "aliquota_pis": 3.25,
+      "aliquota_cofins": 15.0,
+      "aliquota_irpj": 5.6,
+      "aliquota_csll": 4.26,
+      "aliquota_outros": 0.0,
+      "aliquota_total": 28.81
+    }
+  },
+  "viabilidades": [
+    {
+      "id": 3,
+      "project_name": "VIABILIDADE STRESS TEST",
+      "city": "Não informado",
+      "status": "Em Andamento",
+      "tem_multiplas_fases": 1,
+      "aplicar_ipca_receitas": 1,
+      "ipca_projetado_valor": null,
+      "aplicar_ipca_despesas": 1,
+      "aplicar_incc_obras": 1,
+      "incc_projetado_valor": null,
+      "taxa_desconto_vpl": 15.0,
+      "fases": [
+        {
+          "id": 3,
+          "name": "Fase 1 - Lotes Mistos"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "project_name": "VIABILIDADE STRESS TEST",
+      "city": "Não informado",
+      "status": "Em Andamento",
+      "tem_multiplas_fases": 0,
+      "aplicar_ipca_receitas": 1,
+      "ipca_projetado_valor": null,
+      "aplicar_ipca_despesas": 1,
+      "aplicar_incc_obras": 1,
+      "incc_projetado_valor": null,
+      "taxa_desconto_vpl": 15.0,
+      "fases": [
+        {
+          "id": 4,
+          "name": "Fase 1 - Lotes Mistos"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "project_name": "IGAVETÁ",
+      "city": "ARAÇARIGUAMA",
+      "status": "Em Aprovação",
+      "tem_multiplas_fases": 0,
+      "aplicar_ipca_receitas": 0,
+      "ipca_projetado_valor": null,
+      "aplicar_ipca_despesas": 0,
+      "aplicar_incc_obras": 0,
+      "incc_projetado_valor": null,
+      "taxa_desconto_vpl": 12.0,
+      "fases": [
+        {
+          "id": 5,
+          "name": "Fase Única"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "project_name": "Jardim dos Ipês III",
+      "city": "Taguai",
+      "status": "Aprovado",
+      "tem_multiplas_fases": 0,
+      "aplicar_ipca_receitas": 1,
+      "ipca_projetado_valor": null,
+      "aplicar_ipca_despesas": 0,
+      "aplicar_incc_obras": 0,
+      "incc_projetado_valor": null,
+      "taxa_desconto_vpl": 10.0,
+      "fases": [
+        {
+          "id": 6,
+          "name": "Fase Única"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "project_name": "28/07/2026 - Jardim dos Ipês III - Cenário II",
+      "city": "Não informado",
+      "status": "Aprovado",
+      "tem_multiplas_fases": 0,
+      "aplicar_ipca_receitas": 1,
+      "ipca_projetado_valor": null,
+      "aplicar_ipca_despesas": 0,
+      "aplicar_incc_obras": 0,
+      "incc_projetado_valor": null,
+      "taxa_desconto_vpl": 10.0,
+      "fases": [
+        {
+          "id": 7,
+          "name": "Fase Única"
+        }
+      ]
+    }
+  ],
+  "orcamentos": [
+    {
+      "id": 5,
+      "ano": 2026,
+      "tipo": "DESPESAS",
+      "status": "Fechado",
+      "versao_numero": 1,
+      "departamento_id": 1,
+      "produto_id": null,
+      "descricao": "Orçamento",
+      "soma_itens": 184269360.34,
+      "soma_vgv": 0.0
+    },
+    {
+      "id": 7,
+      "ano": 2026,
+      "tipo": "VENDAS",
+      "status": "Fechado",
+      "versao_numero": 1,
+      "departamento_id": 1,
+      "produto_id": null,
+      "descricao": "Orçamento Vendas 2026",
+      "soma_itens": 0.0,
+      "soma_vgv": 0.0
+    },
+    {
+      "id": 8,
+      "ano": 2026,
+      "tipo": "RECEITAS",
+      "status": "Fechado",
+      "versao_numero": 1,
+      "departamento_id": 1,
+      "produto_id": null,
+      "descricao": "Orçamento",
+      "soma_itens": 198268420.04,
+      "soma_vgv": 0.0
+    },
+    {
+      "id": 9,
+      "ano": 2026,
+      "tipo": "VENDAS",
+      "status": "Fechado",
+      "versao_numero": 1,
+      "departamento_id": null,
+      "produto_id": null,
+      "descricao": "1ª versão",
+      "soma_itens": 0.0,
+      "soma_vgv": 177136772.8895762
+    }
+  ],
+  "forecasts": [
+    {
+      "id": 37,
+      "ano": 2026,
+      "tipo": "VENDAS",
+      "status": "Aprovado",
+      "versao_numero": 1,
+      "departamento_id": null,
+      "produto_id": null,
+      "descricao": "Forecast - 1+11",
+      "versao_base_orcamento_id": null,
+      "versao_base_forecast_id": null,
+      "soma_itens": 0.0,
+      "soma_vgv": 164978420.94538462
+    },
+    {
+      "id": 38,
+      "ano": 2026,
+      "tipo": "VENDAS",
+      "status": "Aprovado",
+      "versao_numero": 1,
+      "departamento_id": null,
+      "produto_id": null,
+      "descricao": "Forecast - 2+10",
+      "versao_base_orcamento_id": null,
+      "versao_base_forecast_id": null,
+      "soma_itens": 0.0,
+      "soma_vgv": 149240039.98615384
+    },
+    {
+      "id": 39,
+      "ano": 2026,
+      "tipo": "VENDAS",
+      "status": "Aprovado",
+      "versao_numero": 1,
+      "departamento_id": null,
+      "produto_id": null,
+      "descricao": "Forecast - 3+9",
+      "versao_base_orcamento_id": null,
+      "versao_base_forecast_id": null,
+      "soma_itens": 0.0,
+      "soma_vgv": 143119749.28615385
+    },
+    {
+      "id": 40,
+      "ano": 2026,
+      "tipo": "VENDAS",
+      "status": "Aprovado",
+      "versao_numero": 1,
+      "departamento_id": null,
+      "produto_id": null,
+      "descricao": "Forecast - 4+8",
+      "versao_base_orcamento_id": null,
+      "versao_base_forecast_id": null,
+      "soma_itens": 0.0,
+      "soma_vgv": 109294199.75239292
+    },
+    {
+      "id": 41,
+      "ano": 2026,
+      "tipo": "VENDAS",
+      "status": "Aprovado",
+      "versao_numero": 1,
+      "departamento_id": null,
+      "produto_id": null,
+      "descricao": "Forecast - 5+7",
+      "versao_base_orcamento_id": null,
+      "versao_base_forecast_id": null,
+      "soma_itens": 0.0,
+      "soma_vgv": 101373676.19723831
+    },
+    {
+      "id": 42,
+      "ano": 2026,
+      "tipo": "VENDAS",
+      "status": "Aprovado",
+      "versao_numero": 1,
+      "departamento_id": null,
+      "produto_id": null,
+      "descricao": "Forecast - 6+6",
+      "versao_base_orcamento_id": null,
+      "versao_base_forecast_id": null,
+      "soma_itens": 0.0,
+      "soma_vgv": 93888417.16084233
+    },
+    {
+      "id": 43,
+      "ano": 2026,
+      "tipo": "VENDAS",
+      "status": "Aprovado",
+      "versao_numero": 1,
+      "departamento_id": null,
+      "produto_id": null,
+      "descricao": "Forecast - 7+5",
+      "versao_base_orcamento_id": null,
+      "versao_base_forecast_id": null,
+      "soma_itens": 0.0,
+      "soma_vgv": 87651456.64671943
+    },
+    {
+      "id": 86,
+      "ano": 2026,
+      "tipo": "VENDAS",
+      "status": "Rascunho",
+      "versao_numero": 1,
+      "departamento_id": 1,
+      "produto_id": null,
+      "descricao": "Forecast - 7+5",
+      "versao_base_orcamento_id": null,
+      "versao_base_forecast_id": null,
+      "soma_itens": 0.0,
+      "soma_vgv": 0.0
+    },
+    {
+      "id": 97,
+      "ano": 2026,
+      "tipo": "DESPESAS",
+      "status": "Aprovado",
+      "versao_numero": 1,
+      "departamento_id": 18,
+      "produto_id": null,
+      "descricao": "Forecast - 2+10",
+      "versao_base_orcamento_id": 5,
+      "versao_base_forecast_id": null,
+      "soma_itens": 169696845.09,
+      "soma_vgv": 0.0
+    },
+    {
+      "id": 98,
+      "ano": 2026,
+      "tipo": "RECEITAS",
+      "status": "Aprovado",
+      "versao_numero": 1,
+      "departamento_id": 18,
+      "produto_id": null,
+      "descricao": "Forecast - 2+10",
+      "versao_base_orcamento_id": 9,
+      "versao_base_forecast_id": null,
+      "soma_itens": 165223279.34,
+      "soma_vgv": 0.0
+    },
+    {
+      "id": 99,
+      "ano": 2026,
+      "tipo": "DESPESAS",
+      "status": "Aprovado",
+      "versao_numero": 1,
+      "departamento_id": 18,
+      "produto_id": null,
+      "descricao": "Forecast - 3+9",
+      "versao_base_orcamento_id": 5,
+      "versao_base_forecast_id": null,
+      "soma_itens": 162291217.84,
+      "soma_vgv": 0.0
+    },
+    {
+      "id": 100,
+      "ano": 2026,
+      "tipo": "RECEITAS",
+      "status": "Aprovado",
+      "versao_numero": 1,
+      "departamento_id": 18,
+      "produto_id": null,
+      "descricao": "Forecast - 3+9",
+      "versao_base_orcamento_id": 9,
+      "versao_base_forecast_id": null,
+      "soma_itens": 173783279.34,
+      "soma_vgv": 0.0
+    },
+    {
+      "id": 101,
+      "ano": 2026,
+      "tipo": "DESPESAS",
+      "status": "Aprovado",
+      "versao_numero": 1,
+      "departamento_id": 18,
+      "produto_id": null,
+      "descricao": "Forecast - 4+8",
+      "versao_base_orcamento_id": 5,
+      "versao_base_forecast_id": null,
+      "soma_itens": 174139746.58,
+      "soma_vgv": 0.0
+    },
+    {
+      "id": 102,
+      "ano": 2026,
+      "tipo": "RECEITAS",
+      "status": "Aprovado",
+      "versao_numero": 1,
+      "departamento_id": 18,
+      "produto_id": null,
+      "descricao": "Forecast - 4+8",
+      "versao_base_orcamento_id": 9,
+      "versao_base_forecast_id": null,
+      "soma_itens": 177377145.95000002,
+      "soma_vgv": 0.0
+    },
+    {
+      "id": 103,
+      "ano": 2026,
+      "tipo": "DESPESAS",
+      "status": "Aprovado",
+      "versao_numero": 1,
+      "departamento_id": 18,
+      "produto_id": null,
+      "descricao": "Forecast - 5+7",
+      "versao_base_orcamento_id": 5,
+      "versao_base_forecast_id": null,
+      "soma_itens": 176009004.03,
+      "soma_vgv": 0.0
+    },
+    {
+      "id": 104,
+      "ano": 2026,
+      "tipo": "RECEITAS",
+      "status": "Aprovado",
+      "versao_numero": 1,
+      "departamento_id": 18,
+      "produto_id": null,
+      "descricao": "Forecast - 5+7",
+      "versao_base_orcamento_id": 9,
+      "versao_base_forecast_id": null,
+      "soma_itens": 172697738.5,
+      "soma_vgv": 0.0
+    },
+    {
+      "id": 105,
+      "ano": 2026,
+      "tipo": "DESPESAS",
+      "status": "Aprovado",
+      "versao_numero": 1,
+      "departamento_id": 18,
+      "produto_id": null,
+      "descricao": "Forecast - 7+5",
+      "versao_base_orcamento_id": 5,
+      "versao_base_forecast_id": null,
+      "soma_itens": 119145156.57000001,
+      "soma_vgv": 0.0
+    },
+    {
+      "id": 106,
+      "ano": 2026,
+      "tipo": "RECEITAS",
+      "status": "Aprovado",
+      "versao_numero": 1,
+      "departamento_id": 18,
+      "produto_id": null,
+      "descricao": "Forecast - 7+5",
+      "versao_base_orcamento_id": 9,
+      "versao_base_forecast_id": null,
+      "soma_itens": 115673188.83,
+      "soma_vgv": 0.0
+    },
+    {
+      "id": 107,
+      "ano": 2026,
+      "tipo": "DESPESAS",
+      "status": "Aprovado",
+      "versao_numero": 1,
+      "departamento_id": 18,
+      "produto_id": null,
+      "descricao": "Forecast - 6+6",
+      "versao_base_orcamento_id": 5,
+      "versao_base_forecast_id": null,
+      "soma_itens": 177355507.19,
+      "soma_vgv": 0.0
+    },
+    {
+      "id": 108,
+      "ano": 2026,
+      "tipo": "RECEITAS",
+      "status": "Aprovado",
+      "versao_numero": 1,
+      "departamento_id": 18,
+      "produto_id": null,
+      "descricao": "Forecast - 6+6",
+      "versao_base_orcamento_id": 9,
+      "versao_base_forecast_id": null,
+      "soma_itens": 170007814.26,
+      "soma_vgv": 0.0
+    }
+  ],
+  "phase_snapshots": [],
+  "perfis_acesso": [
+    {
+      "id": 1,
+      "name": "Diretor",
+      "is_active": true,
+      "hash_permissions": "bca5afae1ae36841da0a2ff2884cd9e5ed51bf184585eb8ac8b33a5356a30a60"
+    },
+    {
+      "id": 2,
+      "name": "Controladoria",
+      "is_active": true,
+      "hash_permissions": "bca5afae1ae36841da0a2ff2884cd9e5ed51bf184585eb8ac8b33a5356a30a60"
+    },
+    {
+      "id": 3,
+      "name": "Administrador",
+      "is_active": true,
+      "hash_permissions": "e2bcaa05b89c60ef816ac595b8f15828217af57d84cd8b16434d36e9282b9542"
+    },
+    {
+      "id": 4,
+      "name": "Marketing",
+      "is_active": true,
+      "hash_permissions": "c4f715dafdd5fb695b8d83f873f7ac1f5cd8dbdb8d595fe1a016c1ae532713e1"
+    }
+  ],
+  "indicadores_economicos": [
+    {
+      "id": 1,
+      "nome": "Padrão A.A ",
+      "competencia": null,
+      "valor": 5.0,
+      "tipo_unidade": "% a.a.",
+      "index_type": "IPCA"
+    },
+    {
+      "id": 2,
+      "nome": "Padrão A.M",
+      "competencia": null,
+      "valor": 1.0,
+      "tipo_unidade": "% a.m.",
+      "index_type": "IPCA"
+    },
+    {
+      "id": 3,
+      "nome": "Padrão A.A",
+      "competencia": null,
+      "valor": 4.5,
+      "tipo_unidade": "% a.a.",
+      "index_type": "INCC"
+    },
+    {
+      "id": 4,
+      "nome": "Padrão A.M",
+      "competencia": null,
+      "valor": 1.2,
+      "tipo_unidade": "% a.m.",
+      "index_type": "INCC"
+    }
+  ],
+  "fingerprint": "989d88d308c7ca68acf2db16440f4e21ec68728741a1c0f49b04174b9c9ae843"
+}

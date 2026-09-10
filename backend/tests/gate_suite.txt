@@ -1,0 +1,29 @@
+# Suíte usada por check.ps1 / check.sh na raiz do projeto.
+# Foco: números validados, caracterização e infra (auth/CORS/roles).
+# test_acceptance.py fica de fora até ser alinhado ao fluxo /criar (legado Seção 26).
+
+tests/test_calculations.py
+tests/test_characterization_numeros.py
+tests/test_characterization_api.py
+tests/test_baseline_motor.py
+tests/test_baseline_dados.py
+tests/test_roles.py
+tests/test_periodos.py
+tests/test_department_header.py
+tests/test_cors.py
+tests/test_dummy_auth.py
+tests/test_microsoft_auth.py
+tests/test_system_version_auth.py
+tests/test_require_admin.py
+tests/test_access.py
+tests/test_database_url.py
+tests/test_budget_shared.py
+tests/test_sienge_client.py
+tests/test_user_department_scope.py
+tests/test_departamento_leitura.py
+tests/test_diretoria.py
+tests/test_departamento_conferencia.py
+tests/test_mldu_ownership.py
+tests/test_holding_consolidation.py
+tests/test_consolidacao_mldu_access.py
+tests/test_mldu_organograma_validacao.py

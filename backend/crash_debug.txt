@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "<string>", line 25, in <module>
+  File "C:\Users\Usuario\Desktop\Em Desenvolvimento\Meus Projetos\ERP ML\backend\app\api\routes\dashboard.py", line 305, in get_dashboard_executivo
+    plano_map = {p.id: p.nome for p in db.query(FinancialPlan).filter(FinancialPlan.id.in_(plano_ids)).all()}
+                       ^^^^^^
+AttributeError: 'FinancialPlan' object has no attribute 'nome'. Did you mean: 'name'?

@@ -1,0 +1,74 @@
+﻿========================================================================
+Cruzamento Realizado RECEITAS 2026 (mes<= 8): SP-MIG x INC-*
+========================================================================
+Linhas SP-MIG: 1025 | Linhas INC-*: 758
+So no SharePoint: 271 | So no INC: 4
+Batendo (|d|<1.0): 754 | Divergindo: 258
+Total SP-MIG: R$ 78,806,060.64
+Total INC-*:  R$ 78,024,685.24
+Diff (INC - SP): R$ -781,375.40
+
+Top 40 maiores diferencas:
+------------------------------------------------------------------------
+    300,000.00 SP=        0.00 INC=  300,000.00  m=07  73200 CORPORATIVO - NOVO HORIZONTE | AFAC
+   -181,000.16 SP=  181,000.16 INC=        0.00  m=03  70100 CORPORATIVO - MLDU | Rendimentos de Aplica├º├Áes Financeira
+   -165,897.85 SP=  165,897.85 INC=        0.00  m=07  70100 CORPORATIVO - MLDU | Rendimentos de Aplica├º├Áes Financeira
+   -161,578.99 SP=  161,578.99 INC=        0.00  m=04  70100 CORPORATIVO - MLDU | Rendimentos de Aplica├º├Áes Financeira
+   -151,361.53 SP=  151,361.53 INC=        0.00  m=06  70100 CORPORATIVO - MLDU | Rendimentos de Aplica├º├Áes Financeira
+   -148,685.92 SP=  148,685.92 INC=        0.00  m=01  70100 CORPORATIVO - MLDU | Rendimentos de Aplica├º├Áes Financeira
+   -138,441.86 SP=  138,441.86 INC=        0.00  m=02  70100 CORPORATIVO - MLDU | Rendimentos de Aplica├º├Áes Financeira
+    126,658.18 SP=        0.00 INC=  126,658.18  m=04  73200 CORPORATIVO - NOVO HORIZONTE | AFAC
+   -105,743.15 SP=  105,743.15 INC=        0.00  m=05  70100 CORPORATIVO - MLDU | Rendimentos de Fundos de Investiment
+    100,000.00 SP=        0.00 INC=  100,000.00  m=06  73200 CORPORATIVO - NOVO HORIZONTE | AFAC
+    100,000.00 SP=        0.00 INC=  100,000.00  m=05  73200 CORPORATIVO - NOVO HORIZONTE | AFAC
+    -59,781.88 SP=   59,781.88 INC=        0.00  m=03  70129 CORPORATIVO DE PESSOAS - MLDU | Descontos Obtidos
+    -42,127.25 SP=   42,127.25 INC=        0.00  m=05  70100 CORPORATIVO - MLDU | Rendimentos de Aplica├º├Áes Financeira
+    -22,119.15 SP=   22,119.15 INC=        0.00  m=07  70400 CORPORATIVO - TERRAS DE ITU | Rendimentos de Aplica├º├Áes Financeira
+    -20,325.32 SP=   20,325.32 INC=        0.00  m=02  70100 CORPORATIVO - MLDU | Reembolso de Despesas Gerais
+    -20,000.00 SP=   20,000.00 INC=        0.00  m=04  70108 NOVOS NEG├ôCIOS - MLDU E PARCERIA | Reembolso de Despesas Gerais
+    -16,967.61 SP=   16,967.61 INC=        0.00  m=08  70400 CORPORATIVO - TERRAS DE ITU | Rendimentos de Aplica├º├Áes Financeira
+    -14,875.61 SP=   14,875.61 INC=        0.00  m=07  70100 CORPORATIVO - MLDU | Rendimentos de Fundos de Investiment
+    -13,841.49 SP=   13,841.49 INC=        0.00  m=01  70100 CORPORATIVO - MLDU | Reembolso de Despesas Gerais
+    -13,016.07 SP=   13,016.07 INC=        0.00  m=08  70100 CORPORATIVO - MLDU | Rendimentos de Aplica├º├Áes Financeira
+    -11,778.88 SP=   11,778.88 INC=        0.00  m=04  72800 CORPORATIVO - RESERVA DOS RAMOS | Rendimentos de Aplica├º├Áes Financeira
+    -10,233.37 SP=   10,233.37 INC=        0.00  m=01  72800 CORPORATIVO - RESERVA DOS RAMOS | Rendimentos de Aplica├º├Áes Financeira
+     -7,405.80 SP=    7,405.80 INC=        0.00  m=02  72800 CORPORATIVO - RESERVA DOS RAMOS | Rendimentos de Aplica├º├Áes Financeira
+     -6,324.41 SP=    6,324.41 INC=        0.00  m=03  14000 AVAR├ë - RESERVA CENTRAL PARQUE I | Descontos Obtidos
+     -6,020.53 SP=    6,020.53 INC=        0.00  m=03  14800 BOTUCATU - CVA - MRV | Rendimentos de Aplica├º├Áes Financeira
+     -5,306.02 SP=    5,306.02 INC=        0.00  m=03  70100 CORPORATIVO - MLDU | Rendimentos de Fundos de Investiment
+     -5,074.80 SP=    5,074.80 INC=        0.00  m=04  70100 CORPORATIVO - MLDU | Rendimentos de Fundos de Investiment
+     -4,975.84 SP=    4,975.84 INC=        0.00  m=03  72800 CORPORATIVO - RESERVA DOS RAMOS | Rendimentos de Aplica├º├Áes Financeira
+     -4,447.88 SP=    4,447.88 INC=        0.00  m=06  72800 CORPORATIVO - RESERVA DOS RAMOS | Rendimentos de Aplica├º├Áes Financeira
+     -4,310.23 SP=    4,310.23 INC=        0.00  m=05  72800 CORPORATIVO - RESERVA DOS RAMOS | Rendimentos de Aplica├º├Áes Financeira
+     -4,301.80 SP=    4,301.80 INC=        0.00  m=08  72800 CORPORATIVO - RESERVA DOS RAMOS | Rendimentos de Aplica├º├Áes Financeira
+     -4,281.31 SP=    4,281.31 INC=        0.00  m=05  71300 CORPORATIVO - VERCELLINO | Rendimentos de Aplica├º├Áes Financeira
+     -3,873.42 SP=    3,873.42 INC=        0.00  m=07  70100 CORPORATIVO - MLDU | Dep├│sitos n├úo Identificados
+     -3,678.00 SP=    3,678.00 INC=        0.00  m=05  14800 BOTUCATU - CVA - MRV | Rendimentos de Aplica├º├Áes Financeira
+     -3,645.68 SP=    3,645.68 INC=        0.00  m=03  13900 AVAR├ë - CENTRAL PARQUE II | Descontos Obtidos
+     -3,526.88 SP=    3,526.88 INC=        0.00  m=07  14800 BOTUCATU - CVA - MRV | Rendimentos de Aplica├º├Áes Financeira
+     -3,226.74 SP=    3,226.74 INC=        0.00  m=06  70100 CORPORATIVO - MLDU | Rendimentos de Fundos de Investiment
+     -3,191.81 SP=    3,191.81 INC=        0.00  m=02  14800 BOTUCATU - CVA - MRV | Rendimentos de Aplica├º├Áes Financeira
+     -3,118.60 SP=    3,118.60 INC=        0.00  m=04  70100 CORPORATIVO - MLDU | Descontos Obtidos
+     -2,815.76 SP=    2,815.76 INC=        0.00  m=01  14800 BOTUCATU - CVA - MRV | Rendimentos de Aplica├º├Áes Financeira
+
+Top 20 CCs por |d|:
+ -1,172,855.72  SP=  2,068,716.53  INC=    895,860.81  70100 - CORPORATIVO - MLDU
+    626,628.23  SP=      5,493.13  INC=    632,121.36  73200 - CORPORATIVO - NOVO HORIZONTE
+    -60,173.94  SP=     60,223.62  INC=         49.68  70129 - CORPORATIVO DE PESSOAS - MLDU
+    -49,236.05  SP=     49,236.05  INC=          0.00  72800 - CORPORATIVO - RESERVA DOS RAMOS
+    -41,335.52  SP=  3,984,802.73  INC=  3,943,467.21  70400 - CORPORATIVO - TERRAS DE ITU
+    -24,788.24  SP=  7,385,590.22  INC=  7,360,801.98  14800 - BOTUCATU - CVA - MRV
+    -20,000.00  SP=     20,000.00  INC=          0.00  70108 - NOVOS NEG├ôCIOS - MLDU E PARCERIAS
+    -11,382.84  SP=     11,382.84  INC=          0.00  71300 - CORPORATIVO - VERCELLINO
+     -9,164.73  SP=  2,009,449.11  INC=  2,000,284.38  14000 - AVAR├ë - RESERVA CENTRAL PARQUE II
+     -3,943.88  SP=    718,617.86  INC=    714,673.98  13900 - AVAR├ë - CENTRAL PARQUE II
+     -2,366.89  SP=      2,366.89  INC=          0.00  70119 - TIME | MARKETING
+     -1,339.41  SP=  5,740,290.56  INC=  5,738,951.15  14305 - BOITUVA - RESERVA DOS IP├èS
+     -1,191.84  SP=  3,690,400.84  INC=  3,689,209.00  71200 - CORPORATIVO - ELLENCO & MOURA LEITE
+     -1,049.64  SP=  1,120,071.30  INC=  1,119,021.66  14201 - ARA├çARIGUAMA - RESERVA DO ARA├çARI
+       -824.75  SP=    880,056.06  INC=    879,231.31  14202 - ARA├çARIGUAMA - RESERVA DO ARA├çARI - PARCERIA GA
+       -646.37  SP=        646.37  INC=          0.00  15302 - ITU - RESERVA ALTAVISTA I - MLDU
+       -645.76  SP=        645.76  INC=          0.00  70106 - FELIPE DA SILVA DE MOURA LEITE
+       -645.76  SP=        645.76  INC=          0.00  70107 - ANDR├ë DA SILVA DE MOURA LEITE
+       -584.34  SP=        584.34  INC=          0.00  70130 - TIME | NOVOS NEG├ôCIOS
+       -548.22  SP=  1,167,959.82  INC=  1,167,411.60  13500 - BOTUCATU - LIVIA II

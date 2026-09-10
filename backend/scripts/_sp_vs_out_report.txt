@@ -1,0 +1,77 @@
+﻿========================================================================
+Cruzamento Realizado DESPESAS 2026: SharePoint (SP-MIG) ├ù Sienge (OUT-*)
+========================================================================
+Linhas SP-MIG (CC├ùplano├ùm├¬s): 5398
+Linhas OUT-*  (CC├ùplano├ùm├¬s): 2366
+S├│ no SharePoint: 3338 | S├│ no Sienge OUT: 306
+Batendo (|d|<1.0): 316 | Divergindo: 5328
+Total SP-MIG: R$ 72,215,009.41
+Total OUT-*:  R$ 60,092,420.03
+Diff (OUT - SP): R$ -12,122,589.38
+
+Top 40 maiores diferencas absolutas:
+------------------------------------------------------------------------
+          d R$         SP-MIG          OUT-*  mes  CC / Plano
+ -2,674,427.84   2,674,427.84           0.00    5  72801 SPE EMPREENDEDORA MIRANTE DOS RAMO | Distribui├º├úo Lucro
+  2,000,000.00           0.00   2,000,000.00    4  70103 OCA ADMINISTRA├ç├âO E PARTICIPA├ç├òES  | Distribui├º├úo Lucro - Aquisi├º├úo
+  1,775,941.35       3,500.00   1,779,441.35    8  13900 AVAR├ë - CENTRAL PARQUE II | Servi├ºos de Terceiros (Obra)
+ -1,440,076.53   1,440,076.53           0.00    5  72801 SPE EMPREENDEDORA MIRANTE DOS RAMO | Distribui├º├úo Lucro - Remessa para Contro
+ -1,097,201.16   1,097,201.16           0.00    5  72802 MV RAMOS EMPREENDIMENTOS LTDA | Distribui├º├úo Lucro - Repasse
+ -1,071,684.86   1,071,684.86           0.00    5  72803 J&A RAMOS EMPREENDIMENTOS LTDA | Distribui├º├úo Lucro - Repasse
+  1,054,621.43      17,150.00   1,071,771.43    8  14000 AVAR├ë - RESERVA CENTRAL PARQUE II | Servi├ºos de Terceiros (Obra)
+  1,050,001.00           0.00   1,050,001.00    8  70109 TRANSA├ç├òES ENTRE EMPRESAS | Aportes em Empreendimentos
+   -849,924.16     849,924.16           0.00    7  72801 SPE EMPREENDEDORA MIRANTE DOS RAMO | Distribui├º├úo Lucro
+   -823,369.68     823,369.68           0.00    6  72801 SPE EMPREENDEDORA MIRANTE DOS RAMO | Distribui├º├úo Lucro
+    666,000.00     459,771.43   1,125,771.43    5  70101 SOMA DESENVOLVIMENTO IMOBILIARIO L | Distribui├º├úo Lucro - Aporte
+    666,000.00     459,771.43   1,125,771.43    5  70102 PR&F PARTICIPA├ç├òES IMOBILI├üRIAS LT | Distribui├º├úo Lucro - Aporte
+   -575,787.54     575,787.54           0.00    8  72801 SPE EMPREENDEDORA MIRANTE DOS RAMO | Distribui├º├úo Lucro
+   -568,677.89     568,677.89           0.00    4  72801 SPE EMPREENDEDORA MIRANTE DOS RAMO | Distribui├º├úo Lucro
+   -457,651.47     457,651.47           0.00    7  72801 SPE EMPREENDEDORA MIRANTE DOS RAMO | Distribui├º├úo Lucro - Remessa para Contro
+   -443,352.91     443,352.91           0.00    6  72801 SPE EMPREENDEDORA MIRANTE DOS RAMO | Distribui├º├úo Lucro - Remessa para Contro
+   -420,797.60     420,797.60           0.00    1  14305 BOITUVA - RESERVA DOS IP├èS | Desconto de Juros Contratuais
+   -378,281.63     378,281.63           0.00    2  72801 SPE EMPREENDEDORA MIRANTE DOS RAMO | Distribui├º├úo Lucro
+   -374,448.30     374,448.30           0.00    5  14800 BOTUCATU - CVA - MRV | Servi├ºos de Terceiros (Obra)
+   -366,334.72     366,334.72           0.00    4  14800 BOTUCATU - CVA - MRV | Materiais Aplicados (Obra)
+    356,731.54     356,731.54     713,463.08    3  70129 CORPORATIVO DE PESSOAS - MLDU | B├┤nus
+   -348,686.83     348,686.83           0.00    7  72802 MV RAMOS EMPREENDIMENTOS LTDA | Distribui├º├úo Lucro - Repasse
+   -340,577.84     340,577.84           0.00    7  72803 J&A RAMOS EMPREENDIMENTOS LTDA | Distribui├º├úo Lucro - Repasse
+   -337,792.69     337,792.69           0.00    6  72802 MV RAMOS EMPREENDIMENTOS LTDA | Distribui├º├úo Lucro - Repasse
+   -336,884.00     336,884.00           0.00    7  15312 ITU - RESERVA ALTAVISTA I - OBRAS | Servi├ºos de Terceiros (Obra)
+   -336,385.99     336,385.99           0.00    5  15312 ITU - RESERVA ALTAVISTA I - OBRAS | Servi├ºos de Terceiros (Obra)
+   -329,937.05     329,937.05           0.00    6  72803 J&A RAMOS EMPREENDIMENTOS LTDA | Distribui├º├úo Lucro - Repasse
+   -324,384.00     324,384.00           0.00    6  15312 ITU - RESERVA ALTAVISTA I - OBRAS | Servi├ºos de Terceiros (Obra)
+   -310,039.44     310,039.44           0.00    8  72801 SPE EMPREENDEDORA MIRANTE DOS RAMO | Distribui├º├úo Lucro - Remessa para Contro
+   -308,021.81     308,021.81           0.00    2  71301 ELLENCO & MOURA LEITE BOITUVA EMPR | Distribui├º├úo Lucro - Remessa para Contro
+   -308,021.81     308,021.81           0.00    2  71301 ELLENCO & MOURA LEITE BOITUVA EMPR | Distribui├º├úo Lucro
+   -307,500.00     307,500.00           0.00    2  71201 MOURA LEITE DESENVOLVIMENTO E URBA | Distribui├º├úo Lucro - Remessa para Contro
+   -307,313.21     307,313.21           0.00    3  14800 BOTUCATU - CVA - MRV | Materiais Aplicados (Obra)
+   -306,211.17     306,211.17           0.00    4  72801 SPE EMPREENDEDORA MIRANTE DOS RAMO | Distribui├º├úo Lucro - Remessa para Contro
+   -300,000.00     300,000.00           0.00    7  73200 CORPORATIVO - NOVO HORIZONTE | AFAC
+   -274,382.83     274,382.83           0.00    5  71301 ELLENCO & MOURA LEITE BOITUVA EMPR | Distribui├º├úo Lucro - Remessa para Contro
+   -274,382.83     274,382.83           0.00    5  71301 ELLENCO & MOURA LEITE BOITUVA EMPR | Distribui├º├úo Lucro
+   -272,122.93     272,122.93           0.00    2  14800 BOTUCATU - CVA - MRV | Servi├ºos de Terceiros (Obra)
+   -270,000.00     270,000.00           0.00    5  71201 MOURA LEITE DESENVOLVIMENTO E URBA | Distribui├º├úo Lucro - Remessa para Contro
+   -263,854.09     263,854.09           0.00    4  71301 ELLENCO & MOURA LEITE BOITUVA EMPR | Distribui├º├úo Lucro
+
+Top 20 CCs por |d| total anual:
+------------------------------------------------------------------------
+ -9,342,838.86  SP=  9,342,838.86  OUT=          0.00  72801 - SPE EMPREENDEDORA MIRANTE DOS RAMOS LTDA
+  6,197,601.53  SP=  2,765,690.99  OUT=  8,963,292.52  13900 - AVAR├ë - CENTRAL PARQUE II
+  5,581,053.31  SP=  5,346,561.88  OUT= 10,927,615.19  14000 - AVAR├ë - RESERVA CENTRAL PARQUE II
+ -3,689,209.02  SP=  3,689,209.02  OUT=          0.00  71301 - ELLENCO & MOURA LEITE BOITUVA EMPREENDIMENTO IM
+  2,844,612.22  SP=     73,687.12  OUT=  2,918,299.34  14001 - AVAR├ë - RESERVA CENTRAL PARQUE II - PARCERIA
+  2,828,581.09  SP=    101,677.77  OUT=  2,930,258.86  13901 - AVAR├ë - CENTRAL PARQUE II - PARCERIA
+ -2,604,637.13  SP=  2,604,637.13  OUT=          0.00  14800 - BOTUCATU - CVA - MRV
+ -2,491,423.68  SP=  2,491,423.68  OUT=          0.00  72802 - MV RAMOS EMPREENDIMENTOS LTDA
+ -2,433,483.62  SP=  2,433,483.62  OUT=          0.00  72803 - J&A RAMOS EMPREENDIMENTOS LTDA
+  2,349,884.27  SP=  4,087,474.43  OUT=  6,437,358.70  70129 - CORPORATIVO DE PESSOAS - MLDU
+  2,000,000.00  SP=  2,324,332.19  OUT=  4,324,332.19  70103 - OCA ADMINISTRA├ç├âO E PARTICIPA├ç├òES DE BENS LTDA
+ -1,840,000.00  SP=  1,840,000.00  OUT=          0.00  71201 - MOURA LEITE DESENVOLVIMENTO E URBANIZA├çAO LTDA
+ -1,686,097.80  SP=  1,686,097.80  OUT=          0.00  14704 - TATU├ì - RESERVA DOS RAMOS - RESIDENCIAL
+ -1,472,000.00  SP=  1,472,000.00  OUT=          0.00  71202 - ELLENCO EMPREENDIMENTOS IMOBILIARIOS LTDA
+  1,398,475.11  SP=  3,175,961.37  OUT=  4,574,436.48  70109 - TRANSA├ç├òES ENTRE EMPRESAS
+ -1,237,448.72  SP=  1,237,448.72  OUT=          0.00  72800 - CORPORATIVO - RESERVA DOS RAMOS
+ -1,111,088.86  SP=  1,434,296.40  OUT=    323,207.54  14305 - BOITUVA - RESERVA DOS IP├èS
+ -1,009,459.36  SP=  1,009,459.36  OUT=          0.00  15312 - ITU - RESERVA ALTAVISTA I - OBRAS
+   -951,351.79  SP=    951,351.79  OUT=          0.00  16001 - ARA├çARIGUAMA - MADUREIRA
+    875,188.26  SP=  2,606,444.96  OUT=  3,481,633.22  70100 - CORPORATIVO - MLDU

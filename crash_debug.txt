@@ -1,0 +1,50 @@
+Traceback (most recent call last):
+  File "C:\Users\Usuario\Desktop\Em Desenvolvimento\Meus Projetos\ERP ML\backend\.venv\Lib\site-packages\sqlalchemy\orm\clsregistry.py", line 515, in _resolve_name
+    rval = d[token]
+           ~^^^^^^^
+  File "C:\Users\Usuario\Desktop\Em Desenvolvimento\Meus Projetos\ERP ML\backend\.venv\Lib\site-packages\sqlalchemy\util\_collections.py", line 344, in __missing__
+    self[key] = val = self.creator(key)
+                      ^^^^^^^^^^^^^^^^^
+  File "C:\Users\Usuario\Desktop\Em Desenvolvimento\Meus Projetos\ERP ML\backend\.venv\Lib\site-packages\sqlalchemy\orm\clsregistry.py", line 483, in _access_cls
+    return self.fallback[key]
+           ~~~~~~~~~~~~~^^^^^
+KeyError: 'OrcamentoItemDespesa'
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "<string>", line 18, in <module>
+  File "C:\Users\Usuario\Desktop\Em Desenvolvimento\Meus Projetos\ERP ML\backend\.venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2896, in query
+    return self._query_cls(entities, self, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Usuario\Desktop\Em Desenvolvimento\Meus Projetos\ERP ML\backend\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 275, in __init__
+    self._set_entities(entities)
+  File "C:\Users\Usuario\Desktop\Em Desenvolvimento\Meus Projetos\ERP ML\backend\.venv\Lib\site-packages\sqlalchemy\orm\query.py", line 288, in _set_entities
+    coercions.expect(
+  File "C:\Users\Usuario\Desktop\Em Desenvolvimento\Meus Projetos\ERP ML\backend\.venv\Lib\site-packages\sqlalchemy\sql\coercions.py", line 389, in expect
+    insp._post_inspect
+  File "C:\Users\Usuario\Desktop\Em Desenvolvimento\Meus Projetos\ERP ML\backend\.venv\Lib\site-packages\sqlalchemy\util\langhelpers.py", line 1253, in __get__
+    obj.__dict__[self.__name__] = result = self.fget(obj)
+                                           ^^^^^^^^^^^^^^
+  File "C:\Users\Usuario\Desktop\Em Desenvolvimento\Meus Projetos\ERP ML\backend\.venv\Lib\site-packages\sqlalchemy\orm\mapper.py", line 2711, in _post_inspect
+    self._check_configure()
+  File "C:\Users\Usuario\Desktop\Em Desenvolvimento\Meus Projetos\ERP ML\backend\.venv\Lib\site-packages\sqlalchemy\orm\mapper.py", line 2388, in _check_configure
+    _configure_registries({self.registry}, cascade=True)
+  File "C:\Users\Usuario\Desktop\Em Desenvolvimento\Meus Projetos\ERP ML\backend\.venv\Lib\site-packages\sqlalchemy\orm\mapper.py", line 4203, in _configure_registries
+    _do_configure_registries(registries, cascade)
+  File "C:\Users\Usuario\Desktop\Em Desenvolvimento\Meus Projetos\ERP ML\backend\.venv\Lib\site-packages\sqlalchemy\orm\mapper.py", line 4244, in _do_configure_registries
+    mapper._post_configure_properties()
+  File "C:\Users\Usuario\Desktop\Em Desenvolvimento\Meus Projetos\ERP ML\backend\.venv\Lib\site-packages\sqlalchemy\orm\mapper.py", line 2405, in _post_configure_properties
+    prop.init()
+  File "C:\Users\Usuario\Desktop\Em Desenvolvimento\Meus Projetos\ERP ML\backend\.venv\Lib\site-packages\sqlalchemy\orm\interfaces.py", line 584, in init
+    self.do_init()
+  File "C:\Users\Usuario\Desktop\Em Desenvolvimento\Meus Projetos\ERP ML\backend\.venv\Lib\site-packages\sqlalchemy\orm\relationships.py", line 1642, in do_init
+    self._setup_entity()
+  File "C:\Users\Usuario\Desktop\Em Desenvolvimento\Meus Projetos\ERP ML\backend\.venv\Lib\site-packages\sqlalchemy\orm\relationships.py", line 1854, in _setup_entity
+    self._clsregistry_resolve_name(argument)(),
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Usuario\Desktop\Em Desenvolvimento\Meus Projetos\ERP ML\backend\.venv\Lib\site-packages\sqlalchemy\orm\clsregistry.py", line 519, in _resolve_name
+    self._raise_for_name(name, err)
+  File "C:\Users\Usuario\Desktop\Em Desenvolvimento\Meus Projetos\ERP ML\backend\.venv\Lib\site-packages\sqlalchemy\orm\clsregistry.py", line 500, in _raise_for_name
+    raise exc.InvalidRequestError(
+sqlalchemy.exc.InvalidRequestError: When initializing mapper Mapper[FinancialPlan(planos_financeiros)], expression 'OrcamentoItemDespesa' failed to locate a name ('OrcamentoItemDespesa'). If this is a class name, consider adding this relationship() to the <class 'app.models.financial_plan.FinancialPlan'> class after both dependent classes have been defined.

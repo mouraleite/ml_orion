@@ -1,0 +1,66 @@
+# --- Segredos e ambiente ---
+.env
+.env.*
+!.env.example
+!.env.production.example
+!.env.postgres.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+!backend/.env.production.example
+!backend/.env.postgres.example
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+!frontend/.env.production.example
+
+# --- Dependências e builds ---
+**/node_modules/
+**/.next/
+**/out/
+**/build/
+**/.venv/
+**/venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.mypy_cache/
+**/*.egg-info/
+frontend/tsconfig.tsbuildinfo
+frontend/next-env.d.ts
+
+# --- Banco e dados locais (NÃO subir ao GitHub) ---
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+backend/viabilidades.db
+backend/*.db
+
+# --- Backups e zonas de segurança ---
+Backups/
+scratch_backup/
+backend/scratch/
+*.zip
+*.zip.tmp
+
+# --- IDE / SO / agentes ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+!.vscode/extensions.json
+.cursor/
+.agents/
+.gemini/
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# --- Artefatos locais ---
+response*.json
+resp_*.txt
+tool_call_*.json
+*.bak

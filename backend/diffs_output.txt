@@ -1,0 +1,6 @@
+=== CONTAS NO BANCO DE DADOS MAS QUE ESTÃO FALTANDO/DIFERENTES NO SIENGE ===
+- Retenção Caução: Sienge tem R$ -8094.3, mas Sistema importou R$ 8094.30 (Diferença: 16188.60)
+- (-) Retenção de ISS - Terceiros: Sienge tem R$ -5230.77, mas Sistema importou R$ 5230.77 (Diferença: 10461.54)
+- (-) Retenção de PIS/Cofins/CSLL - Terceiros: Sienge tem R$ -4241.87, mas Sistema importou R$ 4241.87 (Diferença: 8483.74)
+- (-) Retenção de INSS - Terceiros: Sienge tem R$ -3840.03, mas Sistema importou R$ 3840.03 (Diferença: 7680.06)
+- (-) Retenção de IR - Terceiros: Sienge tem R$ -3277.78, mas Sistema importou R$ 3277.78 (Diferença: 6555.56)

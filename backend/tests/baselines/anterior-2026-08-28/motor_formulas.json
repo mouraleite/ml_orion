@@ -1,0 +1,88 @@
+{
+  "curvas": {
+    "vazio": [
+      [],
+      1
+    ],
+    "soma_100": [
+      [
+        40.0,
+        60.0
+      ],
+      3
+    ],
+    "normaliza": [
+      [
+        50.0,
+        50.0
+      ],
+      1
+    ],
+    "offset_m1": [
+      10.0,
+      20.0,
+      0.0,
+      0.0
+    ],
+    "offset_m3": [
+      0.0,
+      0.0,
+      100.0,
+      0.0,
+      0.0
+    ],
+    "offset_corte": [
+      0.0,
+      0.0,
+      0.0,
+      0.0,
+      1.0
+    ]
+  },
+  "indicadores_acompanhamento": {
+    "fluxo_dois_meses": {
+      "tir_anual": 213.84283767,
+      "tir_mensal": 10.0,
+      "mtir_anual": 213.84283767,
+      "mtir_mensal": 10.0,
+      "payback": 2,
+      "exposicao_maxima": -100.0,
+      "periodo_exposicao": 1,
+      "vida": 2
+    },
+    "sem_troca_sinal": {
+      "tir_anual": null,
+      "tir_mensal": null,
+      "mtir_anual": null,
+      "mtir_mensal": null,
+      "payback": 1,
+      "exposicao_maxima": 0.0,
+      "periodo_exposicao": 0,
+      "vida": 2
+    },
+    "meses_faltantes": {
+      "tir_anual": 0.0,
+      "tir_mensal": 0.0,
+      "mtir_anual": -0.0,
+      "mtir_mensal": -0.0,
+      "payback": 3,
+      "exposicao_maxima": -50.0,
+      "periodo_exposicao": 1,
+      "vida": 3
+    }
+  },
+  "excel": {
+    "float_10_virgula": 10.5,
+    "float_10_ponto": 10.5,
+    "float_vazio": null,
+    "int_3": 3
+  },
+  "variacoes": {
+    "rs": 50.0,
+    "perc": 0.2,
+    "saldo": 200.0,
+    "serie_jan_orcado": 800.0,
+    "serie_total_realizado": 9240.0
+  },
+  "fingerprint": "6c1c8e0013330aad86b01edf5921044d545d1e549d3e5c3efa38b75b7be2a17f"
+}
