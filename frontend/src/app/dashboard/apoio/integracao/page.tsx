@@ -18,6 +18,7 @@ export default function IntegracaoSiengePage() {
   const [pendencias, setPendencias] = useState<Pendencia[]>([]);
   const [loading, setLoading] = useState(false);
   const [reprocessing, setReprocessing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
 
   // Reprocess dates
   const [startDate, setStartDate] = useState(() => {
@@ -63,7 +64,8 @@ export default function IntegracaoSiengePage() {
     setReprocessing(true);
     try {
       await integracaoService.reprocessar({ start_date: startDate, end_date: endDate });
-      alert("Reprocessamento iniciado! O processo roda em segundo plano. Verifique a aba de Logs em alguns instantes.");
+      setSyncMessage("Reprocessamento iniciado! O processo roda em segundo plano. Verifique a aba de Logs em alguns instantes.");
+      setTimeout(() => setSyncMessage(""), 5000);
       setActiveTab("LOGS");
     } catch (err) {
       console.error(err);
@@ -96,53 +98,71 @@ export default function IntegracaoSiengePage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col md:flex-row gap-4 items-end">
-        <div className="flex-1 w-full">
-          <label className="block text-xs font-medium text-slate-500 mb-1">Data Início (Reprocessamento)</label>
-          <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+      {syncMessage && (
+        <div className="px-4 py-2.5 bg-brand-green/10 text-brand-green border border-brand-green/20 rounded-lg text-sm font-medium inline-flex items-center gap-2 animate-in fade-in">
+          <CheckCircle className="w-4 h-4 shrink-0" />
+          {syncMessage}
         </div>
-        <div className="flex-1 w-full">
-          <label className="block text-xs font-medium text-slate-500 mb-1">Data Fim (Reprocessamento)</label>
-          <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-        </div>
-        <div className="flex-none w-full md:w-auto">
-          <Button 
-            onClick={handleReprocess} 
-            disabled={reprocessing}
-            className="w-full gap-2 bg-brand-orange hover:bg-brand-orange/90 text-white"
-          >
-            {reprocessing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            Sincronizar Manualmente
-          </Button>
+      )}
+
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
+        <p className="text-xs text-slate-500">
+          Escolha o período e sincronize. O processamento ocorre em segundo plano.
+        </p>
+        <div className="flex flex-col md:flex-row gap-4 items-end">
+          <div className="flex-1 w-full">
+            <label className="block text-xs font-medium text-slate-500 mb-1">Data Início (Reprocessamento)</label>
+            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+          </div>
+          <div className="flex-1 w-full">
+            <label className="block text-xs font-medium text-slate-500 mb-1">Data Fim (Reprocessamento)</label>
+            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+          </div>
+          <div className="flex-none w-full md:w-auto">
+            <Button 
+              onClick={handleReprocess} 
+              disabled={reprocessing}
+              className="w-full gap-2 bg-brand-orange hover:bg-brand-orange/90 text-white"
+            >
+              {reprocessing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+              Sincronizar Manualmente
+            </Button>
+          </div>
         </div>
       </div>
 
-      <div className="flex overflow-x-auto border-b border-slate-200 hide-scrollbar">
-        <button
-          onClick={() => setActiveTab("PENDENCIAS")}
-          className={`whitespace-nowrap px-6 py-3 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 ${
-            activeTab === "PENDENCIAS"
-              ? "border-brand-green text-brand-green"
-              : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
-          }`}
-        >
-          <AlertTriangle className="w-4 h-4" />
-          Pendências de Reconciliação
-          {pendencias.length > 0 && (
-            <span className="bg-red-100 text-red-600 py-0.5 px-2 rounded-full text-xs">{pendencias.length}</span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab("LOGS")}
-          className={`whitespace-nowrap px-6 py-3 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 ${
-            activeTab === "LOGS"
-              ? "border-brand-green text-brand-green"
-              : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
-          }`}
-        >
-          <Clock className="w-4 h-4" />
-          Histórico de Execuções (Logs)
-        </button>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200">
+        <div className="flex overflow-x-auto hide-scrollbar flex-1">
+          <button
+            onClick={() => setActiveTab("PENDENCIAS")}
+            className={`whitespace-nowrap px-6 py-3 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 ${
+              activeTab === "PENDENCIAS"
+                ? "border-brand-green text-brand-green"
+                : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+            }`}
+          >
+            <AlertTriangle className="w-4 h-4" />
+            Pendências de Reconciliação
+            {pendencias.length > 0 && (
+              <span className="bg-red-100 text-red-600 py-0.5 px-2 rounded-full text-xs">{pendencias.length}</span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("LOGS")}
+            className={`whitespace-nowrap px-6 py-3 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 ${
+              activeTab === "LOGS"
+                ? "border-brand-green text-brand-green"
+                : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+            }`}
+          >
+            <Clock className="w-4 h-4" />
+            Histórico de Execuções (Logs)
+          </button>
+        </div>
+        <Button variant="outline" size="sm" onClick={fetchData} disabled={loading} className="gap-2 shrink-0 mb-2 sm:mb-0">
+          <RefreshCw className={`w-3.5 h-3.5 ${loading ? "animate-spin" : ""}`} />
+          Atualizar lista
+        </Button>
       </div>
 
       {activeTab === "PENDENCIAS" && (

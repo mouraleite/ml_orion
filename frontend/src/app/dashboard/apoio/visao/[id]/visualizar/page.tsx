@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from"react";
 import { useParams, useRouter } from"next/navigation";
-import { Eye, ChevronDown, ChevronRight, FileText, ArrowLeft, ArrowRight, Printer } from"lucide-react";
+import { Eye, ChevronDown, ChevronRight, FileText, ArrowLeft, ArrowRight, Printer, Search } from"lucide-react";
 import { Button } from"@/components/ui/Button";
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
 import { apoioService, VisaoNode } from"@/services/apoio";
@@ -14,7 +14,7 @@ function ReadOnlyPlano({ plano }: { plano: any }) {
  <div className="flex items-center py-1.5 px-2 -ml-2 rounded hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0">
  <div className="w-4 h-4 mr-2" /> {/* Placeholder para o grip icon do editor para manter alinhamento */}
  <FileText className="w-4 h-4 text-slate-400 shrink-0 mr-3" />
- <span className="text-sm text-slate-700 flex-1 truncate" title={plano.name}>{plano.name}</span>
+ <span className="text-sm text-slate-700 flex-1 break-words line-clamp-2" title={plano.name}>{plano.name}</span>
  <span className="text-sm font-mono text-slate-500 w-32 shrink-0">{formatPlanId(plano.db_id)}</span>
  <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded uppercase w-20 text-center shrink-0">{plano.tp_conta || '-'}</span>
  </div>
@@ -65,6 +65,7 @@ export default function VisualizarVisaoPage() {
  const [nodes, setNodes] = useState<VisaoNode[]>([]);
  const [isLoading, setIsLoading] = useState(true);
  const [expandedNodes, setExpandedNodes] = useState<Record<number, boolean>>({});
+ const [busca, setBusca] = useState("");
 
  const fetchData = useCallback(async () => {
  setIsLoading(true);
@@ -107,6 +108,29 @@ export default function VisualizarVisaoPage() {
  setExpandedNodes({});
  };
 
+ const term = busca.trim().toLowerCase();
+ const filteredNodes = term
+ ? nodes.filter((node) => {
+ const codigo = (node.codigo || "").toLowerCase();
+ const descricao = (node.descricao || "").toLowerCase();
+ if (codigo.includes(term) || descricao.includes(term)) return true;
+ return (node.planos_financeiros || []).some((p) =>
+ (p.name || "").toLowerCase().includes(term)
+ );
+ }).map((node) => {
+ const codigo = (node.codigo || "").toLowerCase();
+ const descricao = (node.descricao || "").toLowerCase();
+ const nodeMatches = codigo.includes(term) || descricao.includes(term);
+ if (nodeMatches) return node;
+ return {
+ ...node,
+ planos_financeiros: (node.planos_financeiros || []).filter((p) =>
+ (p.name || "").toLowerCase().includes(term)
+ ),
+ };
+ })
+ : nodes;
+
  if (isLoading && nodes.length === 0) {
  return <AppLoadingState />;
  }
@@ -141,10 +165,20 @@ export default function VisualizarVisaoPage() {
  </div>
 
  {/* Árvore */}
- <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col flex-1">
- <div className="p-4 border-b border-slate-200 bg-slate-50 shrink-0 flex justify-between items-center">
+ <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col flex-1 overflow-hidden">
+ <div className="p-4 border-b border-slate-200 bg-slate-50 shrink-0 sticky top-0 z-10 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
  <h2 className="font-semibold text-slate-800">Estrutura Consolidada</h2>
- <div className="flex gap-2">
+ <div className="flex items-center gap-2 flex-wrap">
+ <div className="relative">
+ <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+ <input
+ type="search"
+ placeholder="Buscar categoria ou plano..."
+ value={busca}
+ onChange={(e) => setBusca(e.target.value)}
+ className="ml-input pl-9 h-8 text-sm w-full sm:w-64"
+ />
+ </div>
  <button className="p-2 text-slate-500 hover:text-brand-green hover:bg-emerald-50 rounded-lg transition-colors" title="Imprimir" onClick={() => window.print()}>
  <Printer className="w-4 h-4" />
  </button>
@@ -155,6 +189,10 @@ export default function VisualizarVisaoPage() {
  <div className="py-12 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg bg-slate-50">
  Nenhuma categoria nesta visão.
  </div>
+ ) : filteredNodes.length === 0 ? (
+ <div className="py-12 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg bg-slate-50">
+ Nenhum resultado para a busca
+ </div>
  ) : (
  <>
  <div className="flex items-center px-4 pb-2 mb-2 border-b border-slate-100 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
@@ -162,12 +200,12 @@ export default function VisualizarVisaoPage() {
  <span className="w-32 shrink-0">Código</span>
  <span className="w-20 text-center shrink-0">Tipo</span>
  </div>
- {nodes.map(node => (
+ {filteredNodes.map(node => (
  <ReadOnlyVisionNode
  key={node.id}
  node={node}
  indentLevel={getIndentLevel(node.codigo)}
- isExpanded={!!expandedNodes[node.id]}
+ isExpanded={term ? true : !!expandedNodes[node.id]}
  onToggle={() => setExpandedNodes(prev => ({ ...prev, [node.id]: !prev[node.id] }))}
  />
  ))}

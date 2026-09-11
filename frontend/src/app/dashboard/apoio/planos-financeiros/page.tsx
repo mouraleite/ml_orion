@@ -16,6 +16,7 @@ export default function PlanosFinanceirosPage() {
  const [planos, setPlanos] = useState<any[]>([]);
  const [isLoading, setIsLoading] = useState(true);
  const [isSyncing, setIsSyncing] = useState(false);
+ const [syncMessage, setSyncMessage] = useState("");
 
  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>({ key:"db_sienge_id", direction:"asc" });
 
@@ -42,6 +43,8 @@ export default function PlanosFinanceirosPage() {
  try {
  await apoioService.syncPlanosFinanceiros();
  await loadPlanos();
+ setSyncMessage("Sincronização concluída");
+ setTimeout(() => setSyncMessage(""), 3000);
  } catch (error) {
  console.error("Erro na sincronização:", error);
  alert("Erro ao sincronizar planos financeiros.");
@@ -138,6 +141,12 @@ export default function PlanosFinanceirosPage() {
  </h1>
  <p className="text-slate-500 text-sm mt-1">Gerencie os planos financeiros (Categorias de Pagamento) integrados com o Sienge.</p>
  </div>
+ <div className="flex items-center gap-3 flex-wrap">
+ {syncMessage && (
+ <span className="text-sm font-medium text-brand-green bg-brand-green/10 border border-brand-green/20 px-3 py-1.5 rounded-lg animate-in fade-in">
+ {syncMessage}
+ </span>
+ )}
  <Button 
  className="gap-2" 
  onClick={handleSync}
@@ -146,6 +155,7 @@ export default function PlanosFinanceirosPage() {
  {isSyncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
  {isSyncing ?"Sincronizando..." :"Atualizar Sincronização"}
  </Button>
+ </div>
  </div>
 
  <CollapsibleFilterPanel
@@ -201,11 +211,18 @@ export default function PlanosFinanceirosPage() {
  </CollapsibleFilterPanel>
 
  <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
- <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+ <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between gap-3 flex-wrap">
  <h2 className="text-sm font-semibold text-slate-800">Resultados</h2>
+ <div className="flex items-center gap-2 flex-wrap">
+ {[busca, filtroTipo, filtroAtiva, filtroRedutora, filtroImposto].some(Boolean) && (
+ <span className="text-xs font-medium text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
+ Mostrando {sortedPlanos.length} de {planos.length}
+ </span>
+ )}
  <span className="text-xs font-medium text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
  {sortedPlanos.length} {sortedPlanos.length === 1 ? "plano" : "planos"}
  </span>
+ </div>
  </div>
  <div className="overflow-x-auto">
  <table className="w-full text-left text-sm">

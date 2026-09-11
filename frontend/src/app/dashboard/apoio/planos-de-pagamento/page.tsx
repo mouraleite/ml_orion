@@ -4,7 +4,7 @@ import { useEffect, useState } from"react";
 import { Button } from"@/components/ui/Button";
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
 import { apoioService } from"@/services/apoio";
-import { Save, AlertCircle, RefreshCw, Plus } from"lucide-react";
+import { Save, AlertCircle, RefreshCw, Plus, CreditCard } from"lucide-react";
 
 export default function PlanosDePagamentoPage() {
  const [plans, setPlans] = useState<any[]>([]);
@@ -84,7 +84,10 @@ export default function PlanosDePagamentoPage() {
  <div className="p-8 max-w-[1600px] mx-auto animate-in fade-in duration-300 space-y-6">
  <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
  <div>
- <h1 className="text-2xl font-bold text-slate-800">Planos de Pagamento</h1>
+ <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+ <CreditCard className="w-6 h-6 text-brand-green" />
+ Planos de Pagamento
+ </h1>
  <p className="text-slate-500 text-sm mt-1">Gerencie os templates globais de planos de pagamento e suas condições.</p>
  </div>
  
@@ -115,6 +118,21 @@ export default function PlanosDePagamentoPage() {
  </div>
  ) : null}
 
+ {(() => {
+ const invalidCount = plans.filter((plano) => {
+ const conds = plano.condicoes_json || plano.condicoes || [];
+ const totalPerc = conds.reduce((s: number, c: any) => s + (Number(c.perc) || 0), 0);
+ return Math.abs(totalPerc - 100) >= 0.01;
+ }).length;
+ if (invalidCount === 0) return null;
+ return (
+ <div className="flex items-center gap-2 px-4 py-3 bg-red-50 text-red-700 border border-red-100 rounded-lg text-sm font-medium">
+ <AlertCircle className="w-4 h-4 shrink-0" />
+ {invalidCount} {invalidCount === 1 ? "plano está inválido" : "planos estão inválidos"} (soma das porcentagens ≠ 100%).
+ </div>
+ );
+ })()}
+
  <div className="flex flex-wrap gap-6 items-stretch">
  {plans.map((plano, pIdx) => {
  const conds = plano.condicoes_json || plano.condicoes || [];
@@ -122,7 +140,9 @@ export default function PlanosDePagamentoPage() {
  const isTotalValid = Math.abs(totalPerc - 100) < 0.01;
 
  return (
- <div key={pIdx} className="w-[320px] min-h-[280px] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+ <div key={pIdx} className={`w-[320px] min-h-[280px] bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col ${
+ isTotalValid ? "border-brand-green/30" : "border-red-200"
+ }`}>
  <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center gap-2 min-h-[64px]">
  <textarea 
  className="font-bold text-slate-700 bg-transparent border-none outline-none focus:ring-1 focus:ring-brand-green rounded px-1 w-full text-sm leading-tight resize-none"

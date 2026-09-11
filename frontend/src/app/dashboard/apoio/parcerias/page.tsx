@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { api } from "@/lib/api";
 import { apoioService } from "@/services/apoio";
-import { Plus, Pencil, Trash2, X, Users } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Users, Search } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { confirmDialog } from "@/components/ui/confirmDialog";
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
@@ -21,6 +21,7 @@ export default function ParceriasPage() {
   const [formName, setFormName] = useState("");
   const [formPrefix, setFormPrefix] = useState("");
   const [formRules, setFormRules] = useState<Record<string, boolean>>({});
+  const [formSearch, setFormSearch] = useState("");
 
   useEffect(() => {
     loadData();
@@ -52,19 +53,6 @@ export default function ParceriasPage() {
     }
   };
 
-  const getPrefixes = () => {
-    const map = new Map<string, string>();
-    costCenters.forEach(cc => {
-      if (cc.id_sienge) {
-        const prefix = String(cc.id_sienge).substring(0, 3);
-        if (!map.has(prefix) && cc.nome) {
-          map.set(prefix, cc.nome.split(" - ")[0]); // Pega a primeira parte do nome
-        }
-      }
-    });
-    return Array.from(map.entries()).map(([prefix, name]) => ({ prefix, name }));
-  };
-
   const openModal = (config?: any) => {
     if (config) {
       setEditingId(config.id);
@@ -77,6 +65,7 @@ export default function ParceriasPage() {
       setFormPrefix("");
       setFormRules({});
     }
+    setFormSearch("");
     setIsModalOpen(true);
   };
 
@@ -86,6 +75,40 @@ export default function ParceriasPage() {
       [planoNome]: !prev[planoNome]
     }));
   };
+
+  const setCategoryRules = (planos: any[], checked: boolean) => {
+    setFormRules(prev => {
+      const next = { ...prev };
+      planos.forEach((plano: any) => {
+        next[plano.name] = checked;
+      });
+      return next;
+    });
+  };
+
+  const selectedCount = Object.keys(formRules).filter(k => formRules[k]).length;
+
+  const filteredTree = useMemo(() => {
+    const term = formSearch.trim().toLowerCase();
+    if (!term) return visionTree;
+
+    return visionTree
+      .map((node: any) => {
+        const planos = (node.planos_financeiros || []).filter((plano: any) =>
+          String(plano.name || "").toLowerCase().includes(term)
+        );
+        const nodeMatches =
+          String(node.codigo || "").toLowerCase().includes(term) ||
+          String(node.descricao || "").toLowerCase().includes(term);
+
+        if (!nodeMatches && planos.length === 0) return null;
+        return {
+          ...node,
+          planos_financeiros: nodeMatches ? (node.planos_financeiros || []) : planos,
+        };
+      })
+      .filter(Boolean);
+  }, [visionTree, formSearch]);
 
   const handleSave = async () => {
     if (!formName) {
@@ -170,13 +193,13 @@ export default function ParceriasPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {configs.map((config) => {
-                const selectedCount = Object.keys(config.rules || {}).filter(k => config.rules[k]).length;
+                const count = Object.keys(config.rules || {}).filter(k => config.rules[k]).length;
                 return (
                   <tr key={config.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-4 py-3 font-medium text-slate-800">{config.name}</td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
-                        {selectedCount} selecionadas
+                        {count} selecionadas
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right space-x-1">
@@ -197,7 +220,7 @@ export default function ParceriasPage() {
 
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
               <div>
                 <h2 className="text-lg font-bold text-slate-800">
@@ -223,47 +246,114 @@ export default function ParceriasPage() {
               </div>
 
               <div className="space-y-3">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <label className="text-sm font-semibold text-slate-700">
-                    Linhas Financeiras Sujeitas a Rateio
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-medium text-brand-green bg-brand-green/10 px-2 py-0.5 rounded-full">
-                      {Object.keys(formRules).filter(k => formRules[k]).length} selecionadas
-                    </span>
-                    <span className="text-xs text-slate-500 italic">
-                      % lido de &quot;Participação&quot; do Centro de Custo
+                <div className="flex flex-col gap-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <label className="text-sm font-semibold text-slate-700">
+                      Linhas Financeiras Sujeitas a Rateio
+                    </label>
+                    <span className="text-xs font-medium text-brand-green bg-brand-green/10 px-2.5 py-1 rounded-full">
+                      {selectedCount} selecionadas
                     </span>
                   </div>
+                  <p className="text-xs text-slate-500">
+                    O percentual de rateio é lido do campo <span className="font-medium text-slate-600">&quot;Participação&quot;</span> do Centro de Custo.
+                  </p>
+                </div>
+
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="search"
+                    value={formSearch}
+                    onChange={(e) => setFormSearch(e.target.value)}
+                    className="ml-input pl-9"
+                    placeholder="Buscar linha financeira ou categoria..."
+                  />
                 </div>
                 
                 <div className="border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
-                  <div className="p-3 max-h-96 overflow-y-auto space-y-3">
-                    {visionTree.map((node: any) => (
-                      <div key={node.id} className="bg-white p-3 rounded-lg border border-slate-200">
-                        <h4 className="text-sm font-semibold text-slate-800 mb-2">{node.codigo} - {node.descricao}</h4>
-                        <div className="pl-1 grid grid-cols-1 md:grid-cols-2 gap-0.5">
-                          {node.planos_financeiros && node.planos_financeiros.length > 0 ? (
-                            node.planos_financeiros.map((plano: any) => (
-                              <label key={plano.id} className="flex items-center gap-2 text-sm p-1.5 rounded hover:bg-slate-50 cursor-pointer">
+                  <div className="p-3 max-h-[28rem] overflow-y-auto space-y-2">
+                    {filteredTree.map((node: any) => {
+                      const planos = node.planos_financeiros || [];
+                      const hasPlanos = planos.length > 0;
+                      const selectedInNode = planos.filter((p: any) => formRules[p.name]).length;
+                      const allSelected = hasPlanos && selectedInNode === planos.length;
+
+                      if (!hasPlanos) {
+                        return (
+                          <div key={node.id} className="px-3 py-2 rounded-lg border border-dashed border-slate-200 bg-white/70">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-xs font-semibold text-slate-500">
+                                {node.codigo} — {node.descricao}
+                              </p>
+                              <span className="text-[11px] text-slate-400 shrink-0">Sem planos neste nível</span>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div key={node.id} className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                          <div className="px-3 py-2.5 bg-slate-50 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <h4 className="text-sm font-semibold text-slate-800">
+                                {node.codigo} — {node.descricao}
+                              </h4>
+                              <p className="text-[11px] text-slate-500 mt-0.5">
+                                {selectedInNode}/{planos.length} selecionadas nesta categoria
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => setCategoryRules(planos, true)}
+                                className={`text-xs font-medium px-2 py-1 rounded-md transition-colors ${
+                                  allSelected
+                                    ? "text-brand-green bg-brand-green/10"
+                                    : "text-slate-600 hover:text-brand-green hover:bg-emerald-50"
+                                }`}
+                              >
+                                Selecionar todos
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setCategoryRules(planos, false)}
+                                disabled={selectedInNode === 0}
+                                className="text-xs font-medium px-2 py-1 rounded-md text-slate-500 hover:text-slate-700 hover:bg-slate-100 disabled:opacity-40 disabled:pointer-events-none"
+                              >
+                                Limpar
+                              </button>
+                            </div>
+                          </div>
+                          <div className="p-2 grid grid-cols-1 gap-0.5">
+                            {planos.map((plano: any) => (
+                              <label
+                                key={plano.id}
+                                className="flex items-start gap-2.5 text-sm p-2 rounded-md hover:bg-slate-50 cursor-pointer"
+                              >
                                 <input
                                   type="checkbox"
                                   checked={formRules[plano.name] || false}
                                   onChange={() => toggleRule(plano.name)}
-                                  className="ml-checkbox"
+                                  className="ml-checkbox mt-0.5 shrink-0"
                                 />
-                                <span className="truncate flex-1 text-slate-700">{plano.name}</span>
+                                <span className="text-slate-700 leading-snug break-words" title={plano.name}>
+                                  {plano.name}
+                                </span>
                               </label>
-                            ))
-                          ) : (
-                            <span className="text-xs text-slate-400 italic">Nenhum plano financeiro vinculado a este nível.</span>
-                          )}
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                     {visionTree.length === 0 && (
                       <div className="p-4 text-center text-sm text-slate-400 bg-white rounded-lg border border-dashed border-slate-200">
                         Nenhuma árvore de visão encontrada.
+                      </div>
+                    )}
+                    {visionTree.length > 0 && filteredTree.length === 0 && (
+                      <div className="p-4 text-center text-sm text-slate-400 bg-white rounded-lg border border-dashed border-slate-200">
+                        Nenhum resultado para &quot;{formSearch.trim()}&quot;.
                       </div>
                     )}
                   </div>

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { confirmDialog } from "@/components/ui/confirmDialog";
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
 import { Input } from "@/components/ui/Input";
-import { Save, Building2, FileText, Landmark, ShieldCheck } from "lucide-react";
+import { Save, Building2, FileText, Landmark, ShieldCheck, CheckCircle, Search } from "lucide-react";
 
 export default function TaxasFundingPage() {
   const [rates, setRates] = useState<any>({
@@ -24,6 +24,7 @@ export default function TaxasFundingPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [message, setMessage] = useState("");
+  const [secSearch, setSecSearch] = useState("");
 
   useEffect(() => {
     fetchRates();
@@ -163,7 +164,8 @@ export default function TaxasFundingPage() {
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {message && (
-            <span className="text-sm font-medium text-brand-green bg-brand-green/10 border border-brand-green/20 px-3 py-1.5 rounded-lg">
+            <span className="text-sm font-medium text-brand-green bg-brand-green/10 border border-brand-green/20 px-3 py-1.5 rounded-lg inline-flex items-center gap-1.5">
+              <CheckCircle className="w-4 h-4 shrink-0" />
               {message}
             </span>
           )}
@@ -191,6 +193,9 @@ export default function TaxasFundingPage() {
           </button>
         ))}
       </div>
+      <p className="text-xs text-slate-500 -mt-2">
+        Edite a aba ativa e clique em Salvar Configurações para persistir todas as abas.
+      </p>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-6">
@@ -339,6 +344,17 @@ export default function TaxasFundingPage() {
                 <h3 className="text-base font-bold text-slate-800">Custos Fixos por Securitizadora</h3>
                 <Button variant="outline" size="sm" onClick={addSecuritizadora}>+ Nova Securitizadora</Button>
               </div>
+
+              <div className="relative max-w-sm">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Input
+                  type="search"
+                  placeholder="Buscar securitizadora..."
+                  value={secSearch}
+                  onChange={(e) => setSecSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
               
               <div className="grid gap-4">
                 {Object.keys(rates.Securitizadoras || {}).length === 0 ? (
@@ -346,7 +362,20 @@ export default function TaxasFundingPage() {
                     Nenhuma securitizadora cadastrada.
                   </div>
                 ) : (
-                  Object.keys(rates.Securitizadoras || {}).map((secName) => (
+                  (() => {
+                    const secNames = Object.keys(rates.Securitizadoras || {}).filter((name) => {
+                      const q = secSearch.trim().toLowerCase();
+                      if (!q) return true;
+                      return name.toLowerCase().includes(q);
+                    });
+                    if (secNames.length === 0) {
+                      return (
+                        <div className="py-8 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg bg-slate-50">
+                          Nenhuma securitizadora encontrada para a busca.
+                        </div>
+                      );
+                    }
+                    return secNames.map((secName) => (
                     <div key={secName} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
                       <div className="flex items-center justify-between gap-2">
                         <h4 className="font-bold text-brand-green text-sm">{secName}</h4>
@@ -377,7 +406,8 @@ export default function TaxasFundingPage() {
                         </div>
                       </div>
                     </div>
-                  ))
+                    ));
+                  })()
                 )}
               </div>
             </div>

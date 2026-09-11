@@ -11,7 +11,7 @@ import {
 } from "@/services/migration";
 import { apoioService } from "@/services/apoio";
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
-import { FolderOpen, CloudDownload, Save } from "lucide-react";
+import { FolderOpen, CloudDownload, Save, Search } from "lucide-react";
 
 export default function MigracaoSharePoint() {
   const [pendencias, setPendencias] = useState<MigrationMapping[]>([]);
@@ -21,6 +21,7 @@ export default function MigracaoSharePoint() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [selecoes, setSelecoes] = useState<Record<number, number>>({});
+  const [busca, setBusca] = useState("");
 
   const [message, setMessage] = useState("");
 
@@ -46,6 +47,12 @@ export default function MigracaoSharePoint() {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(() => setMessage(""), 5000);
+    return () => clearTimeout(t);
+  }, [message]);
 
   const handleSelect = (id: number, val: string) => {
     if (val) {
@@ -104,6 +111,19 @@ export default function MigracaoSharePoint() {
     }
   };
 
+  const term = busca.trim().toLowerCase();
+  const pendenciasFiltradas = term
+    ? pendencias.filter((p) => {
+        const nome = (p.nome_origem || "").toLowerCase();
+        const tipo = (p.tipo || "").toLowerCase();
+        const tipoLabel = p.tipo === "CENTRO_CUSTO" ? "obra / cc" : "plano financeiro";
+        return nome.includes(term) || tipo.includes(term) || tipoLabel.includes(term);
+      })
+    : pendencias;
+
+  const selecoesCount = Object.keys(selecoes).length;
+  const isErrorMessage = message.toLowerCase().includes("erro");
+
   return (
     <div className="p-8 max-w-[1400px] mx-auto animate-in fade-in duration-300 space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -129,7 +149,13 @@ export default function MigracaoSharePoint() {
       </div>
 
       {message && (
-        <div className="px-4 py-3 bg-brand-green/10 text-brand-green border border-brand-green/20 rounded-lg text-sm font-medium">
+        <div
+          className={`px-4 py-3 rounded-lg text-sm font-medium border ${
+            isErrorMessage
+              ? "bg-amber-50 text-amber-800 border-amber-200"
+              : "bg-brand-green/10 text-brand-green border-brand-green/20"
+          }`}
+        >
           {message}
         </div>
       )}
@@ -144,15 +170,20 @@ export default function MigracaoSharePoint() {
               Vincule nomes da planilha aos cadastros do ERP ML antes de concluir a carga.
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {pendencias.length > 0 && (
               <span className="text-xs font-medium text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
                 {pendencias.length} pendências
               </span>
             )}
+            {selecoesCount > 0 && (
+              <span className="text-xs font-medium text-brand-green bg-brand-green/10 border border-brand-green/20 px-2 py-0.5 rounded-full">
+                {selecoesCount} selecionados para salvar
+              </span>
+            )}
             <Button
               onClick={handleSalvar}
-              disabled={Object.keys(selecoes).length === 0 || submitting}
+              disabled={selecoesCount === 0 || submitting}
               variant="secondary"
               size="sm"
               className="gap-2"
@@ -163,13 +194,29 @@ export default function MigracaoSharePoint() {
           </div>
         </div>
 
-        <div className="p-4">
+        <div className="p-4 space-y-3">
+          {!loading && pendencias.length > 0 && (
+            <div className="relative max-w-sm">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="search"
+                placeholder="Buscar por nome ou tipo..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className="ml-input pl-9 h-9 text-sm w-full"
+              />
+            </div>
+          )}
           {loading ? (
             <AppLoadingState />
           ) : pendencias.length === 0 ? (
             <div className="p-8 text-center space-y-1 bg-slate-50 rounded-lg border border-dashed border-slate-200">
               <p className="text-sm font-medium text-slate-600">Nenhuma pendência encontrada</p>
               <p className="text-xs text-slate-400">Tudo pronto para a carga.</p>
+            </div>
+          ) : pendenciasFiltradas.length === 0 ? (
+            <div className="p-8 text-center space-y-1 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+              <p className="text-sm font-medium text-slate-600">Nenhuma pendência encontrada para a busca</p>
             </div>
           ) : (
             <div className="rounded-lg border border-slate-200 overflow-hidden">
@@ -189,7 +236,7 @@ export default function MigracaoSharePoint() {
                     </tr>
                   </thead>
                   <tbody>
-                    {pendencias.map((p) => (
+                    {pendenciasFiltradas.map((p) => (
                       <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
                         <td className="py-2.5 px-4 text-slate-600">
                           {p.tipo === "CENTRO_CUSTO" ? "Obra / CC" : "Plano Financeiro"}

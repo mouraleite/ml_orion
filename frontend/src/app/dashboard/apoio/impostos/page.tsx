@@ -13,6 +13,7 @@ export default function ImpostosPage() {
   const [regimes, setRegimes] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [savingId, setSavingId] = useState<number | null>(null);
   const [message, setMessage] = useState("");
 
   const fetchData = async () => {
@@ -66,6 +67,7 @@ export default function ImpostosPage() {
 
   const handleSave = async (regime: any) => {
     setIsSaving(true);
+    setSavingId(regime.id);
     setMessage("");
     try {
       await apoioService.updateTaxRegime(regime.id, {
@@ -78,8 +80,10 @@ export default function ImpostosPage() {
       });
       setMessage(`"${regime.nome}" salvo com sucesso!`);
       setTimeout(() => setMessage(""), 3000);
+      setTimeout(() => setSavingId(null), 1500);
     } catch (error) {
       alert("Erro ao salvar regime tributário.");
+      setSavingId(null);
     } finally {
       setIsSaving(false);
     }
@@ -102,6 +106,7 @@ export default function ImpostosPage() {
             Regimes Tributários
           </h1>
           <p className="text-slate-500 text-sm mt-1">Crie os regimes de impostos com as alíquotas separadas (PIS, COFINS, etc) para utilizar nos estudos.</p>
+          <p className="text-xs text-slate-400 mt-1">O total da carga é a soma das alíquotas (somente visualização).</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {message && (
@@ -125,9 +130,12 @@ export default function ImpostosPage() {
 
         <div className="p-4 space-y-3">
           {regimes.length === 0 ? (
-            <div className="p-8 text-center space-y-2 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+            <div className="p-8 text-center space-y-3 bg-slate-50 rounded-lg border border-dashed border-slate-200">
               <p className="text-sm font-medium text-slate-600">Nenhum regime cadastrado</p>
               <p className="text-xs text-slate-400">Clique em &quot;Novo Regime&quot; para começar.</p>
+              <Button onClick={handleAdd} className="gap-2">
+                <Plus className="w-4 h-4" /> Novo Regime
+              </Button>
             </div>
           ) : (
             regimes.map(reg => (
@@ -147,7 +155,10 @@ export default function ImpostosPage() {
                     </span>
                     <div className="hidden sm:block w-px h-6 bg-slate-200 mx-1"></div>
                     <Button onClick={() => handleSave(reg)} size="sm" variant="secondary" className="gap-2" disabled={isSaving}>
-                      <Save className="w-3.5 h-3.5" /> Salvar
+                      <Save className="w-3.5 h-3.5" />
+                      {savingId === reg.id
+                        ? (isSaving ? "Salvando..." : "Salvo")
+                        : "Salvar"}
                     </Button>
                     <button 
                       onClick={() => handleDelete(reg.id)}

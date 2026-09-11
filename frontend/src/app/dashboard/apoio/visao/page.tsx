@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from"react";
 import { useRouter } from"next/navigation";
-import { Eye, Plus, Edit2, Trash2, Copy } from"lucide-react";
+import { Eye, Plus, Edit2, Trash2, Copy, Search } from"lucide-react";
 import { Button } from"@/components/ui/Button";
 import { confirmDialog } from "@/components/ui/confirmDialog";
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
@@ -23,6 +23,7 @@ export default function VisoesPage() {
  const [visoes, setVisoes] = useState<Visao[]>([]);
  const [isLoading, setIsLoading] = useState(true);
  const [isModalOpen, setIsModalOpen] = useState(false);
+ const [busca, setBusca] = useState("");
  const [formData, setFormData] = useState({ nome:"", descricao:"", copiar_de_id: null as number | null });
  const [createMode, setCreateMode] = useState<"vazia" |"copia">("vazia");
 
@@ -69,6 +70,15 @@ export default function VisoesPage() {
  return new Date(iso).toLocaleDateString("pt-BR");
  };
 
+ const term = busca.trim().toLowerCase();
+ const visoesFiltradas = term
+ ? visoes.filter((v) => {
+ const nome = (v.nome || "").toLowerCase();
+ const desc = (v.descricao || "").toLowerCase();
+ return nome.includes(term) || desc.includes(term);
+ })
+ : visoes;
+
  return (
  <div className="p-8 max-w-[1400px] mx-auto space-y-6 animate-in fade-in duration-300">
  {/* Header */}
@@ -82,11 +92,31 @@ export default function VisoesPage() {
  Crie e gerencie diferentes cenários de estrutura DRE.
  </p>
  </div>
+ <div className="flex items-center gap-3 flex-wrap">
+ {!isLoading && visoes.length > 0 && (
+ <span className="text-xs font-medium text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-full">
+ {visoes.length} {visoes.length === 1 ? "visão" : "visões"}
+ </span>
+ )}
  <Button onClick={() => setIsModalOpen(true)} className="gap-2">
  <Plus className="w-4 h-4" />
  Nova Visão
  </Button>
  </div>
+ </div>
+
+ {!isLoading && visoes.length > 0 && (
+ <div className="relative max-w-sm">
+ <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+ <input
+ type="search"
+ placeholder="Buscar por nome ou descrição..."
+ value={busca}
+ onChange={(e) => setBusca(e.target.value)}
+ className="ml-input pl-9 h-9 text-sm w-full"
+ />
+ </div>
+ )}
 
  {/* Cards de Visões */}
  {isLoading ? (
@@ -102,9 +132,13 @@ export default function VisoesPage() {
  <Plus className="w-4 h-4" /> Nova Visão
  </Button>
  </div>
+ ) : visoesFiltradas.length === 0 ? (
+ <div className="bg-white rounded-xl border border-dashed border-slate-200 p-10 text-center">
+ <p className="text-sm text-slate-500">Nenhuma visão encontrada para a busca</p>
+ </div>
  ) : (
  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
- {visoes.map(visao => (
+ {visoesFiltradas.map(visao => (
  <div key={visao.id}
  className="bg-white rounded-xl border border-slate-200 shadow-sm hover:border-slate-300 transition-colors group flex flex-col"
  >
