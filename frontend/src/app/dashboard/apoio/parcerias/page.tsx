@@ -147,8 +147,12 @@ export default function ParceriasPage() {
     }
   };
 
+  const totalLinhasSelecionadas = configs.reduce((acc, config) => {
+    return acc + Object.keys(config.rules || {}).filter(k => config.rules[k]).length;
+  }, 0);
+
   return (
-    <div className="p-8 max-w-[1400px] mx-auto space-y-6 animate-in fade-in duration-300">
+    <div className="p-6 md:p-8 max-w-[1400px] mx-auto space-y-6 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
@@ -176,45 +180,113 @@ export default function ParceriasPage() {
           </Button>
         </div>
       ) : (
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-slate-800">Regras cadastradas</h2>
-            <span className="text-xs font-medium text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
-              {configs.length} {configs.length === 1 ? "regra" : "regras"}
-            </span>
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Regras</p>
+              <p className="text-2xl font-bold text-slate-800 mt-1">{configs.length}</p>
+              <p className="text-xs text-slate-400 mt-1">cadastradas no sistema</p>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Linhas rateadas</p>
+              <p className="text-2xl font-bold text-slate-800 mt-1">{totalLinhasSelecionadas}</p>
+              <p className="text-xs text-slate-400 mt-1">soma das seleções nas regras</p>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Como funciona</p>
+              <p className="text-sm text-slate-700 mt-2 leading-relaxed">
+                O % de rateio vem do campo <span className="font-semibold">&quot;Participação&quot;</span> do Centro de Custo.
+              </p>
+            </div>
           </div>
-          <table className="w-full text-left text-sm">
-            <thead className="bg-white border-b border-slate-200 text-slate-600 font-semibold">
-              <tr>
-                <th className="px-4 py-3">Nome da Regra</th>
-                <th className="px-4 py-3">Linhas Rateadas</th>
-                <th className="px-4 py-3 text-right">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {configs.map((config) => {
-                const count = Object.keys(config.rules || {}).filter(k => config.rules[k]).length;
-                return (
-                  <tr key={config.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-slate-800">{config.name}</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex items-center text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
-                        {count} selecionadas
+
+          <div className="bg-emerald-50/60 border border-brand-green/20 rounded-xl px-4 py-3 text-sm text-slate-700">
+            Edite uma regra para marcar ou desmarcar as linhas financeiras sujeitas ao rateio de parceria.
+          </div>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            {configs.map((config) => {
+              const selectedNames = Object.keys(config.rules || {}).filter(k => config.rules[k]);
+              const count = selectedNames.length;
+              const preview = selectedNames.slice(0, 4);
+              const remaining = Math.max(0, count - preview.length);
+
+              return (
+                <div
+                  key={config.id}
+                  className="bg-white rounded-xl border border-slate-200 shadow-sm hover:border-slate-300 transition-colors flex flex-col"
+                >
+                  <div className="p-5 flex-1 space-y-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="text-lg font-bold text-slate-800 truncate" title={config.name}>
+                          {config.name}
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Regra usada para definir quais linhas entram no rateio.
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-xs font-semibold text-brand-green bg-brand-green/10 border border-brand-green/20 px-2.5 py-1 rounded-full">
+                        {count} linhas
                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-right space-x-1">
-                      <button onClick={() => openModal(config)} className="text-slate-400 hover:text-brand-green p-1.5 rounded hover:bg-emerald-50 transition-colors" title="Editar">
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button onClick={() => handleDelete(config.id)} className="text-slate-400 hover:text-red-500 p-1.5 rounded hover:bg-red-50 transition-colors" title="Excluir">
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                    </div>
+
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">
+                        Exemplos de linhas selecionadas
+                      </p>
+                      {preview.length === 0 ? (
+                        <p className="text-sm text-slate-400 italic">Nenhuma linha marcada nesta regra.</p>
+                      ) : (
+                        <ul className="space-y-1.5">
+                          {preview.map((name) => (
+                            <li key={name} className="text-sm text-slate-700 flex items-start gap-2">
+                              <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-brand-green shrink-0" />
+                              <span className="leading-snug break-words">{name}</span>
+                            </li>
+                          ))}
+                          {remaining > 0 && (
+                            <li className="text-xs text-slate-500 pl-3.5">
+                              +{remaining} outras linhas
+                            </li>
+                          )}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="px-5 py-4 border-t border-slate-100 bg-slate-50 flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1 gap-2"
+                      onClick={() => openModal(config)}
+                    >
+                      <Pencil className="w-4 h-4" />
+                      Editar regra
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="gap-2 text-red-500 hover:text-red-600 hover:bg-red-50"
+                      onClick={() => handleDelete(config.id)}
+                      title="Excluir"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Excluir
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+
+            <button
+              type="button"
+              onClick={() => openModal()}
+              className="min-h-[220px] rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/70 hover:bg-slate-100 hover:border-brand-green/40 transition-colors flex flex-col items-center justify-center gap-2 text-slate-500 hover:text-brand-green"
+            >
+              <Plus className="w-8 h-8" />
+              <span className="text-sm font-semibold">Adicionar nova regra</span>
+            </button>
+          </div>
         </div>
       )}
 
