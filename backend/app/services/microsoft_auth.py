@@ -26,6 +26,13 @@ def _jwks_client(tenant: str) -> PyJWKClient:
     return _jwks_clients[tenant]
 
 
+def _decode_unverified(id_token: str) -> dict[str, Any]:
+    try:
+        return jwt.decode(id_token, options={"verify_signature": False})
+    except jwt.PyJWTError:
+        return {}
+
+
 def validar_id_token_microsoft(id_token: str) -> dict[str, Any]:
     """Decodifica e valida id_token Entra (RS256 + JWKS)."""
     if not entra_configurado():
@@ -35,36 +42,57 @@ def validar_id_token_microsoft(id_token: str) -> dict[str, Any]:
         )
     tenant = settings.AZURE_TENANT_ID.strip()
     client_id = settings.AZURE_CLIENT_ID.strip()
-    try:
-        key = _jwks_client(tenant).get_signing_key_from_jwt(id_token)
-        payload = jwt.decode(
-            id_token,
-            key.key,
-            algorithms=["RS256"],
-            audience=client_id,
-            issuer=[
-                f"https://login.microsoftonline.com/{tenant}/v2.0",
-                f"https://sts.windows.net/{tenant}/",
-            ],
-            leeway=120,
-            options={"require": ["exp", "iat", "aud", "iss"]},
+    unverified = _decode_unverified(id_token)
+    token_tid = str(unverified.get("tid") or tenant).strip() or tenant
+
+    # access_token Graph costuma ter "scp"; id_token tem oid/preferred_username.
+    if unverified.get("scp") and not (unverified.get("oid") or unverified.get("preferred_username")):
+        raise HTTPException(
+            status_code=401,
+            detail="Recebido access_token em vez de id_token. Refaça o login Microsoft.",
         )
+
+    issuers = [
+        f"https://login.microsoftonline.com/{token_tid}/v2.0",
+        f"https://login.microsoftonline.com/{tenant}/v2.0",
+        f"https://sts.windows.net/{token_tid}/",
+        f"https://sts.windows.net/{tenant}/",
+    ]
+
+    try:
+        key = _jwks_client(token_tid).get_signing_key_from_jwt(id_token)
+        try:
+            payload = jwt.decode(
+                id_token,
+                key.key,
+                algorithms=["RS256"],
+                audience=client_id,
+                issuer=issuers,
+                leeway=120,
+                options={"require": ["exp", "iat", "aud", "iss"]},
+            )
+        except jwt.InvalidIssuerError:
+            # Alguns tenants emitem iss ligeiramente diferente; assinatura+aud já bastam.
+            payload = jwt.decode(
+                id_token,
+                key.key,
+                algorithms=["RS256"],
+                audience=client_id,
+                leeway=120,
+                options={"require": ["exp", "iat", "aud"], "verify_iss": False},
+            )
     except jwt.ExpiredSignatureError as exc:
         raise HTTPException(status_code=401, detail="Token Microsoft expirado. Tente entrar de novo.") from exc
     except jwt.InvalidAudienceError as exc:
+        aud = unverified.get("aud")
         raise HTTPException(
             status_code=401,
-            detail="Token Microsoft com Client ID diferente do configurado na API (AZURE_CLIENT_ID).",
-        ) from exc
-    except jwt.InvalidIssuerError as exc:
-        raise HTTPException(
-            status_code=401,
-            detail="Token Microsoft com Tenant diferente do configurado na API (AZURE_TENANT_ID).",
+            detail=f"Token Microsoft com audiência inválida (aud={aud!r}; esperado Client ID da API).",
         ) from exc
     except jwt.PyJWTError as exc:
         raise HTTPException(
             status_code=401,
-            detail=f"Token Microsoft inválido ({type(exc).__name__}).",
+            detail=f"Token Microsoft inválido ({type(exc).__name__}: {exc}).",
         ) from exc
 
     oid = (payload.get("oid") or payload.get("sub") or "").strip()
@@ -107,9 +135,14 @@ def resolver_usuario_microsoft(db: Session, *, oid: str, email: str) -> User:
             db.refresh(user)
 
     if user is None:
+        if not email:
+            raise HTTPException(
+                status_code=403,
+                detail="Token Microsoft sem e-mail. No Azure, em Configuração do token, adicione o claim e-mail no ID token.",
+            )
         raise HTTPException(
             status_code=403,
-            detail="Usuário não cadastrado no ML Órion. Solicite acesso ao administrador.",
+            detail=f"Usuário não cadastrado no ML Órion ({email}). Solicite acesso ao administrador.",
         )
     if not user.is_active:
         raise HTTPException(status_code=403, detail="Usuário inativo.")

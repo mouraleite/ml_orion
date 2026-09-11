@@ -2,6 +2,7 @@ import {
   PublicClientApplication,
   type AuthenticationResult,
   type Configuration,
+  type SilentRequest,
 } from "@azure/msal-browser";
 
 const clientId = (process.env.NEXT_PUBLIC_AZURE_CLIENT_ID || "").trim();
@@ -9,6 +10,8 @@ const tenantId = (process.env.NEXT_PUBLIC_AZURE_TENANT_ID || "").trim();
 const redirectUri =
   (process.env.NEXT_PUBLIC_AZURE_REDIRECT_URI || "").trim() ||
   (typeof window !== "undefined" ? `${window.location.origin}/login` : "http://localhost:3000/login");
+
+const SSO_PENDING_KEY = "ml_orion_ms_sso_pending";
 
 export function isMicrosoftAuthConfigured(): boolean {
   return Boolean(clientId && tenantId);
@@ -18,6 +21,7 @@ let pca: PublicClientApplication | null = null;
 let initPromise: Promise<PublicClientApplication> | null = null;
 /** handleRedirectPromise só uma vez por carga da página. */
 let redirectPromise: Promise<AuthenticationResult | null> | null = null;
+let redirectConsumePromise: Promise<string | null> | null = null;
 
 function buildConfig(): Configuration {
   return {
@@ -55,43 +59,75 @@ export async function getMsalInstance(): Promise<PublicClientApplication> {
 
 const loginRequest = {
   scopes: ["openid", "profile", "email"],
-  // Força a UI da Microsoft (escolha de conta), em vez de SSO silencioso.
   prompt: "select_account" as const,
 };
 
-function hasMicrosoftRedirectResponse(): boolean {
-  if (typeof window === "undefined") return false;
-  const hash = window.location.hash || "";
-  const search = window.location.search || "";
-  return (
-    /[#&?]code=/i.test(hash) ||
-    /[#&?]code=/i.test(search) ||
-    /[#&?]error=/i.test(hash) ||
-    /[#&?]error=/i.test(search) ||
-    /[#&?]client_info=/i.test(hash)
-  );
+function clearOauthHash(): void {
+  if (typeof window === "undefined") return;
+  if (window.location.hash || window.location.search.includes("code=")) {
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+}
+
+function redirectErrorFromUrl(): string | null {
+  if (typeof window === "undefined") return null;
+  const raw = `${window.location.hash || ""}${window.location.search || ""}`;
+  const err = raw.match(/[?#&]error=([^&]+)/i)?.[1];
+  if (!err) return null;
+  const desc = raw.match(/[?#&]error_description=([^&]+)/i)?.[1];
+  const decoded = desc ? decodeURIComponent(desc.replace(/\+/g, " ")) : decodeURIComponent(err);
+  return `Microsoft: ${decoded}`;
 }
 
 /** Se o usuário voltou do login Microsoft, devolve o id_token; senão null. */
-let redirectConsumePromise: Promise<string | null> | null = null;
-
 export async function consumeMicrosoftRedirectIdToken(): Promise<string | null> {
-  // Uma única troca code→token por carga da página (evita Strict Mode / remount).
   if (!redirectConsumePromise) {
     redirectConsumePromise = (async () => {
-      const hadResponse = hasMicrosoftRedirectResponse();
-      await getMsalInstance();
-      if (!hadResponse) return null;
+      const pending = typeof sessionStorage !== "undefined" && sessionStorage.getItem(SSO_PENDING_KEY) === "1";
+      const urlError = redirectErrorFromUrl();
+      const instance = await getMsalInstance();
       const result = await redirectPromise;
-      const idToken = result?.idToken?.trim() || null;
-      if (typeof window !== "undefined" && window.location.hash) {
-        window.history.replaceState(
-          {},
-          document.title,
-          window.location.pathname + window.location.search,
+
+      if (urlError) {
+        sessionStorage.removeItem(SSO_PENDING_KEY);
+        clearOauthHash();
+        throw new Error(urlError);
+      }
+
+      let idToken = result?.idToken?.trim() || "";
+
+      if (!idToken) {
+        const account = result?.account || instance.getAllAccounts()[0];
+        if (account) {
+          try {
+            const silentReq: SilentRequest = {
+              ...loginRequest,
+              account,
+              forceRefresh: false,
+            };
+            const silent = await instance.acquireTokenSilent(silentReq);
+            idToken = silent.idToken?.trim() || "";
+          } catch {
+            /* segue para erro/pendente */
+          }
+        }
+      }
+
+      clearOauthHash();
+
+      if (idToken) {
+        sessionStorage.removeItem(SSO_PENDING_KEY);
+        return idToken;
+      }
+
+      if (pending) {
+        sessionStorage.removeItem(SSO_PENDING_KEY);
+        throw new Error(
+          "Microsoft autenticou, mas o navegador não devolveu o id_token. Feche abas extras do login e tente de novo.",
         );
       }
-      return idToken;
+
+      return null;
     })();
   }
   return redirectConsumePromise;
@@ -100,5 +136,6 @@ export async function consumeMicrosoftRedirectIdToken(): Promise<string | null> 
 /** Redireciona a janela inteira para a tela de login da Microsoft. */
 export async function loginWithMicrosoftRedirect(): Promise<void> {
   const instance = await getMsalInstance();
+  sessionStorage.setItem(SSO_PENDING_KEY, "1");
   await instance.loginRedirect(loginRequest);
 }

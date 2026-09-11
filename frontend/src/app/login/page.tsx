@@ -64,18 +64,23 @@ export default function LoginPage() {
       microsoftSsoExchange = (async () => {
         const idToken = await consumeMicrosoftRedirectIdToken();
         if (!idToken) return "skip";
-        const { data } = await api.post("/auth/microsoft", { id_token: idToken });
+        const { data } = await api.post<{ access_token: string }>("/auth/microsoft", {
+          id_token: idToken,
+        });
+        if (!data?.access_token) {
+          throw new Error("API não devolveu access_token do ERP.");
+        }
         await login(data.access_token);
         return "ok";
-      })().catch((err: unknown) => {
-        // Propaga para o efeito atual poder mostrar o erro.
-        throw err;
-      });
+      })();
     }
 
     (async () => {
       try {
-        if (alive) setMsLoading(true);
+        if (alive) {
+          setError("");
+          setMsLoading(true);
+        }
         const result = await microsoftSsoExchange;
         if (result === "skip") {
           microsoftSsoExchange = null;
