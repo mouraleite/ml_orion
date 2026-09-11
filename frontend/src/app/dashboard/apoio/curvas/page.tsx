@@ -179,7 +179,7 @@ export default function CurvasPage() {
  onClick={() => setActiveTab(tipo)}
  className={`whitespace-nowrap px-6 py-3 font-medium text-sm border-b-2 transition-colors ${
  activeTab === tipo
- ?"border-blue-600 text-blue-600" 
+ ?"border-brand-green text-brand-green"
  :"border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
  }`}
  >
@@ -223,7 +223,7 @@ export default function CurvasPage() {
  </td>
  <td className="p-4 text-right">
  <div className="flex justify-end gap-2">
- <button onClick={() => handleEdit(c)} className="p-2 text-slate-400 hover:text-blue-600 transition-colors">
+ <button onClick={() => handleEdit(c)} className="p-2 text-slate-400 hover:text-brand-green transition-colors">
  <Edit2 className="w-4 h-4" />
  </button>
  <button onClick={() => handleDelete(c.id)} className="p-2 text-slate-400 hover:text-red-600 transition-colors">
