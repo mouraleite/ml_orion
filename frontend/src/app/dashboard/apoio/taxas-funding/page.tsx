@@ -142,65 +142,57 @@ export default function TaxasFundingPage() {
 
   if (isLoading) return <AppLoadingState />;
 
+  const tabs = [
+    { id: "CVM_ANBIMA", label: "CVM & ANBIMA", icon: Landmark },
+    { id: "B3", label: "B3 (Registro e Custódia)", icon: Building2 },
+    { id: "Securitizadoras", label: "Securitizadoras", icon: ShieldCheck },
+    { id: "GrossUp", label: "Taxas Gross Up", icon: FileText },
+  ] as const;
+
   return (
-    <div className="p-8 space-y-8 animate-in fade-in duration-300 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between">
+    <div className="p-8 space-y-6 animate-in fade-in duration-300 max-w-6xl mx-auto">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Taxas de Funding (CRI)</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Taxas de Funding (CRI)</h1>
           <p className="text-slate-500 mt-1 text-sm">
             Configure as tabelas de preços da B3, CVM, ANBIMA e Securitizadoras de forma amigável.
           </p>
         </div>
         <div className="flex items-center gap-4">
-          {message && <span className="text-sm text-green-600 font-medium">{message}</span>}
-          <Button onClick={handleSave} disabled={isSaving} className="bg-ml-green hover:bg-ml-dark text-white flex items-center gap-2">
+          {message && <span className="text-sm text-brand-green font-medium">{message}</span>}
+          <Button onClick={handleSave} disabled={isSaving} className="gap-2">
             <Save className="w-4 h-4" />
             {isSaving ? "Salvando..." : "Salvar Configurações"}
           </Button>
         </div>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col md:flex-row">
-        
-        {/* Menu Lateral das Abas */}
-        <div className="w-full md:w-64 bg-slate-50 border-r border-slate-200 p-4 space-y-2 shrink-0">
-          <button 
-            onClick={() => setActiveTab("CVM_ANBIMA")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === "CVM_ANBIMA" ? "bg-white text-ml-green shadow-sm border border-slate-200" : "text-slate-600 hover:bg-slate-100"}`}
+      <div className="flex overflow-x-auto border-b border-slate-200 hide-scrollbar">
+        {tabs.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setActiveTab(id)}
+            className={`whitespace-nowrap px-6 py-3 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 ${
+              activeTab === id
+                ? "border-brand-green text-brand-green"
+                : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+            }`}
           >
-            <Landmark className="w-4 h-4" /> CVM & ANBIMA
+            <Icon className="w-4 h-4" />
+            {label}
           </button>
-          
-          <button 
-            onClick={() => setActiveTab("B3")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === "B3" ? "bg-white text-ml-green shadow-sm border border-slate-200" : "text-slate-600 hover:bg-slate-100"}`}
-          >
-            <Building2 className="w-4 h-4" /> B3 (Registro e Custódia)
-          </button>
+        ))}
+      </div>
 
-          <button 
-            onClick={() => setActiveTab("Securitizadoras")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === "Securitizadoras" ? "bg-white text-ml-green shadow-sm border border-slate-200" : "text-slate-600 hover:bg-slate-100"}`}
-          >
-            <ShieldCheck className="w-4 h-4" /> Securitizadoras
-          </button>
-
-          <button 
-            onClick={() => setActiveTab("GrossUp")}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${activeTab === "GrossUp" ? "bg-white text-ml-green shadow-sm border border-slate-200" : "text-slate-600 hover:bg-slate-100"}`}
-          >
-            <FileText className="w-4 h-4" /> Taxas Gross Up
-          </button>
-        </div>
-
-        {/* Área de Conteúdo da Aba */}
-        <div className="flex-1 p-8 bg-white min-h-[500px]">
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="p-8 min-h-[500px]">
           
           {/* CVM e ANBIMA */}
           {activeTab === "CVM_ANBIMA" && (
             <div className="space-y-8 animate-in fade-in">
               <div className="space-y-4">
-                <h3 className="text-lg font-bold text-slate-800 border-b pb-2">Taxas CVM</h3>
+                <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2">Taxas CVM</h3>
                 <div className="grid grid-cols-3 gap-6">
                   <div className="space-y-1">
                     <label className="text-sm font-medium text-slate-700">ICVM 400 (Decimal)</label>
@@ -218,7 +210,7 @@ export default function TaxasFundingPage() {
               </div>
 
               <div className="space-y-4">
-                <h3 className="text-lg font-bold text-slate-800 border-b pb-2 mt-8">Taxas ANBIMA</h3>
+                <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mt-8">Taxas ANBIMA</h3>
                 <div className="grid grid-cols-3 gap-6">
                   <div className="space-y-1">
                     <label className="text-sm font-medium text-slate-700">Taxa de Registro</label>
@@ -262,7 +254,7 @@ export default function TaxasFundingPage() {
           {activeTab === "B3" && (
             <div className="space-y-8 animate-in fade-in">
               <div className="space-y-4">
-                <div className="flex items-center justify-between border-b pb-2">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                   <h3 className="text-lg font-bold text-slate-800">Tabela Escalonada: Registro B3</h3>
                   <Button variant="outline" size="sm" onClick={() => addB3Row("Registro")}>+ Adicionar Faixa</Button>
                 </div>
@@ -289,7 +281,7 @@ export default function TaxasFundingPage() {
               </div>
 
               <div className="space-y-4">
-                <div className="flex items-center justify-between border-b pb-2 mt-8">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2 mt-8">
                   <h3 className="text-lg font-bold text-slate-800">Tabela Escalonada: Custódia B3</h3>
                   <Button variant="outline" size="sm" onClick={() => addB3Row("Custodia")}>+ Adicionar Faixa</Button>
                 </div>
@@ -320,16 +312,16 @@ export default function TaxasFundingPage() {
           {/* Securitizadoras */}
           {activeTab === "Securitizadoras" && (
             <div className="space-y-8 animate-in fade-in">
-              <div className="flex items-center justify-between border-b pb-2">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                 <h3 className="text-lg font-bold text-slate-800">Custos Fixos por Securitizadora</h3>
                 <Button variant="outline" size="sm" onClick={addSecuritizadora}>+ Nova Securitizadora</Button>
               </div>
               
               <div className="grid gap-6">
                 {Object.keys(rates.Securitizadoras || {}).map((secName) => (
-                  <div key={secName} className="p-5 bg-slate-50 rounded-xl border border-slate-200 shadow-sm space-y-4">
+                  <div key={secName} className="p-5 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
                     <div className="flex items-center justify-between">
-                      <h4 className="font-bold text-ml-green">{secName}</h4>
+                      <h4 className="font-bold text-brand-green">{secName}</h4>
                       <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8" onClick={() => removeSecuritizadora(secName)}>
                         Excluir
                       </Button>
@@ -371,7 +363,7 @@ export default function TaxasFundingPage() {
           {/* Gross Up */}
           {activeTab === "GrossUp" && (
             <div className="space-y-6 animate-in fade-in">
-              <h3 className="text-lg font-bold text-slate-800 border-b pb-2">Prestador Gross Up (%)</h3>
+              <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2">Prestador Gross Up (%)</h3>
               
               <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                 {Object.keys(rates.Prestador_GrossUp || {}).map((prestador) => (

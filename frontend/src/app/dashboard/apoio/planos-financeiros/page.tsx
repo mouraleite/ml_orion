@@ -69,7 +69,7 @@ export default function PlanosFinanceirosPage() {
 
  const renderSortIcon = (key: string) => {
  if (sortConfig?.key !== key) return <span className="text-slate-300">↕</span>;
- return sortConfig.direction ==="asc" ? <span className="text-[#F5883A] font-bold">↑</span> : <span className="text-[#F5883A] font-bold">↓</span>;
+ return sortConfig.direction ==="asc" ? <span className="text-brand-orange font-bold">↑</span> : <span className="text-brand-orange font-bold">↓</span>;
  };
 
  const filteredPlanos = planos.filter(p => {
@@ -114,13 +114,13 @@ export default function PlanosFinanceirosPage() {
  };
 
  const renderFlag = (flag: string) => {
- if (flag ==="S") return <span className="inline-flex items-center gap-1 text-green-600 bg-green-50 px-2 py-0.5 rounded-full text-xs font-semibold border border-green-200">✅ Sim</span>;
+ if (flag ==="S") return <span className="inline-flex items-center gap-1 text-brand-green bg-brand-green/10 px-2 py-0.5 rounded-full text-xs font-semibold border border-brand-green/20">Sim</span>;
  if (flag ==="N") return <span className="inline-flex items-center gap-1 text-slate-500 bg-slate-50 px-2 py-0.5 rounded-full text-xs border border-slate-200">Não</span>;
  return flag;
  };
 
  const renderAtiva = (flag: string) => {
- if (flag ==="S") return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border bg-green-100 text-green-700 border-green-200"><span className="w-1.5 h-1.5 rounded-full bg-green-500"/> Ativa</span>;
+ if (flag ==="S") return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border bg-brand-green/10 text-brand-green border-brand-green/20"><span className="w-1.5 h-1.5 rounded-full bg-brand-green"/> Ativa</span>;
  if (flag ==="N") return <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold border bg-slate-100 text-slate-500 border-slate-200"><span className="w-1.5 h-1.5 rounded-full bg-slate-400"/> Inativa</span>;
  return flag;
  };
@@ -129,17 +129,17 @@ export default function PlanosFinanceirosPage() {
  const tiposUnicos = Array.from(new Set(planos.map(p => p.tpConta).filter(Boolean))).sort();
 
  return (
- <div className="space-y-6">
+ <div className="p-8 space-y-6 animate-in fade-in duration-300">
  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
  <div>
  <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
- <Wallet className="w-6 h-6 text-[#F5883A]" />
+ <Wallet className="w-6 h-6 text-brand-orange" />
  Planos Financeiros
  </h1>
  <p className="text-slate-500 text-sm mt-1">Gerencie os planos financeiros (Categorias de Pagamento) integrados com o Sienge.</p>
  </div>
  <Button 
- className="bg-[#F5883A] hover:bg-[#d97732] text-white font-bold flex items-center gap-2 shadow-sm shadow-orange-500/20" 
+ className="gap-2" 
  onClick={handleSync}
  disabled={isSyncing}
  >
@@ -241,8 +241,8 @@ export default function PlanosFinanceirosPage() {
  Nenhum plano financeiro encontrado.
  </td>
  </tr>
- ) : sortedPlanos.map((plano) => (
- <tr key={plano.id} className="hover:bg-slate-50/50 transition-colors">
+ ) : sortedPlanos.map((plano, idx) => (
+ <tr key={plano.id} className={`hover:bg-slate-50 transition-colors ${idx % 2 === 1 ? "bg-slate-50/60" : "bg-white"}`}>
  <td className="px-4 py-3 whitespace-nowrap">
  <span className="text-sm font-mono text-slate-600 bg-slate-50 px-2 py-1 rounded">
  {formatPlanId(plano.db_sienge_id)}

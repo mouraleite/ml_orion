@@ -124,7 +124,7 @@ export default function IntegracaoSiengePage() {
             onClick={() => setActiveTab("PENDENCIAS")}
             className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
               activeTab === "PENDENCIAS"
-                ? "border-brand-orange text-brand-orange"
+                ? "border-brand-green text-brand-green"
                 : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
             }`}
           >
@@ -138,7 +138,7 @@ export default function IntegracaoSiengePage() {
             onClick={() => setActiveTab("LOGS")}
             className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
               activeTab === "LOGS"
-                ? "border-brand-orange text-brand-orange"
+                ? "border-brand-green text-brand-green"
                 : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
             }`}
           >

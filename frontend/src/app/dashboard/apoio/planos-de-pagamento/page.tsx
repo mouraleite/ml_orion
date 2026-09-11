@@ -164,16 +164,16 @@ export default function PlanosDePagamentoPage() {
  }} className="text-slate-400 hover:text-red-500 font-bold">&times;</button>
  </div>
  <div className="flex gap-4 items-center text-xs text-slate-500 ml-1">
- <label className="flex items-center gap-1 cursor-pointer hover:text-slate-700">
- <input type="checkbox" checked={cond.aplica_juros !== false} onChange={(e) => {
+ <label className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700">
+ <input type="checkbox" className="ml-checkbox" checked={cond.aplica_juros !== false} onChange={(e) => {
  const newPlans = [...plans];
  (newPlans[pIdx].condicoes_json || newPlans[pIdx].condicoes)[cIdx].aplica_juros = e.target.checked;
  setPlans(newPlans);
  }} />
  Aplica Juros
  </label>
- <label className="flex items-center gap-1 cursor-pointer hover:text-slate-700">
- <input type="checkbox" checked={cond.aplica_correcao !== false} onChange={(e) => {
+ <label className="flex items-center gap-1.5 cursor-pointer hover:text-slate-700">
+ <input type="checkbox" className="ml-checkbox" checked={cond.aplica_correcao !== false} onChange={(e) => {
  const newPlans = [...plans];
  (newPlans[pIdx].condicoes_json || newPlans[pIdx].condicoes)[cIdx].aplica_correcao = e.target.checked;
  setPlans(newPlans);
@@ -196,7 +196,7 @@ export default function PlanosDePagamentoPage() {
  <div className="p-4 border-t bg-slate-50 flex flex-col gap-2">
  <div className="flex justify-between items-center text-sm">
  <span className="font-semibold text-slate-500">Soma Total:</span>
- <span className={`font-bold ${isTotalValid ? 'text-green-600' : 'text-red-500'}`}>
+ <span className={`font-bold ${isTotalValid ? 'text-brand-green' : 'text-red-500'}`}>
  {Number(totalPerc.toFixed(2))}%
  </span>
  </div>

@@ -61,7 +61,7 @@ function DroppableUnmapped({ planos }: { planos: any[] }) {
  const { isOver, setNodeRef } = useDroppable({ id:"unmapped-area" });
  return (
  <div ref={setNodeRef}
- className={`flex-1 flex flex-col gap-2 p-4 min-h-[200px] border-2 border-dashed rounded-xl transition-colors ${isOver ?"border-ml-green bg-emerald-50/50" :"border-slate-200 bg-slate-50"}`}>
+ className={`flex-1 flex flex-col gap-2 p-4 min-h-[200px] border-2 border-dashed rounded-xl transition-colors ${isOver ?"border-brand-green bg-emerald-50/50" :"border-slate-200 bg-slate-50"}`}>
  {planos.length === 0 ? (
  <div className="flex-1 flex flex-col items-center justify-center text-slate-400">
  <AlertCircle className="w-8 h-8 mb-2 opacity-50" />
@@ -86,7 +86,7 @@ function DroppableVisionNode({ node, indentLevel, isExpanded, onToggle, onEdit, 
 
  return (
  <div className="mb-1" ref={setNodeRef}>
- <div className={`flex items-center justify-between py-2.5 px-4 rounded-lg transition-colors border-2 group ${isOver ?"border-ml-green bg-emerald-50" :"border-transparent hover:bg-slate-50"} ${isMainNode ? 'bg-slate-50/50' : ''}`}>
+ <div className={`flex items-center justify-between py-2.5 px-4 rounded-lg transition-colors border-2 group ${isOver ?"border-brand-green bg-emerald-50" :"border-transparent hover:bg-slate-50"} ${isMainNode ? 'bg-slate-50/50' : ''}`}>
  <div className="flex items-center gap-2" style={{ paddingLeft: `${indentLevel * 24}px` }}>
  <button onClick={onToggle} className="p-1 rounded hover:bg-slate-200 transition-colors">
  {isExpanded ? <ChevronDown className="w-4 h-4 text-slate-500" /> : <ChevronRight className="w-4 h-4 text-slate-500" />}
@@ -98,7 +98,7 @@ function DroppableVisionNode({ node, indentLevel, isExpanded, onToggle, onEdit, 
  </div>
  </div>
  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
- <button onClick={onEdit} className="p-1.5 text-slate-400 hover:text-ml-green rounded hover:bg-emerald-50"><Edit2 className="w-3.5 h-3.5" /></button>
+ <button onClick={onEdit} className="p-1.5 text-slate-400 hover:text-brand-green rounded hover:bg-emerald-50"><Edit2 className="w-3.5 h-3.5" /></button>
  <button onClick={onDelete} className="p-1.5 text-slate-400 hover:text-red-600 rounded hover:bg-red-50"><Trash2 className="w-3.5 h-3.5" /></button>
  </div>
  </div>
@@ -112,7 +112,7 @@ function DroppableVisionNode({ node, indentLevel, isExpanded, onToggle, onEdit, 
  </div>
  )}
  {isExpanded && planosOrdenados.length === 0 && isOver && (
- <div className="mt-1 mb-2 py-3 text-center text-sm text-ml-green font-medium bg-emerald-50 border border-dashed border-emerald-200 rounded-lg mx-4"
+ <div className="mt-1 mb-2 py-3 text-center text-sm text-brand-green font-medium bg-emerald-50 border border-dashed border-emerald-200 rounded-lg mx-4"
  style={{ marginLeft: `${(indentLevel + 1) * 24 + 48}px` }}>
  Solte aqui para vincular à {node.codigo}
  </div>
@@ -275,7 +275,7 @@ export default function EditorVisaoPage() {
 
  return (
  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
- <div className="space-y-6 h-[calc(100vh-8rem)] flex flex-col">
+ <div className="space-y-6 h-[calc(100vh-8rem)] flex flex-col animate-in fade-in duration-300">
  {/* Header */}
  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
  <div className="flex items-center gap-3">
@@ -284,21 +284,21 @@ export default function EditorVisaoPage() {
  </button>
  <div>
  <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
- <Eye className="w-6 h-6 text-ml-green" />
+ <Eye className="w-6 h-6 text-brand-green" />
  {visaoNome ||"Visão"}
  </h1>
  <p className="text-slate-500 mt-1 text-sm">Arraste contas para as categorias ou vice-versa.</p>
  </div>
  </div>
- <div className="flex gap-2">
+ <div className="flex gap-2 flex-wrap">
  {hasChanges && (
- <Button variant="outline" onClick={handleUndoChanges}>
- <RotateCcw className="w-4 h-4 mr-2" />
+ <Button variant="outline" onClick={handleUndoChanges} className="gap-2">
+ <RotateCcw className="w-4 h-4" />
  Desfazer Alterações
  </Button>
  )}
- <Button onClick={() => { setEditingNode(null); setFormData({ codigo:"", descricao:"" }); setIsModalOpen(true); }}>
- <Plus className="w-4 h-4 mr-2" />
+ <Button onClick={() => { setEditingNode(null); setFormData({ codigo:"", descricao:"" }); setIsModalOpen(true); }} className="gap-2">
+ <Plus className="w-4 h-4" />
  Nova Categoria
  </Button>
  </div>
@@ -330,7 +330,7 @@ export default function EditorVisaoPage() {
  <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col min-h-0">
  <div className="p-4 border-b border-slate-200 bg-slate-50 shrink-0 flex justify-between items-center">
  <h2 className="font-semibold text-slate-800">Não Mapeados</h2>
- <span className={`font-bold px-2 py-0.5 rounded text-xs ${unmappedPlans.length > 0 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+ <span className={`font-bold px-2 py-0.5 rounded text-xs ${unmappedPlans.length > 0 ? 'bg-amber-100 text-amber-700' : 'bg-brand-green/10 text-brand-green'}`}>
  {unmappedPlans.length} pendentes
  </span>
  </div>
@@ -360,12 +360,12 @@ export default function EditorVisaoPage() {
  <div className="p-4 space-y-4">
  <div>
  <label className="block text-sm font-medium text-slate-700 mb-1">Código Hierárquico</label>
- <input type="text" placeholder="Ex: 01.05" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-ml-green outline-none"
+ <input type="text" placeholder="Ex: 01.05" className="ml-input"
  value={formData.codigo} onChange={e => setFormData({ ...formData, codigo: e.target.value })} />
  </div>
  <div>
  <label className="block text-sm font-medium text-slate-700 mb-1">Descrição</label>
- <input type="text" placeholder="Ex: RECEITAS EXTRAORDINÁRIAS" className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-ml-green outline-none"
+ <input type="text" placeholder="Ex: RECEITAS EXTRAORDINÁRIAS" className="ml-input"
  value={formData.descricao} onChange={e => setFormData({ ...formData, descricao: e.target.value })} />
  </div>
  </div>

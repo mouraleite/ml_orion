@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback } from"react";
 import { useParams, useRouter } from"next/navigation";
-import { Eye, ChevronDown, ChevronRight, FileText, ArrowLeft, ArrowRight, Printer, Download } from"lucide-react";
+import { Eye, ChevronDown, ChevronRight, FileText, ArrowLeft, ArrowRight, Printer } from"lucide-react";
 import { Button } from"@/components/ui/Button";
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
 import { apoioService, VisaoNode } from"@/services/apoio";
@@ -112,7 +112,7 @@ export default function VisualizarVisaoPage() {
  }
 
  return (
- <div className="space-y-6 flex flex-col h-full">
+ <div className="p-8 space-y-6 flex flex-col h-full animate-in fade-in duration-300">
  {/* Header */}
  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
  <div className="flex items-center gap-3">
@@ -120,22 +120,22 @@ export default function VisualizarVisaoPage() {
  <ArrowLeft className="w-5 h-5" />
  </button>
  <div>
- <div className="flex items-center gap-2">
+ <div className="flex items-center gap-2 flex-wrap">
  <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
- <Eye className="w-6 h-6 text-ml-green" />
+ <Eye className="w-6 h-6 text-brand-green" />
  {visaoNome ||"Visão"}
  </h1>
- <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded font-medium ml-2">Modo Visualização</span>
+ <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded font-medium">Modo Visualização</span>
  </div>
  <p className="text-slate-500 mt-1 text-sm">Visualize a estrutura de categorias e contas da DRE.</p>
  </div>
  </div>
- <div className="flex gap-2">
+ <div className="flex gap-2 flex-wrap">
  <Button variant="outline" onClick={expandirTodos}>Expandir Tudo</Button>
  <Button variant="outline" onClick={recolherTodos}>Recolher Tudo</Button>
- <Button onClick={() => router.push(`/dashboard/apoio/visao/${visaoId}`)}>
+ <Button onClick={() => router.push(`/dashboard/apoio/visao/${visaoId}`)} className="gap-2">
  Editar Estrutura
- <ArrowRight className="w-4 h-4 ml-2" />
+ <ArrowRight className="w-4 h-4" />
  </Button>
  </div>
  </div>
@@ -145,7 +145,7 @@ export default function VisualizarVisaoPage() {
  <div className="p-4 border-b border-slate-200 bg-slate-50 shrink-0 flex justify-between items-center">
  <h2 className="font-semibold text-slate-800">Estrutura Consolidada</h2>
  <div className="flex gap-2">
- <button className="p-2 text-slate-500 hover:text-ml-green hover:bg-emerald-50 rounded-lg transition-colors" title="Imprimir" onClick={() => window.print()}>
+ <button className="p-2 text-slate-500 hover:text-brand-green hover:bg-emerald-50 rounded-lg transition-colors" title="Imprimir" onClick={() => window.print()}>
  <Printer className="w-4 h-4" />
  </button>
  </div>

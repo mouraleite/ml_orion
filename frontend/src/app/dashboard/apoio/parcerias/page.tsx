@@ -125,17 +125,17 @@ export default function ParceriasPage() {
   };
 
   return (
-    <div className="p-6 max-w-[1400px] mx-auto space-y-6">
+    <div className="p-8 max-w-[1400px] mx-auto space-y-6 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <Users className="w-6 h-6 text-[#F5883A]" />
+            <Users className="w-6 h-6 text-brand-orange" />
             Regras de Parceria
           </h1>
-          <p className="text-slate-500 mt-1">Configure o rateio de parceria por agrupamento Sienge.</p>
+          <p className="text-slate-500 text-sm mt-1">Configure o rateio de parceria por agrupamento Sienge.</p>
         </div>
-        <Button onClick={() => openModal()} className="bg-[#F5883A] hover:bg-[#d97732] text-white">
-          <Plus className="w-4 h-4 mr-2" /> Nova Regra
+        <Button onClick={() => openModal()} className="gap-2">
+          <Plus className="w-4 h-4" /> Nova Regra
         </Button>
       </div>
 
@@ -144,7 +144,7 @@ export default function ParceriasPage() {
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-medium">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
               <tr>
                 <th className="px-6 py-4">Nome da Regra</th>
                 <th className="px-6 py-4">Linhas Rateadas</th>
@@ -155,21 +155,23 @@ export default function ParceriasPage() {
               {configs.length === 0 ? (
                 <tr>
                   <td colSpan={3} className="px-6 py-8 text-center text-slate-500">
-                    Nenhuma regra de parceria cadastrada.
+                    <div className="p-4 text-sm text-slate-400 bg-slate-50 rounded-lg border border-dashed inline-block">
+                      Nenhuma regra de parceria cadastrada.
+                    </div>
                   </td>
                 </tr>
               ) : (
                 configs.map((config) => (
-                  <tr key={config.id} className="hover:bg-slate-50/50">
+                  <tr key={config.id} className="hover:bg-slate-50 transition-colors">
                     <td className="px-6 py-4 font-medium text-slate-800">{config.name}</td>
                     <td className="px-6 py-4 text-slate-600">
                       {Object.keys(config.rules || {}).filter(k => config.rules[k]).length} selecionadas
                     </td>
                     <td className="px-6 py-4 text-right space-x-2">
-                      <button onClick={() => openModal(config)} className="text-slate-400 hover:text-[#F5883A] p-1">
+                      <button onClick={() => openModal(config)} className="text-slate-400 hover:text-brand-green p-1 transition-colors" title="Editar">
                         <Pencil className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleDelete(config.id)} className="text-slate-400 hover:text-red-500 p-1">
+                      <button onClick={() => handleDelete(config.id)} className="text-slate-400 hover:text-red-500 p-1 transition-colors" title="Excluir">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </td>
@@ -201,26 +203,26 @@ export default function ParceriasPage() {
                     type="text"
                     value={formName}
                     onChange={(e) => setFormName(e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#F5883A]/40 focus:border-[#F5883A]"
+                    className="ml-input"
                     placeholder="Ex: Regra Padrão"
                   />
                 </div>
               </div>
 
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-4">
                   <label className="text-sm font-semibold text-slate-700 block">
                     Linhas Financeiras Sujeitas a Rateio
                   </label>
-                  <span className="text-xs text-slate-500 italic">
-                    O percentual será lido do campo "Participação" do Centro de Custo.
+                  <span className="text-xs text-slate-500 italic shrink-0">
+                    O percentual será lido do campo &quot;Participação&quot; do Centro de Custo.
                   </span>
                 </div>
                 
                 <div className="border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
                   <div className="p-4 max-h-96 overflow-y-auto space-y-4">
                     {visionTree.map((node: any) => (
-                      <div key={node.id} className="bg-white p-3 rounded border border-slate-200">
+                      <div key={node.id} className="bg-white p-3 rounded-lg border border-slate-200">
                         <h4 className="text-sm font-semibold text-slate-800 mb-2">{node.codigo} - {node.descricao}</h4>
                         <div className="pl-2 grid grid-cols-1 md:grid-cols-2 gap-1">
                           {node.planos_financeiros && node.planos_financeiros.length > 0 ? (
@@ -230,9 +232,9 @@ export default function ParceriasPage() {
                                   type="checkbox"
                                   checked={formRules[plano.name] || false}
                                   onChange={() => toggleRule(plano.name)}
-                                  className="w-4 h-4 text-[#F5883A] rounded border-slate-300 focus:ring-[#F5883A]"
+                                  className="ml-checkbox"
                                 />
-                                <span className="truncate flex-1">{plano.name}</span>
+                                <span className="truncate flex-1 text-slate-700">{plano.name}</span>
                               </label>
                             ))
                           ) : (
@@ -251,7 +253,7 @@ export default function ParceriasPage() {
             
             <div className="px-6 py-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
               <Button variant="outline" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-              <Button onClick={handleSave} className="bg-[#F5883A] hover:bg-[#d97732] text-white">
+              <Button onClick={handleSave} className="gap-2">
                 Salvar Regra
               </Button>
             </div>
