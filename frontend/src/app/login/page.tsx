@@ -52,64 +52,20 @@ function BrandStack() {
 }
 
 function LoginBackdrop() {
-  // Arte verde + arcos dourados (sem foto do loteamento).
+  // Fundo institucional (creme + linhas topográficas), sem logo.
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
       <div
-        className="absolute inset-0"
+        className="absolute inset-0 bg-[#FBF7F0]"
         style={{
-          background:
-            "radial-gradient(ellipse 90% 80% at 35% 45%, #1a4a3c 0%, #12352c 45%, #0B1C12 100%)",
+          backgroundImage: "url('/login-bg-moura.jpg')",
+          backgroundSize: "cover",
+          backgroundPosition: "center top",
+          backgroundRepeat: "no-repeat",
         }}
       />
-      <svg
-        className="absolute inset-0 h-full w-full"
-        viewBox="0 0 1440 900"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
-        preserveAspectRatio="xMidYMid slice"
-      >
-        {/* Canto superior esquerdo */}
-        <path
-          d="M -20 -10 C 160 -40 280 60 310 200"
-          stroke="#E8B86D"
-          strokeWidth="1.35"
-          strokeOpacity="0.85"
-        />
-        {/* Arcos inferiores esquerdos (concentricos) */}
-        <path
-          d="M -80 520 C 200 380 380 520 420 780"
-          stroke="#E8B86D"
-          strokeWidth="1.4"
-          strokeOpacity="0.8"
-        />
-        <path
-          d="M -100 600 C 240 440 440 580 500 860"
-          stroke="#E8B86D"
-          strokeWidth="1.3"
-          strokeOpacity="0.7"
-        />
-        <path
-          d="M -120 680 C 280 500 500 640 580 920"
-          stroke="#F9C094"
-          strokeWidth="1.2"
-          strokeOpacity="0.55"
-        />
-        {/* Detalhe suave no canto superior direito */}
-        <path
-          d="M 1480 -20 C 1280 40 1220 160 1260 300"
-          stroke="#E8B86D"
-          strokeWidth="1.1"
-          strokeOpacity="0.28"
-        />
-      </svg>
-      <div
-        className="absolute inset-0 opacity-[0.06]"
-        style={{
-          backgroundImage:
-            "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
-        }}
-      />
+      {/* Suaviza bordas em telas altas sem apagar as linhas */}
+      <div className="absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#FBF7F0] to-transparent" />
     </div>
   );
 }
@@ -245,9 +201,9 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex w-full items-center justify-center p-4 sm:p-6 font-sans bg-[#0B1C12] relative overflow-x-hidden overflow-y-auto">
+    <div className="min-h-screen flex w-full items-center justify-center p-4 sm:p-6 font-sans bg-[#FBF7F0] relative overflow-x-hidden overflow-y-auto">
       <LoginBackdrop />
-      <div className="relative z-10 w-full max-w-[440px] box-border rounded-2xl bg-white border border-white/10 p-7 sm:p-10 shadow-[0_24px_64px_rgba(0,0,0,0.45)]">
+      <div className="relative z-10 w-full max-w-[440px] box-border rounded-2xl bg-white border border-slate-200/80 p-7 sm:p-10 shadow-[0_20px_50px_rgba(37,87,66,0.12)]">
         <div className="mb-7">
           <BrandStack />
         </div>
