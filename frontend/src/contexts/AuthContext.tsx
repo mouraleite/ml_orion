@@ -3,6 +3,7 @@ import { createContext, useContext, useState, useEffect, ReactNode, useCallback 
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { setAuthSession, clearAuthSession, syncAuthSessionFromStorage } from '@/lib/auth-session';
+import { clearMicrosoftSession, isMicrosoftAuthConfigured } from '@/lib/msal';
 import type { UserCapabilities } from '@/lib/roles';
 
 interface DepartamentoSimples {
@@ -232,7 +233,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     persistDepartamentoId(null);
     clearAuthSession();
     setUser(null);
-    router.push('/login');
+    void (async () => {
+      if (isMicrosoftAuthConfigured()) {
+        await clearMicrosoftSession();
+      }
+      router.push('/login');
+    })();
   };
 
   return (

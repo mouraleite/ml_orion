@@ -44,7 +44,7 @@ Em https://vercel.com → projeto `erp-ml` → Settings → Environment Variable
 
 Redeploy o front.
 
-Confirme no Render: `CORS_ORIGINS=https://erp-ml-six.vercel.app,http://localhost:3000`
+Confirme no Render: `CORS_ORIGINS=https://mlorion.vercel.app,https://erp-ml-six.vercel.app,http://localhost:3000`
 
 ## 5) Smoke test
 

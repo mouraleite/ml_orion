@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { api } from "@/lib/api";
@@ -9,6 +9,7 @@ import { AppLoadingScreen } from "@/components/shared/BudgetLoadingState";
 import {
   consumeMicrosoftRedirectIdToken,
   isMicrosoftAuthConfigured,
+  isMicrosoftSsoPending,
   loginWithMicrosoftRedirect,
 } from "@/lib/msal";
 
@@ -28,6 +29,90 @@ function microsoftErrorMessage(err: unknown): string {
 
 /** Evita dois POSTs /auth/microsoft no Strict Mode. */
 let microsoftSsoExchange: Promise<"ok" | "skip" | "error"> | null = null;
+
+const MS_ICON =
+  "https://learn.microsoft.com/en-us/entra/identity-platform/media/howto-add-branding-in-apps/ms-symbollockup_mssymbol_19.svg";
+
+function BrandStack() {
+  // Arquivos recortados do lockup oficial — proporção natural (sem esticar).
+  return (
+    <div className="flex flex-col items-center w-full max-w-full gap-4">
+      <img
+        src="/logo-moura-login.png"
+        alt="Moura Leite"
+        className="block h-auto w-auto max-w-[150px] sm:max-w-[170px] object-contain"
+      />
+      <img
+        src="/logo-orion-login.png"
+        alt="ML Órion"
+        className="block h-auto w-full max-w-[340px] sm:max-w-[380px] object-contain"
+      />
+    </div>
+  );
+}
+
+function LoginBackdrop() {
+  // Arte verde + arcos dourados (sem foto do loteamento).
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 90% 80% at 35% 45%, #1a4a3c 0%, #12352c 45%, #0B1C12 100%)",
+        }}
+      />
+      <svg
+        className="absolute inset-0 h-full w-full"
+        viewBox="0 0 1440 900"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        preserveAspectRatio="xMidYMid slice"
+      >
+        {/* Canto superior esquerdo */}
+        <path
+          d="M -20 -10 C 160 -40 280 60 310 200"
+          stroke="#E8B86D"
+          strokeWidth="1.35"
+          strokeOpacity="0.85"
+        />
+        {/* Arcos inferiores esquerdos (concentricos) */}
+        <path
+          d="M -80 520 C 200 380 380 520 420 780"
+          stroke="#E8B86D"
+          strokeWidth="1.4"
+          strokeOpacity="0.8"
+        />
+        <path
+          d="M -100 600 C 240 440 440 580 500 860"
+          stroke="#E8B86D"
+          strokeWidth="1.3"
+          strokeOpacity="0.7"
+        />
+        <path
+          d="M -120 680 C 280 500 500 640 580 920"
+          stroke="#F9C094"
+          strokeWidth="1.2"
+          strokeOpacity="0.55"
+        />
+        {/* Detalhe suave no canto superior direito */}
+        <path
+          d="M 1480 -20 C 1280 40 1220 160 1260 300"
+          stroke="#E8B86D"
+          strokeWidth="1.1"
+          strokeOpacity="0.28"
+        />
+      </svg>
+      <div
+        className="absolute inset-0 opacity-[0.06]"
+        style={{
+          backgroundImage:
+            "url(\"data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E\")",
+        }}
+      />
+    </div>
+  );
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -55,10 +140,21 @@ export default function LoginPage() {
       .catch(() => setMsConfigured(frontOk));
   }, []);
 
-  // Volta da Microsoft (redirect): troca id_token pelo JWT do ERP.
   useEffect(() => {
     if (!isMicrosoftAuthConfigured()) return;
     let alive = true;
+
+    const pending = isMicrosoftSsoPending();
+    const hasOauthReturn =
+      typeof window !== "undefined" &&
+      (window.location.hash.includes("code") ||
+        window.location.hash.includes("id_token") ||
+        window.location.search.includes("code="));
+
+    if (!pending && !hasOauthReturn) {
+      microsoftSsoExchange = null;
+      return;
+    }
 
     if (!microsoftSsoExchange) {
       microsoftSsoExchange = (async () => {
@@ -98,12 +194,11 @@ export default function LoginPage() {
     };
   }, [login]);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
     setIsLoading(true);
     try {
-      // Desenvolvimento: fluxo que funcionava antes (não exige usuário no banco).
       if (process.env.NODE_ENV !== "production") {
         await login("dummy-token-for-dev");
         return;
@@ -119,7 +214,7 @@ export default function LoginPage() {
       const ax = err as { response?: { data?: { detail?: string } }; message?: string };
       if (!ax.response) {
         setError(
-          "Não foi possível conectar ao servidor. Verifique se o backend está rodando (porta 8000)."
+          "Não foi possível conectar ao servidor. Verifique se o backend está rodando (porta 8000).",
         );
       } else {
         const detail = ax.response.data?.detail;
@@ -133,15 +228,12 @@ export default function LoginPage() {
   const handleMicrosoft = async () => {
     setError("");
     if (!isMicrosoftAuthConfigured()) {
-      setError(
-        "Login Microsoft ainda sem Client ID / Tenant no frontend (.env.local)."
-      );
+      setError("Login Microsoft ainda sem Client ID / Tenant no frontend (.env.local).");
       return;
     }
     setMsLoading(true);
     try {
       await loginWithMicrosoftRedirect();
-      // A página sai para login.microsoftonline.com; se voltar sem navegar, cai no catch.
     } catch (err: unknown) {
       setError(microsoftErrorMessage(err));
       setMsLoading(false);
@@ -153,135 +245,90 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex w-full overflow-hidden bg-[#fdfdfd] font-sans">
-      
-      {/* Lado Esquerdo - Imagem com Overlay Escuro */}
-      <div className="hidden md:flex flex-[1.2] relative overflow-hidden items-end">
-        <img 
-          src="/Fundo.jpg" 
-          alt="Empreendimento Moura Leite" 
-          className="absolute inset-0 w-full h-full object-cover object-center"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = 'none';
-            (e.target as HTMLImageElement).parentElement!.style.background = 'linear-gradient(135deg, #1a2332, #0f171e)';
-          }}
-        />
-        
-        {/* Overlay Escuro com Gradiente */}
-        <div className="absolute inset-0 z-10" style={{
-          background: 'linear-gradient(180deg, rgba(15, 23, 30, 0.1) 0%, rgba(15, 23, 30, 0.5) 70%, rgba(15, 23, 30, 0.85) 100%)'
-        }}></div>
-
-        {/* Textos sobre a Imagem */}
-        <div className="relative z-20 p-10 text-white w-full">
-          <h2 className="text-3xl font-extrabold mb-2" style={{ textShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>
-            Moura Leite
-          </h2>
-          <p className="text-sm opacity-85 max-w-sm leading-relaxed" style={{ textShadow: '0 1px 4px rgba(0,0,0,0.3)' }}>
-            Plataforma Corporativa de Gestão, Viabilidades e Consolidação Financeira
-          </p>
+    <div className="min-h-screen flex w-full items-center justify-center p-4 sm:p-6 font-sans bg-[#0B1C12] relative overflow-x-hidden overflow-y-auto">
+      <LoginBackdrop />
+      <div className="relative z-10 w-full max-w-[440px] box-border rounded-2xl bg-white border border-white/10 p-7 sm:p-10 shadow-[0_24px_64px_rgba(0,0,0,0.45)]">
+        <div className="mb-7">
+          <BrandStack />
         </div>
-      </div>
 
-      {/* Lado Direito - Formulário */}
-      <div className="flex-[0.8] relative flex items-center justify-center p-6 md:p-10 bg-[#fdfdfd]">
-        
-        {/* Divisor Decorativo */}
-        <div className="hidden md:block absolute left-0 top-[10%] bottom-[10%] w-[1px]" style={{
-          background: 'linear-gradient(180deg, transparent, rgba(245, 136, 58, 0.3), transparent)'
-        }}></div>
+        <div className="flex flex-col gap-4">
+          {error && (
+            <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 text-center">
+              {error}
+            </div>
+          )}
 
-        {/* Card do Formulário (Efeito Glass) */}
-        <div className="relative z-10 w-full max-w-[420px] p-10 md:p-12 rounded-xl" style={{
-          background: 'rgba(255, 255, 255, 0.04)',
-          backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(255, 255, 255, 0.08)',
-          boxShadow: '0 8px 32px rgba(0, 0, 0, 0.2)'
-        }}>
-          
-          <div className="flex flex-col items-center mb-8 gap-3 w-full">
-            <img 
-              src="/logo-ml-orion.png" 
-              alt="Logo ML Órion" 
-              className="w-full h-auto object-contain max-w-[280px]"
-            />
+          <button
+            type="button"
+            className="w-full h-12 bg-white text-[#1F2937] border border-slate-300 rounded-md font-semibold hover:bg-slate-50 transition-transform hover:scale-[1.01] flex items-center justify-center gap-3 disabled:opacity-60"
+            onClick={() => void handleMicrosoft()}
+            disabled={msLoading || isLoading}
+          >
+            <img src={MS_ICON} alt="" className="w-5" />
+            {msLoading ? "Abrindo Microsoft…" : "Entrar com Microsoft"}
+          </button>
+          {!msConfigured && (
+            <p className="text-xs text-center text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+              Configure AZURE_* no backend e NEXT_PUBLIC_AZURE_* no frontend para ativar o SSO.
+            </p>
+          )}
+
+          <div className="flex items-center text-center my-1 text-[#91A89C] text-sm">
+            <hr className="flex-1 border-t border-slate-200" />
+            <span className="px-3 font-medium">OU</span>
+            <hr className="flex-1 border-t border-slate-200" />
           </div>
 
-          <div className="flex flex-col gap-4">
-            {error && (
-              <div className="p-3 bg-red-50 text-red-600 text-sm rounded-lg border border-red-100 text-center">
-                {error}
-              </div>
-            )}
-
-            <button
-              type="button"
-              className="w-full h-12 bg-white text-slate-700 border border-slate-300 rounded-md font-semibold hover:bg-slate-50 transition-transform hover:scale-[1.02] flex items-center justify-center gap-3 disabled:opacity-60"
-              onClick={() => void handleMicrosoft()}
-              disabled={msLoading || isLoading}
-            >
-              <img src="https://learn.microsoft.com/en-us/entra/identity-platform/media/howto-add-branding-in-apps/ms-symbollockup_mssymbol_19.svg" alt="Microsoft" className="w-5" />
-              {msLoading ? "Abrindo Microsoft…" : "Entrar com Microsoft"}
-            </button>
-            {!msConfigured && (
-              <p className="text-xs text-center text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-                Configure AZURE_* no backend e NEXT_PUBLIC_AZURE_* no frontend para ativar o SSO.
-              </p>
-            )}
-
-            {/* Divisor OU */}
-            <div className="flex items-center text-center my-1 text-slate-400 text-sm">
-              <hr className="flex-1 border-t border-slate-300" />
-              <span className="px-3 font-medium">OU</span>
-              <hr className="flex-1 border-t border-slate-300" />
+          <form onSubmit={handleLogin} className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-semibold text-[#255742]" htmlFor="email">
+                E-mail
+              </label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="seu@email.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="h-11 bg-white border-slate-200 focus-visible:ring-[#F5883A]/20 focus-visible:border-[#F5883A] transition-all"
+                required
+              />
             </div>
 
-            <form onSubmit={handleLogin} className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-semibold text-slate-600" htmlFor="email">
-                  E-mail
-                </label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="seu@email.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="h-11 bg-black/5 border-black/10 focus-visible:ring-[#F5883A]/20 focus-visible:border-[#F5883A] transition-all"
-                  required
-                />
-              </div>
-              
-              <div className="flex flex-col gap-1.5">
-                <label className="text-sm font-semibold text-slate-600" htmlFor="password">
-                  Senha
-                </label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="h-11 bg-black/5 border-black/10 focus-visible:ring-[#F5883A]/20 focus-visible:border-[#F5883A] transition-all"
-                  required
-                />
-              </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-semibold text-[#255742]" htmlFor="password">
+                Senha
+              </label>
+              <Input
+                id="password"
+                type="password"
+                placeholder="••••••••"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="h-11 bg-white border-slate-200 focus-visible:ring-[#F5883A]/20 focus-visible:border-[#F5883A] transition-all"
+                required
+              />
+            </div>
 
-              <Button
-                type="submit"
-                className="w-full mt-2 h-12 text-white font-bold text-base transition-all hover:-translate-y-0.5"
-                style={{
-                  background: 'linear-gradient(135deg, #F5883A, #F9C094)',
-                  border: 'none',
-                  boxShadow: '0 4px 15px rgba(245, 136, 58, 0.3)'
-                }}
-                disabled={isLoading || msLoading}
-              >
-                {isLoading ? "Entrando..." : "Entrar com e-mail"}
-              </Button>
-            </form>
-          </div>
+            <Button
+              type="submit"
+              className="w-full mt-2 h-12 text-white font-bold text-base transition-all hover:-translate-y-0.5"
+              style={{
+                background: "linear-gradient(135deg, #F5883A, #F9C094)",
+                border: "none",
+                boxShadow: "0 4px 15px rgba(245, 136, 58, 0.28)",
+              }}
+              disabled={isLoading || msLoading}
+            >
+              {isLoading ? "Entrando..." : "Entrar com e-mail"}
+            </Button>
+          </form>
         </div>
+
+        <p className="mt-6 text-center text-xs text-[#91A89C]">
+          Acesso restrito aos colaboradores Moura Leite
+        </p>
       </div>
     </div>
   );

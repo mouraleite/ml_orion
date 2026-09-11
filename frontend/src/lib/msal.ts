@@ -79,11 +79,34 @@ function redirectErrorFromUrl(): string | null {
   return `Microsoft: ${decoded}`;
 }
 
+function isSsoPending(): boolean {
+  return typeof sessionStorage !== "undefined" && sessionStorage.getItem(SSO_PENDING_KEY) === "1";
+}
+
+export function isMicrosoftSsoPending(): boolean {
+  return isSsoPending();
+}
+
+/** Limpa sessão MSAL local (Sair do ERP). Não desloga o usuário do Office/Microsoft. */
+export async function clearMicrosoftSession(): Promise<void> {
+  if (typeof sessionStorage !== "undefined") {
+    sessionStorage.removeItem(SSO_PENDING_KEY);
+  }
+  redirectConsumePromise = null;
+  if (!isMicrosoftAuthConfigured()) return;
+  try {
+    const instance = await getMsalInstance();
+    await instance.clearCache();
+  } catch {
+    /* ignore — logout do ERP não deve falhar por MSAL */
+  }
+}
+
 /** Se o usuário voltou do login Microsoft, devolve o id_token; senão null. */
 export async function consumeMicrosoftRedirectIdToken(): Promise<string | null> {
   if (!redirectConsumePromise) {
     redirectConsumePromise = (async () => {
-      const pending = typeof sessionStorage !== "undefined" && sessionStorage.getItem(SSO_PENDING_KEY) === "1";
+      const pending = isSsoPending();
       const urlError = redirectErrorFromUrl();
       const instance = await getMsalInstance();
       const result = await redirectPromise;
@@ -94,9 +117,15 @@ export async function consumeMicrosoftRedirectIdToken(): Promise<string | null> 
         throw new Error(urlError);
       }
 
+      // Sem redirect SSO em andamento: não reaproveitar conta em cache (evita reentrar após Sair).
+      if (!pending && !result) {
+        clearOauthHash();
+        return null;
+      }
+
       let idToken = result?.idToken?.trim() || "";
 
-      if (!idToken) {
+      if (!idToken && pending) {
         const account = result?.account || instance.getAllAccounts()[0];
         if (account) {
           try {
@@ -137,5 +166,6 @@ export async function consumeMicrosoftRedirectIdToken(): Promise<string | null> 
 export async function loginWithMicrosoftRedirect(): Promise<void> {
   const instance = await getMsalInstance();
   sessionStorage.setItem(SSO_PENDING_KEY, "1");
+  redirectConsumePromise = null;
   await instance.loginRedirect(loginRequest);
 }
