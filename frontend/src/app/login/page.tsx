@@ -6,7 +6,25 @@ import { api } from "@/lib/api";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { AppLoadingScreen } from "@/components/shared/BudgetLoadingState";
-import { isMicrosoftAuthConfigured, loginWithMicrosoftPopup } from "@/lib/msal";
+import {
+  consumeMicrosoftRedirectIdToken,
+  isMicrosoftAuthConfigured,
+  loginWithMicrosoftRedirect,
+} from "@/lib/msal";
+
+function microsoftErrorMessage(err: unknown): string {
+  const ax = err as {
+    response?: { data?: { detail?: string } };
+    message?: string;
+    errorMessage?: string;
+  };
+  const detail = ax.response?.data?.detail;
+  if (typeof detail === "string") return detail;
+  if (ax.message || ax.errorMessage) {
+    return ax.message || ax.errorMessage || "Falha no login Microsoft.";
+  }
+  return "Não foi possível entrar com Microsoft.";
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -33,6 +51,30 @@ export default function LoginPage() {
       .then((r) => setMsConfigured(Boolean(r.data?.configured) && frontOk))
       .catch(() => setMsConfigured(frontOk));
   }, []);
+
+  // Volta da Microsoft (redirect): troca id_token pelo JWT do ERP.
+  useEffect(() => {
+    if (!isMicrosoftAuthConfigured()) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const idToken = await consumeMicrosoftRedirectIdToken();
+        if (!idToken || cancelled) return;
+        setMsLoading(true);
+        setError("");
+        const { data } = await api.post("/auth/microsoft", { id_token: idToken });
+        if (cancelled) return;
+        await login(data.access_token);
+      } catch (err: unknown) {
+        if (!cancelled) setError(microsoftErrorMessage(err));
+      } finally {
+        if (!cancelled) setMsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [login]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -76,24 +118,10 @@ export default function LoginPage() {
     }
     setMsLoading(true);
     try {
-      const idToken = await loginWithMicrosoftPopup();
-      const { data } = await api.post("/auth/microsoft", { id_token: idToken });
-      await login(data.access_token);
+      await loginWithMicrosoftRedirect();
+      // A página sai para login.microsoftonline.com; se voltar sem navegar, cai no catch.
     } catch (err: unknown) {
-      const ax = err as {
-        response?: { data?: { detail?: string } };
-        message?: string;
-        errorMessage?: string;
-      };
-      const detail = ax.response?.data?.detail;
-      if (typeof detail === "string") {
-        setError(detail);
-      } else if (ax.message || ax.errorMessage) {
-        setError(ax.message || ax.errorMessage || "Falha no login Microsoft.");
-      } else {
-        setError("Não foi possível entrar com Microsoft.");
-      }
-    } finally {
+      setError(microsoftErrorMessage(err));
       setMsLoading(false);
     }
   };
@@ -171,7 +199,7 @@ export default function LoginPage() {
               disabled={msLoading || isLoading}
             >
               <img src="https://learn.microsoft.com/en-us/entra/identity-platform/media/howto-add-branding-in-apps/ms-symbollockup_mssymbol_19.svg" alt="Microsoft" className="w-5" />
-              {msLoading ? "Conectando à Microsoft…" : "Entrar com Microsoft"}
+              {msLoading ? "Abrindo Microsoft…" : "Entrar com Microsoft"}
             </button>
             {!msConfigured && (
               <p className="text-xs text-center text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">

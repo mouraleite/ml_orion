@@ -16,6 +16,8 @@ export function isMicrosoftAuthConfigured(): boolean {
 
 let pca: PublicClientApplication | null = null;
 let initPromise: Promise<PublicClientApplication> | null = null;
+/** handleRedirectPromise só uma vez por carga da página. */
+let redirectPromise: Promise<AuthenticationResult | null> | null = null;
 
 function buildConfig(): Configuration {
   return {
@@ -42,6 +44,8 @@ export async function getMsalInstance(): Promise<PublicClientApplication> {
     initPromise = (async () => {
       const instance = new PublicClientApplication(buildConfig());
       await instance.initialize();
+      redirectPromise = instance.handleRedirectPromise();
+      await redirectPromise;
       pca = instance;
       return instance;
     })();
@@ -53,22 +57,15 @@ const loginRequest = {
   scopes: ["openid", "profile", "email"],
 };
 
-/** Popup Microsoft → id_token para trocar no backend. */
-export async function loginWithMicrosoftPopup(): Promise<string> {
+/** Se o usuário voltou do login Microsoft, devolve o id_token; senão null. */
+export async function consumeMicrosoftRedirectIdToken(): Promise<string | null> {
+  await getMsalInstance();
+  const result = await redirectPromise;
+  return result?.idToken?.trim() || null;
+}
+
+/** Redireciona a janela inteira para a tela de login da Microsoft. */
+export async function loginWithMicrosoftRedirect(): Promise<void> {
   const instance = await getMsalInstance();
-  let result: AuthenticationResult;
-  try {
-    result = await instance.loginPopup(loginRequest);
-  } catch (err: unknown) {
-    const code = (err as { errorCode?: string })?.errorCode;
-    if (code === "interaction_in_progress") {
-      throw new Error("Já existe um login Microsoft em andamento. Feche o popup e tente de novo.");
-    }
-    throw err;
-  }
-  const idToken = result.idToken;
-  if (!idToken) {
-    throw new Error("Microsoft não retornou id_token.");
-  }
-  return idToken;
+  await instance.loginRedirect(loginRequest);
 }
