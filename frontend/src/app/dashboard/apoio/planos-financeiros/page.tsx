@@ -131,8 +131,8 @@ export default function PlanosFinanceirosPage() {
  // Coletar tipos únicos para filtros
  const tiposUnicos = Array.from(new Set(planos.map(p => p.tpConta).filter(Boolean))).sort();
 
- return (
- <div className="p-8 max-w-[1400px] mx-auto space-y-6 animate-in fade-in duration-300">
+  return (
+ <div className="p-6 md:p-8 max-w-[1400px] mx-auto space-y-6 animate-in fade-in duration-300">
  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
  <div>
  <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
@@ -147,8 +147,8 @@ export default function PlanosFinanceirosPage() {
  {syncMessage}
  </span>
  )}
- <Button 
- className="gap-2" 
+ <Button
+ className="gap-2"
  onClick={handleSync}
  disabled={isSyncing}
  >
@@ -156,6 +156,29 @@ export default function PlanosFinanceirosPage() {
  {isSyncing ?"Sincronizando..." :"Atualizar Sincronização"}
  </Button>
  </div>
+ </div>
+
+ <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+ <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+ <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Total</p>
+ <p className="text-2xl font-bold text-slate-800 mt-1">{isLoading ? "—" : planos.length}</p>
+ <p className="text-xs text-slate-400 mt-1">planos no cadastro</p>
+ </div>
+ <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+ <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Filtrados</p>
+ <p className="text-2xl font-bold text-slate-800 mt-1">{isLoading ? "—" : sortedPlanos.length}</p>
+ <p className="text-xs text-slate-400 mt-1">visíveis com os filtros atuais</p>
+ </div>
+ <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+ <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Sienge</p>
+ <p className="text-sm text-slate-700 mt-2 leading-relaxed">
+ Use <span className="font-semibold">Atualizar Sincronização</span> para trazer alterações do Sienge.
+ </p>
+ </div>
+ </div>
+
+ <div className="bg-emerald-50/60 border border-brand-green/20 rounded-xl px-4 py-3 text-sm text-slate-700">
+ Os planos financeiros são sincronizados com o Sienge. Filtre por nome, tipo ou flags e sincronize quando houver mudanças no ERP de origem.
  </div>
 
  <CollapsibleFilterPanel

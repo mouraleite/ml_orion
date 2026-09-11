@@ -70,137 +70,167 @@ export default function VisoesPage() {
  return new Date(iso).toLocaleDateString("pt-BR");
  };
 
- const term = busca.trim().toLowerCase();
- const visoesFiltradas = term
- ? visoes.filter((v) => {
- const nome = (v.nome || "").toLowerCase();
- const desc = (v.descricao || "").toLowerCase();
- return nome.includes(term) || desc.includes(term);
- })
- : visoes;
+  const term = busca.trim().toLowerCase();
+  const visoesFiltradas = term
+    ? visoes.filter((v) => {
+        const nome = (v.nome || "").toLowerCase();
+        const desc = (v.descricao || "").toLowerCase();
+        return nome.includes(term) || desc.includes(term);
+      })
+    : visoes;
 
- return (
- <div className="p-8 max-w-[1400px] mx-auto space-y-6 animate-in fade-in duration-300">
- {/* Header */}
- <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
- <div>
- <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
- <Eye className="w-6 h-6 text-brand-green" />
- Gestão de Visões
- </h1>
- <p className="text-slate-500 text-sm mt-1">
- Crie e gerencie diferentes cenários de estrutura DRE.
- </p>
- </div>
- <div className="flex items-center gap-3 flex-wrap">
- {!isLoading && visoes.length > 0 && (
- <span className="text-xs font-medium text-slate-500 bg-white border border-slate-200 px-2.5 py-1 rounded-full">
- {visoes.length} {visoes.length === 1 ? "visão" : "visões"}
- </span>
- )}
- <Button onClick={() => setIsModalOpen(true)} className="gap-2">
- <Plus className="w-4 h-4" />
- Nova Visão
- </Button>
- </div>
- </div>
+  const totalCategorias = visoes.reduce((acc, v) => acc + (v.total_categorias || 0), 0);
+  const totalPlanos = visoes.reduce((acc, v) => acc + (v.total_planos || 0), 0);
 
- {!isLoading && visoes.length > 0 && (
- <div className="relative max-w-sm">
- <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
- <input
- type="search"
- placeholder="Buscar por nome ou descrição..."
- value={busca}
- onChange={(e) => setBusca(e.target.value)}
- className="ml-input pl-9 h-9 text-sm w-full"
- />
- </div>
- )}
+  return (
+    <div className="p-6 md:p-8 max-w-[1400px] mx-auto space-y-6 animate-in fade-in duration-300">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+            <Eye className="w-6 h-6 text-brand-green" />
+            Gestão de Visões
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Crie e gerencie diferentes cenários de estrutura DRE.
+          </p>
+        </div>
+        <Button onClick={() => setIsModalOpen(true)} className="gap-2 shrink-0">
+          <Plus className="w-4 h-4" />
+          Nova Visão
+        </Button>
+      </div>
 
- {/* Cards de Visões */}
- {isLoading ? (
- <AppLoadingState />
- ) : visoes.length === 0 ? (
- <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-10 text-center space-y-3">
- <div className="mx-auto w-12 h-12 rounded-full bg-slate-50 border border-dashed border-slate-200 flex items-center justify-center">
- <Eye className="w-5 h-5 text-slate-400" />
- </div>
- <p className="text-sm text-slate-600 font-medium">Nenhuma visão cadastrada</p>
- <p className="text-xs text-slate-400 max-w-sm mx-auto">Crie a primeira visão para montar a estrutura DRE.</p>
- <Button onClick={() => setIsModalOpen(true)} className="gap-2 mt-2">
- <Plus className="w-4 h-4" /> Nova Visão
- </Button>
- </div>
- ) : visoesFiltradas.length === 0 ? (
- <div className="bg-white rounded-xl border border-dashed border-slate-200 p-10 text-center">
- <p className="text-sm text-slate-500">Nenhuma visão encontrada para a busca</p>
- </div>
- ) : (
- <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
- {visoesFiltradas.map(visao => (
- <div key={visao.id}
- className="bg-white rounded-xl border border-slate-200 shadow-sm hover:border-slate-300 transition-colors group flex flex-col"
- >
- <div className="p-5 flex-1">
- <div className="flex items-start justify-between mb-2">
- <h3 className="font-bold text-slate-800 text-lg leading-tight">{visao.nome}</h3>
- <div className="flex gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
- {!visao.is_padrao && (
- <button
- onClick={() => handleDelete(visao.id)}
- className="p-1.5 text-slate-400 hover:text-red-600 rounded hover:bg-red-50 transition-colors"
- title="Excluir visão"
- >
- <Trash2 className="w-3.5 h-3.5" />
- </button>
- )}
- </div>
- </div>
+      {isLoading ? (
+        <AppLoadingState />
+      ) : visoes.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-10 text-center space-y-3">
+          <div className="mx-auto w-12 h-12 rounded-full bg-slate-50 border border-dashed border-slate-200 flex items-center justify-center">
+            <Eye className="w-5 h-5 text-slate-400" />
+          </div>
+          <p className="text-sm text-slate-600 font-medium">Nenhuma visão cadastrada</p>
+          <p className="text-xs text-slate-400 max-w-sm mx-auto">Crie a primeira visão para montar a estrutura DRE.</p>
+          <Button onClick={() => setIsModalOpen(true)} className="gap-2 mt-2">
+            <Plus className="w-4 h-4" /> Nova Visão
+          </Button>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Visões</p>
+              <p className="text-2xl font-bold text-slate-800 mt-1">{visoes.length}</p>
+              <p className="text-xs text-slate-400 mt-1">cenários cadastrados</p>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Categorias</p>
+              <p className="text-2xl font-bold text-slate-800 mt-1">{totalCategorias}</p>
+              <p className="text-xs text-slate-400 mt-1">soma em todas as visões</p>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Planos mapeados</p>
+              <p className="text-2xl font-bold text-slate-800 mt-1">{totalPlanos}</p>
+              <p className="text-xs text-slate-400 mt-1">soma em todas as visões</p>
+            </div>
+          </div>
 
- {visao.descricao && (
- <p className="text-sm text-slate-500 line-clamp-2">{visao.descricao}</p>
- )}
+          <div className="bg-emerald-50/60 border border-brand-green/20 rounded-xl px-4 py-3 text-sm text-slate-700">
+            Cada visão define um cenário de estrutura DRE. Visualize a árvore ou edite categorias e mapeamentos de planos.
+          </div>
 
- <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-100">
- <div className="text-center">
- <p className="text-xl font-bold text-slate-700">{visao.total_categorias}</p>
- <p className="text-xs text-slate-400">categorias</p>
- </div>
- <div className="w-px h-8 bg-slate-100" />
- <div className="text-center">
- <p className="text-xl font-bold text-slate-700">{visao.total_planos}</p>
- <p className="text-xs text-slate-400">planos mapeados</p>
- </div>
- <div className="w-px h-8 bg-slate-100" />
- <div className="text-center">
- <p className="text-xs font-semibold text-slate-600">{formatDate(visao.criado_em)}</p>
- <p className="text-xs text-slate-400">criado em</p>
- </div>
- </div>
- </div>
+          <div className="relative max-w-sm">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <input
+              type="search"
+              placeholder="Buscar por nome ou descrição..."
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              className="ml-input pl-9 h-9 text-sm w-full"
+            />
+          </div>
 
- <div className="px-5 pb-4 flex gap-2">
- <Button
- variant="outline"
- className="flex-1 gap-2"
- onClick={() => router.push(`/dashboard/apoio/visao/${visao.id}/visualizar`)}
- >
- <Eye className="w-4 h-4" />
- Visualizar
- </Button>
- <Button
- className="flex-1 gap-2"
- onClick={() => router.push(`/dashboard/apoio/visao/${visao.id}`)}
- >
- <Edit2 className="w-4 h-4" />
- Editar
- </Button>
- </div>
- </div>
- ))}
- </div>
- )}
+          {visoesFiltradas.length === 0 ? (
+            <div className="bg-white rounded-xl border border-dashed border-slate-200 p-10 text-center">
+              <p className="text-sm text-slate-500">Nenhuma visão encontrada para a busca</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {visoesFiltradas.map(visao => (
+                <div key={visao.id}
+                  className="bg-white rounded-xl border border-slate-200 shadow-sm hover:border-slate-300 transition-colors group flex flex-col"
+                >
+                  <div className="p-5 flex-1">
+                    <div className="flex items-start justify-between mb-2">
+                      <h3 className="font-bold text-slate-800 text-lg leading-tight">{visao.nome}</h3>
+                      <div className="flex gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                        {!visao.is_padrao && (
+                          <button
+                            onClick={() => handleDelete(visao.id)}
+                            className="p-1.5 text-slate-400 hover:text-red-600 rounded hover:bg-red-50 transition-colors"
+                            title="Excluir visão"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {visao.descricao ? (
+                      <p className="text-sm text-slate-500 line-clamp-2">{visao.descricao}</p>
+                    ) : (
+                      <p className="text-sm text-slate-400 italic">Sem descrição</p>
+                    )}
+
+                    <div className="flex items-center gap-4 mt-4 pt-4 border-t border-slate-100">
+                      <div className="text-center">
+                        <p className="text-xl font-bold text-slate-700">{visao.total_categorias}</p>
+                        <p className="text-xs text-slate-400">categorias</p>
+                      </div>
+                      <div className="w-px h-8 bg-slate-100" />
+                      <div className="text-center">
+                        <p className="text-xl font-bold text-slate-700">{visao.total_planos}</p>
+                        <p className="text-xs text-slate-400">planos mapeados</p>
+                      </div>
+                      <div className="w-px h-8 bg-slate-100" />
+                      <div className="text-center">
+                        <p className="text-xs font-semibold text-slate-600">{formatDate(visao.criado_em)}</p>
+                        <p className="text-xs text-slate-400">criado em</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="px-5 py-4 border-t border-slate-100 bg-slate-50 flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1 gap-2"
+                      onClick={() => router.push(`/dashboard/apoio/visao/${visao.id}/visualizar`)}
+                    >
+                      <Eye className="w-4 h-4" />
+                      Visualizar
+                    </Button>
+                    <Button
+                      className="flex-1 gap-2"
+                      onClick={() => router.push(`/dashboard/apoio/visao/${visao.id}`)}
+                    >
+                      <Edit2 className="w-4 h-4" />
+                      Editar
+                    </Button>
+                  </div>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(true)}
+                className="min-h-[220px] rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/70 hover:bg-slate-100 hover:border-brand-green/40 transition-colors flex flex-col items-center justify-center gap-2 text-slate-500 hover:text-brand-green"
+              >
+                <Plus className="w-8 h-8" />
+                <span className="text-sm font-semibold">Adicionar nova visão</span>
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
  {/* Modal de Nova Visão */}
  {isModalOpen && (

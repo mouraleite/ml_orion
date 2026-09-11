@@ -7,7 +7,6 @@ import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
 import { Input } from "@/components/ui/Input";
 import { apoioService } from "@/services/apoio";
 import { Plus, Trash2, Save, Calculator } from "lucide-react";
-import { Card } from "@/components/ui/Card";
 
 export default function ImpostosPage() {
   const [regimes, setRegimes] = useState<any[]>([]);
@@ -97,8 +96,14 @@ export default function ImpostosPage() {
     return <AppLoadingState />;
   }
 
+  const cargaValues = regimes.map(calculateTotal);
+  const avgCarga = cargaValues.length
+    ? cargaValues.reduce((a, b) => a + b, 0) / cargaValues.length
+    : 0;
+  const maxCarga = cargaValues.length ? Math.max(...cargaValues) : 0;
+
   return (
-    <div className="p-8 max-w-[1400px] mx-auto animate-in fade-in duration-300 space-y-6">
+    <div className="p-6 md:p-8 max-w-[1400px] mx-auto animate-in fade-in duration-300 space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
@@ -106,7 +111,6 @@ export default function ImpostosPage() {
             Regimes Tributários
           </h1>
           <p className="text-slate-500 text-sm mt-1">Crie os regimes de impostos com as alíquotas separadas (PIS, COFINS, etc) para utilizar nos estudos.</p>
-          <p className="text-xs text-slate-400 mt-1">O total da carga é a soma das alíquotas (somente visualização).</p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {message && (
@@ -120,83 +124,128 @@ export default function ImpostosPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-slate-800">Cadastros atuais</h3>
-          <span className="text-xs font-medium text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
-            {regimes.length} {regimes.length === 1 ? "regime" : "regimes"}
-          </span>
+      {regimes.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-10 text-center space-y-3">
+          <div className="mx-auto w-12 h-12 rounded-full bg-slate-50 border border-dashed border-slate-200 flex items-center justify-center">
+            <Calculator className="w-5 h-5 text-slate-400" />
+          </div>
+          <p className="text-sm text-slate-600 font-medium">Nenhum regime cadastrado</p>
+          <p className="text-xs text-slate-400 max-w-sm mx-auto">Clique em &quot;Novo Regime&quot; para começar.</p>
+          <Button onClick={handleAdd} className="gap-2 mt-2">
+            <Plus className="w-4 h-4" /> Novo Regime
+          </Button>
         </div>
-
-        <div className="p-4 space-y-3">
-          {regimes.length === 0 ? (
-            <div className="p-8 text-center space-y-3 bg-slate-50 rounded-lg border border-dashed border-slate-200">
-              <p className="text-sm font-medium text-slate-600">Nenhum regime cadastrado</p>
-              <p className="text-xs text-slate-400">Clique em &quot;Novo Regime&quot; para começar.</p>
-              <Button onClick={handleAdd} className="gap-2">
-                <Plus className="w-4 h-4" /> Novo Regime
-              </Button>
+      ) : (
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Regimes</p>
+              <p className="text-2xl font-bold text-slate-800 mt-1">{regimes.length}</p>
+              <p className="text-xs text-slate-400 mt-1">cadastrados no sistema</p>
             </div>
-          ) : (
-            regimes.map(reg => (
-              <Card key={reg.id} className="p-4 group hover:border-brand-green/40 transition-colors flex flex-col gap-4">
-                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                  <Input 
-                    value={reg.nome} 
-                    onChange={(e) => handleUpdate(reg.id, "nome", e.target.value)}
-                    className="font-semibold text-slate-800 h-9 bg-transparent border-transparent hover:border-slate-300 focus:bg-white max-w-sm text-base"
-                    placeholder="Nome do Regime (Ex: RET 4%)"
-                  />
-                  
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs font-semibold text-slate-500 uppercase">Total da Carga:</span>
-                    <span className="text-sm font-bold bg-brand-green/10 px-3 py-1 rounded-md text-brand-green">
-                      {calculateTotal(reg).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Carga média</p>
+              <p className="text-2xl font-bold text-slate-800 mt-1">
+                {avgCarga.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
+              </p>
+              <p className="text-xs text-slate-400 mt-1">média dos totais (visual)</p>
+            </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Maior carga</p>
+              <p className="text-2xl font-bold text-slate-800 mt-1">
+                {maxCarga.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
+              </p>
+              <p className="text-xs text-slate-400 mt-1">maior soma entre regimes</p>
+            </div>
+          </div>
+
+          <div className="bg-emerald-50/60 border border-brand-green/20 rounded-xl px-4 py-3 text-sm text-slate-700">
+            O total da carga é a <span className="font-semibold">soma das alíquotas</span> (PIS + COFINS + IRPJ + CSLL + Outros) — somente visualização.
+          </div>
+
+          <div className="grid grid-cols-1 gap-4">
+            {regimes.map(reg => (
+              <div
+                key={reg.id}
+                className="bg-white rounded-xl border border-slate-200 shadow-sm hover:border-slate-300 transition-colors flex flex-col"
+              >
+                <div className="p-5 flex-1 space-y-4">
+                  <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <Input
+                        value={reg.nome}
+                        onChange={(e) => handleUpdate(reg.id, "nome", e.target.value)}
+                        className="font-bold text-slate-800 h-10 bg-transparent border-transparent hover:border-slate-300 focus:bg-white max-w-md text-lg"
+                        placeholder="Nome do Regime (Ex: RET 4%)"
+                      />
+                      <p className="text-xs text-slate-500 mt-1">
+                        Ajuste as alíquotas abaixo e salve o regime.
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-xs font-semibold text-brand-green bg-brand-green/10 border border-brand-green/20 px-2.5 py-1 rounded-full self-start">
+                      {calculateTotal(reg).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}% carga
                     </span>
-                    <div className="hidden sm:block w-px h-6 bg-slate-200 mx-1"></div>
-                    <Button onClick={() => handleSave(reg)} size="sm" variant="secondary" className="gap-2" disabled={isSaving}>
-                      <Save className="w-3.5 h-3.5" />
-                      {savingId === reg.id
-                        ? (isSaving ? "Salvando..." : "Salvo")
-                        : "Salvar"}
-                    </Button>
-                    <button 
-                      onClick={() => handleDelete(reg.id)}
-                      className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
-                      title="Excluir"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">PIS (%)</label>
+                      <Input type="number" step="0.01" className="h-9 text-sm font-mono" value={reg.pis} onChange={(e) => handleUpdate(reg.id, "pis", parseFloat(e.target.value) || 0)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">COFINS (%)</label>
+                      <Input type="number" step="0.01" className="h-9 text-sm font-mono" value={reg.cofins} onChange={(e) => handleUpdate(reg.id, "cofins", parseFloat(e.target.value) || 0)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">IRPJ (%)</label>
+                      <Input type="number" step="0.01" className="h-9 text-sm font-mono" value={reg.irpj} onChange={(e) => handleUpdate(reg.id, "irpj", parseFloat(e.target.value) || 0)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">CSLL (%)</label>
+                      <Input type="number" step="0.01" className="h-9 text-sm font-mono" value={reg.csll} onChange={(e) => handleUpdate(reg.id, "csll", parseFloat(e.target.value) || 0)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide">Outros (%)</label>
+                      <Input type="number" step="0.01" className="h-9 text-sm font-mono" value={reg.outros} onChange={(e) => handleUpdate(reg.id, "outros", parseFloat(e.target.value) || 0)} />
+                    </div>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-500 uppercase">PIS (%)</label>
-                    <Input type="number" step="0.01" className="h-8 text-sm font-mono" value={reg.pis} onChange={(e) => handleUpdate(reg.id, "pis", parseFloat(e.target.value) || 0)} />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-500 uppercase">COFINS (%)</label>
-                    <Input type="number" step="0.01" className="h-8 text-sm font-mono" value={reg.cofins} onChange={(e) => handleUpdate(reg.id, "cofins", parseFloat(e.target.value) || 0)} />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-500 uppercase">IRPJ (%)</label>
-                    <Input type="number" step="0.01" className="h-8 text-sm font-mono" value={reg.irpj} onChange={(e) => handleUpdate(reg.id, "irpj", parseFloat(e.target.value) || 0)} />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-500 uppercase">CSLL (%)</label>
-                    <Input type="number" step="0.01" className="h-8 text-sm font-mono" value={reg.csll} onChange={(e) => handleUpdate(reg.id, "csll", parseFloat(e.target.value) || 0)} />
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-slate-500 uppercase">Outros (%)</label>
-                    <Input type="number" step="0.01" className="h-8 text-sm font-mono" value={reg.outros} onChange={(e) => handleUpdate(reg.id, "outros", parseFloat(e.target.value) || 0)} />
-                  </div>
+                <div className="px-5 py-4 border-t border-slate-100 bg-slate-50 flex gap-2">
+                  <Button
+                    onClick={() => handleSave(reg)}
+                    className="flex-1 gap-2"
+                    disabled={isSaving}
+                  >
+                    <Save className="w-4 h-4" />
+                    {savingId === reg.id
+                      ? (isSaving ? "Salvando..." : "Salvo")
+                      : "Salvar regime"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="gap-2 text-red-500 hover:text-red-600 hover:bg-red-50"
+                    onClick={() => handleDelete(reg.id)}
+                    title="Excluir"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Excluir
+                  </Button>
                 </div>
-              </Card>
-            ))
-          )}
+              </div>
+            ))}
+
+            <button
+              type="button"
+              onClick={handleAdd}
+              className="min-h-[120px] rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/70 hover:bg-slate-100 hover:border-brand-green/40 transition-colors flex flex-col items-center justify-center gap-2 text-slate-500 hover:text-brand-green"
+            >
+              <Plus className="w-7 h-7" />
+              <span className="text-sm font-semibold">Adicionar novo regime</span>
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

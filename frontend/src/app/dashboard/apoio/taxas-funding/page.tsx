@@ -150,8 +150,11 @@ export default function TaxasFundingPage() {
     { id: "GrossUp", label: "Taxas Gross Up", icon: FileText },
   ] as const;
 
+  const activeTabMeta = tabs.find((t) => t.id === activeTab);
+  const ActiveIcon = activeTabMeta?.icon ?? Landmark;
+
   return (
-    <div className="p-8 space-y-6 animate-in fade-in duration-300 max-w-[1400px] mx-auto">
+    <div className="p-6 md:p-8 space-y-6 animate-in fade-in duration-300 max-w-[1400px] mx-auto">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
@@ -176,6 +179,27 @@ export default function TaxasFundingPage() {
         </div>
       </div>
 
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Aba ativa</p>
+          <p className="text-lg font-bold text-slate-800 mt-1 flex items-center gap-2">
+            <ActiveIcon className="w-5 h-5 text-brand-green shrink-0" />
+            {activeTabMeta?.label ?? activeTab}
+          </p>
+          <p className="text-xs text-slate-400 mt-1">edite os campos desta seção</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Persistência</p>
+          <p className="text-sm text-slate-700 mt-2 leading-relaxed">
+            <span className="font-semibold">Salvar</span> persiste todas as abas de uma vez.
+          </p>
+        </div>
+      </div>
+
+      <div className="bg-emerald-50/60 border border-brand-green/20 rounded-xl px-4 py-3 text-sm text-slate-700">
+        Edite a aba ativa e clique em <span className="font-semibold">Salvar Configurações</span> para persistir todas as abas.
+      </div>
+
       <div className="flex overflow-x-auto border-b border-slate-200 hide-scrollbar">
         {tabs.map(({ id, label, icon: Icon }) => (
           <button
@@ -193,12 +217,9 @@ export default function TaxasFundingPage() {
           </button>
         ))}
       </div>
-      <p className="text-xs text-slate-500 -mt-2">
-        Edite a aba ativa e clique em Salvar Configurações para persistir todas as abas.
-      </p>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-6">
+        <div className="p-5 md:p-6">
           
           {/* CVM e ANBIMA */}
           {activeTab === "CVM_ANBIMA" && (
@@ -272,7 +293,7 @@ export default function TaxasFundingPage() {
                 </div>
                 <div className="bg-slate-50 rounded-lg border border-slate-200 p-4">
                   {(!rates.B3?.Registro || rates.B3.Registro.length === 0) ? (
-                    <div className="py-8 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg bg-white">
+                    <div className="py-5 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg bg-white">
                       Nenhuma faixa de registro. Clique em &quot;Adicionar Faixa&quot;.
                     </div>
                   ) : (
@@ -307,7 +328,7 @@ export default function TaxasFundingPage() {
                 </div>
                 <div className="bg-slate-50 rounded-lg border border-slate-200 p-4">
                   {(!rates.B3?.Custodia || rates.B3.Custodia.length === 0) ? (
-                    <div className="py-8 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg bg-white">
+                    <div className="py-5 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg bg-white">
                       Nenhuma faixa de custódia. Clique em &quot;Adicionar Faixa&quot;.
                     </div>
                   ) : (
@@ -358,7 +379,7 @@ export default function TaxasFundingPage() {
               
               <div className="grid gap-4">
                 {Object.keys(rates.Securitizadoras || {}).length === 0 ? (
-                  <div className="py-8 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg bg-slate-50">
+                  <div className="py-5 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg bg-slate-50">
                     Nenhuma securitizadora cadastrada.
                   </div>
                 ) : (
@@ -370,7 +391,7 @@ export default function TaxasFundingPage() {
                     });
                     if (secNames.length === 0) {
                       return (
-                        <div className="py-8 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg bg-slate-50">
+                        <div className="py-5 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg bg-slate-50">
                           Nenhuma securitizadora encontrada para a busca.
                         </div>
                       );

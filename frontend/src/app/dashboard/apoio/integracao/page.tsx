@@ -85,7 +85,7 @@ export default function IntegracaoSiengePage() {
   };
 
   return (
-    <div className="p-8 max-w-[1400px] mx-auto space-y-6 animate-in fade-in duration-300">
+    <div className="p-6 md:p-8 max-w-[1400px] mx-auto space-y-6 animate-in fade-in duration-300">
       <div className="flex justify-between items-start gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
@@ -105,28 +105,61 @@ export default function IntegracaoSiengePage() {
         </div>
       )}
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 space-y-3">
-        <p className="text-xs text-slate-500">
-          Escolha o período e sincronize. O processamento ocorre em segundo plano.
-        </p>
-        <div className="flex flex-col md:flex-row gap-4 items-end">
-          <div className="flex-1 w-full">
-            <label className="block text-xs font-medium text-slate-500 mb-1">Data Início (Reprocessamento)</label>
-            <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-          </div>
-          <div className="flex-1 w-full">
-            <label className="block text-xs font-medium text-slate-500 mb-1">Data Fim (Reprocessamento)</label>
-            <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
-          </div>
-          <div className="flex-none w-full md:w-auto">
-            <Button 
-              onClick={handleReprocess} 
-              disabled={reprocessing}
-              className="w-full gap-2 bg-brand-orange hover:bg-brand-orange/90 text-white"
-            >
-              {reprocessing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-              Sincronizar Manualmente
-            </Button>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Pendências</p>
+          <p className="text-2xl font-bold text-slate-800 mt-1">
+            {activeTab === "PENDENCIAS" ? pendencias.length : "—"}
+          </p>
+          <p className="text-xs text-slate-400 mt-1">
+            {activeTab === "PENDENCIAS" ? "na lista atual" : "abra a aba Pendências para ver"}
+          </p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Aba ativa</p>
+          <p className="text-sm font-bold text-slate-800 mt-2">
+            {activeTab === "PENDENCIAS" ? "Pendências de Reconciliação" : "Histórico de Execuções"}
+          </p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Sincronização</p>
+          <p className="text-sm text-slate-700 mt-2 leading-relaxed">
+            O processamento ocorre em <span className="font-semibold">segundo plano</span> — confira os Logs depois.
+          </p>
+        </div>
+      </div>
+
+      <div className="bg-emerald-50/60 border border-brand-green/20 rounded-xl px-4 py-3 text-sm text-slate-700">
+        Escolha o período e sincronize. O reprocessamento roda em background; acompanhe o resultado na aba de Logs.
+      </div>
+
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 bg-slate-50">
+          <h2 className="text-base font-bold text-slate-800">Reprocessamento manual</h2>
+          <p className="text-xs text-slate-500 mt-0.5">
+            Defina o intervalo e dispare a sincronização com o Sienge.
+          </p>
+        </div>
+        <div className="p-5">
+          <div className="flex flex-col md:flex-row gap-4 items-end">
+            <div className="flex-1 w-full">
+              <label className="block text-xs font-medium text-slate-500 mb-1">Data Início (Reprocessamento)</label>
+              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </div>
+            <div className="flex-1 w-full">
+              <label className="block text-xs font-medium text-slate-500 mb-1">Data Fim (Reprocessamento)</label>
+              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
+            </div>
+            <div className="flex-none w-full md:w-auto">
+              <Button
+                onClick={handleReprocess}
+                disabled={reprocessing}
+                className="w-full gap-2 bg-brand-orange hover:bg-brand-orange/90 text-white"
+              >
+                {reprocessing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                Sincronizar Manualmente
+              </Button>
+            </div>
           </div>
         </div>
       </div>

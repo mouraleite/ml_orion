@@ -108,82 +108,110 @@ export default function VisualizarVisaoPage() {
  setExpandedNodes({});
  };
 
- const term = busca.trim().toLowerCase();
- const filteredNodes = term
- ? nodes.filter((node) => {
- const codigo = (node.codigo || "").toLowerCase();
- const descricao = (node.descricao || "").toLowerCase();
- if (codigo.includes(term) || descricao.includes(term)) return true;
- return (node.planos_financeiros || []).some((p) =>
- (p.name || "").toLowerCase().includes(term)
- );
- }).map((node) => {
- const codigo = (node.codigo || "").toLowerCase();
- const descricao = (node.descricao || "").toLowerCase();
- const nodeMatches = codigo.includes(term) || descricao.includes(term);
- if (nodeMatches) return node;
- return {
- ...node,
- planos_financeiros: (node.planos_financeiros || []).filter((p) =>
- (p.name || "").toLowerCase().includes(term)
- ),
- };
- })
- : nodes;
+  const term = busca.trim().toLowerCase();
+  const filteredNodes = term
+    ? nodes.filter((node) => {
+        const codigo = (node.codigo || "").toLowerCase();
+        const descricao = (node.descricao || "").toLowerCase();
+        if (codigo.includes(term) || descricao.includes(term)) return true;
+        return (node.planos_financeiros || []).some((p) =>
+          (p.name || "").toLowerCase().includes(term)
+        );
+      }).map((node) => {
+        const codigo = (node.codigo || "").toLowerCase();
+        const descricao = (node.descricao || "").toLowerCase();
+        const nodeMatches = codigo.includes(term) || descricao.includes(term);
+        if (nodeMatches) return node;
+        return {
+          ...node,
+          planos_financeiros: (node.planos_financeiros || []).filter((p) =>
+            (p.name || "").toLowerCase().includes(term)
+          ),
+        };
+      })
+    : nodes;
 
- if (isLoading && nodes.length === 0) {
- return <AppLoadingState />;
- }
+  const totalPlanosMapeados = nodes.reduce(
+    (acc, n) => acc + (n.planos_financeiros?.length || 0),
+    0
+  );
 
- return (
- <div className="p-8 space-y-6 flex flex-col h-full animate-in fade-in duration-300">
- {/* Header */}
- <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
- <div className="flex items-center gap-3">
- <button onClick={() => router.push('/dashboard/apoio/visao')} className="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">
- <ArrowLeft className="w-5 h-5" />
- </button>
- <div>
- <div className="flex items-center gap-2 flex-wrap">
- <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
- <Eye className="w-6 h-6 text-brand-green" />
- {visaoNome ||"Visão"}
- </h1>
- <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded font-medium">Modo Visualização</span>
- </div>
- <p className="text-slate-500 mt-1 text-sm">Visualize a estrutura de categorias e contas da DRE.</p>
- </div>
- </div>
- <div className="flex gap-2 flex-wrap">
- <Button variant="outline" onClick={expandirTodos}>Expandir Tudo</Button>
- <Button variant="outline" onClick={recolherTodos}>Recolher Tudo</Button>
- <Button onClick={() => router.push(`/dashboard/apoio/visao/${visaoId}`)} className="gap-2">
- Editar Estrutura
- <ArrowRight className="w-4 h-4" />
- </Button>
- </div>
- </div>
+  if (isLoading && nodes.length === 0) {
+    return <AppLoadingState />;
+  }
 
- {/* Árvore */}
- <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col flex-1 overflow-hidden">
- <div className="p-4 border-b border-slate-200 bg-slate-50 shrink-0 sticky top-0 z-10 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
- <h2 className="font-semibold text-slate-800">Estrutura Consolidada</h2>
- <div className="flex items-center gap-2 flex-wrap">
- <div className="relative">
- <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
- <input
- type="search"
- placeholder="Buscar categoria ou plano..."
- value={busca}
- onChange={(e) => setBusca(e.target.value)}
- className="ml-input pl-9 h-8 text-sm w-full sm:w-64"
- />
- </div>
- <button className="p-2 text-slate-500 hover:text-brand-green hover:bg-emerald-50 rounded-lg transition-colors" title="Imprimir" onClick={() => window.print()}>
- <Printer className="w-4 h-4" />
- </button>
- </div>
- </div>
+  return (
+    <div className="p-6 md:p-8 space-y-6 flex flex-col h-full animate-in fade-in duration-300">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shrink-0">
+        <div className="flex items-center gap-3">
+          <button onClick={() => router.push('/dashboard/apoio/visao')} className="p-2 text-slate-400 hover:text-slate-700 rounded-lg hover:bg-slate-100 transition-colors">
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                <Eye className="w-6 h-6 text-brand-green" />
+                {visaoNome || "Visão"}
+              </h1>
+              <span className="bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded font-medium">Modo Visualização</span>
+            </div>
+            <p className="text-slate-500 mt-1 text-sm">Visualize a estrutura de categorias e contas da DRE.</p>
+          </div>
+        </div>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={expandirTodos}>Expandir Tudo</Button>
+          <Button variant="outline" onClick={recolherTodos}>Recolher Tudo</Button>
+          <Button onClick={() => router.push(`/dashboard/apoio/visao/${visaoId}`)} className="gap-2">
+            Editar Estrutura
+            <ArrowRight className="w-4 h-4" />
+          </Button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 shrink-0">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Categorias</p>
+          <p className="text-2xl font-bold text-slate-800 mt-1">{nodes.length}</p>
+          <p className="text-xs text-slate-400 mt-1">nós nesta visão</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Planos mapeados</p>
+          <p className="text-2xl font-bold text-slate-800 mt-1">{totalPlanosMapeados}</p>
+          <p className="text-xs text-slate-400 mt-1">soma nas categorias</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Modo</p>
+          <p className="text-sm text-slate-700 mt-2 leading-relaxed">
+            Somente leitura — use <span className="font-semibold">Editar Estrutura</span> para alterar.
+          </p>
+        </div>
+      </div>
+
+      <div className="bg-emerald-50/60 border border-brand-green/20 rounded-xl px-4 py-3 text-sm text-slate-700 shrink-0">
+        Você está no <span className="font-semibold">modo visualização</span>. Expanda as categorias ou busque planos; alterações só na tela de edição.
+      </div>
+
+      {/* Árvore */}
+      <div className="bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col flex-1 overflow-hidden">
+        <div className="p-4 border-b border-slate-200 bg-slate-50 shrink-0 sticky top-0 z-10 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
+          <h2 className="font-semibold text-slate-800">Estrutura Consolidada</h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="relative">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="search"
+                placeholder="Buscar categoria ou plano..."
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                className="ml-input pl-9 h-8 text-sm w-full sm:w-64"
+              />
+            </div>
+            <button className="p-2 text-slate-500 hover:text-brand-green hover:bg-emerald-50 rounded-lg transition-colors" title="Imprimir" onClick={() => window.print()}>
+              <Printer className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
  <div className="overflow-y-auto p-4 group">
  {nodes.length === 0 ? (
  <div className="py-12 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg bg-slate-50">

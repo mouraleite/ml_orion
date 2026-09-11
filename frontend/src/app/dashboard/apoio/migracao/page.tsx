@@ -125,7 +125,7 @@ export default function MigracaoSharePoint() {
   const isErrorMessage = message.toLowerCase().includes("erro");
 
   return (
-    <div className="p-8 max-w-[1400px] mx-auto animate-in fade-in duration-300 space-y-6">
+    <div className="p-6 md:p-8 max-w-[1400px] mx-auto animate-in fade-in duration-300 space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
@@ -160,38 +160,48 @@ export default function MigracaoSharePoint() {
         </div>
       )}
 
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Pendências</p>
+          <p className="text-2xl font-bold text-slate-800 mt-1">{loading ? "—" : pendencias.length}</p>
+          <p className="text-xs text-slate-400 mt-1">nomes sem vínculo no ERP</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">Selecionados</p>
+          <p className="text-2xl font-bold text-slate-800 mt-1">{selecoesCount}</p>
+          <p className="text-xs text-slate-400 mt-1">prontos para salvar</p>
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
+          <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">De-para</p>
+          <p className="text-sm text-slate-700 mt-2 leading-relaxed">
+            Vincule nomes da planilha aos cadastros do ERP antes de concluir a carga.
+          </p>
+        </div>
+      </div>
+
+      <div className="bg-emerald-50/60 border border-brand-green/20 rounded-xl px-4 py-3 text-sm text-slate-700">
+        Use o de-para abaixo para mapear obras/planos da planilha aos registros do ERP ML, depois clique em{" "}
+        <span className="font-semibold">Salvar Selecionados</span>.
+      </div>
+
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="px-5 py-4 border-b border-slate-200 bg-slate-50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-slate-800">
+            <h3 className="text-base font-bold text-slate-800">
               Pendências de Mapeamento (De-Para)
             </h3>
             <p className="text-xs text-slate-500 mt-0.5">
               Vincule nomes da planilha aos cadastros do ERP ML antes de concluir a carga.
             </p>
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {pendencias.length > 0 && (
-              <span className="text-xs font-medium text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
-                {pendencias.length} pendências
-              </span>
-            )}
-            {selecoesCount > 0 && (
-              <span className="text-xs font-medium text-brand-green bg-brand-green/10 border border-brand-green/20 px-2 py-0.5 rounded-full">
-                {selecoesCount} selecionados para salvar
-              </span>
-            )}
-            <Button
-              onClick={handleSalvar}
-              disabled={selecoesCount === 0 || submitting}
-              variant="secondary"
-              size="sm"
-              className="gap-2"
-            >
-              <Save className="w-3.5 h-3.5" />
-              Salvar Selecionados
-            </Button>
-          </div>
+          <Button
+            onClick={handleSalvar}
+            disabled={selecoesCount === 0 || submitting}
+            className="gap-2 shrink-0"
+          >
+            <Save className="w-4 h-4" />
+            Salvar Selecionados
+          </Button>
         </div>
 
         <div className="p-4 space-y-3">
