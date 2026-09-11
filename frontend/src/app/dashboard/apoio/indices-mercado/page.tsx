@@ -5,6 +5,7 @@ import toast from "react-hot-toast";
 import { api } from "@/lib/api";
 import { TrendingUp, TrendingDown, RefreshCw, Activity, CalendarDays, Info } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { Card } from "@/components/ui/Card";
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -39,10 +40,9 @@ const fmtPerc = (v: number | null | undefined, decimals = 2) =>
 
 const fmtData = (d: string | null) => {
   if (!d) return "—";
-  // BCB format: dd/mm/yyyy
   const parts = d.split("/");
   if (parts.length === 3) {
-    const months = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+    const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
     return `${months[parseInt(parts[1]) - 1]}/${parts[2].slice(-2)}`;
   }
   return d;
@@ -57,6 +57,12 @@ const fmtAtualizadoEm = (iso: string) =>
     hour: "2-digit",
     minute: "2-digit",
   });
+
+const TAB_META: Record<"IPCA" | "INCC" | "IGP-M", { label: string; hint: string }> = {
+  IPCA: { label: "IPCA", hint: "Série 433 (IPCA mensal — IBGE)." },
+  INCC: { label: "INCC-DI", hint: "Série 192 (INCC-DI mensal — FGV)." },
+  "IGP-M": { label: "IGP-M", hint: "Série 189 (IGP-M mensal — FGV)." },
+};
 
 // ── Component ────────────────────────────────────────────────────────────────
 export default function IndicesMercadoPage() {
@@ -91,7 +97,7 @@ export default function IndicesMercadoPage() {
       if (forceRefresh) {
         toast.success("Índices atualizados com o BCB.");
       }
-    } catch (e: any) {
+    } catch {
       const msg = "Não foi possível conectar ao BCB. Verifique sua conexão e tente novamente.";
       setError(msg);
       if (forceRefresh) toast.error(msg);
@@ -101,25 +107,26 @@ export default function IndicesMercadoPage() {
     }
   }, []);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    fetchAll();
+  }, [fetchAll]);
 
   const activeData = activeTab === "IPCA" ? ipca : activeTab === "INCC" ? incc : igpm;
   const focusDisponivel = activeTab === "IPCA" || activeTab === "IGP-M";
   const focusProj = activeTab === "IPCA" ? focus?.IPCA?.[0] : activeTab === "IGP-M" ? focus?.["IGP-M"]?.[0] : null;
   const focusLabel = activeTab === "IPCA" ? "IPCA Focus" : activeTab === "IGP-M" ? "IGP-M Focus" : "Focus";
+  const tabMeta = TAB_META[activeTab];
 
-  // ── Loading ────────────────────────────────────────────────────────────────
   if (isLoading) {
     return <AppLoadingState />;
   }
 
-  // ── Error ──────────────────────────────────────────────────────────────────
   if (error && !ipca && !incc && !igpm) {
     return (
-      <div className="p-8 max-w-[1000px]">
+      <div className="p-8 max-w-[900px]">
         <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
           <p className="text-red-700 font-medium">{error}</p>
-          <Button onClick={() => fetchAll(true)} className="mt-4 bg-red-600 hover:bg-red-700 text-white">
+          <Button onClick={() => fetchAll(true)} className="mt-4" variant="danger">
             Tentar Novamente
           </Button>
         </div>
@@ -128,9 +135,8 @@ export default function IndicesMercadoPage() {
   }
 
   return (
-    <div className="p-8 max-w-[1000px] animate-in fade-in duration-300">
-
-      {/* ── Header (padrão Apoio) ──────────────────────────────────────────── */}
+    <div className="p-8 max-w-[900px] animate-in fade-in duration-300">
+      {/* Header — mesmo padrão de Índices Projetados */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Índices de Mercado</h1>
@@ -145,159 +151,208 @@ export default function IndicesMercadoPage() {
         </div>
         <Button
           variant="outline"
+          size="sm"
           onClick={() => fetchAll(true)}
           disabled={isRefreshing}
-          className="flex items-center gap-2 shrink-0"
+          className="gap-2 shrink-0"
         >
           <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
           {isRefreshing ? "Atualizando..." : "Atualizar Dados"}
         </Button>
       </div>
 
-      {/* ── Tabs ───────────────────────────────────────────────────────────── */}
-      <div className="flex bg-slate-100 p-1 rounded-lg w-fit mb-6">
-        {(["IPCA", "INCC", "IGP-M"] as const).map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`px-5 py-2 text-sm font-semibold rounded-md transition-all ${
-              activeTab === tab
-                ? "bg-white text-slate-800 shadow-sm"
-                : "text-slate-500 hover:text-slate-700"
-            }`}
-          >
-            {tab === "INCC" ? "INCC-DI" : tab}
-          </button>
-        ))}
-      </div>
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-6 space-y-8">
+        {/* Seletor de índice */}
+        <div className="flex flex-wrap gap-2 border-b border-slate-100 pb-4">
+          {(["IPCA", "INCC", "IGP-M"] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 text-sm font-semibold rounded-md border transition-colors ${
+                activeTab === tab
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-600 border-slate-200 hover:border-brand-primary hover:text-slate-800"
+              }`}
+            >
+              {TAB_META[tab].label}
+            </button>
+          ))}
+        </div>
 
-      {/* ── KPI Cards ──────────────────────────────────────────────────────── */}
-      {activeData && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {/* Último Mês */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-              <p className="text-xs text-slate-500 font-medium uppercase tracking-wider flex items-center gap-1">
-                <CalendarDays className="w-3.5 h-3.5" /> Último Mês
-              </p>
-              <p className="text-slate-400 text-xs mt-1">{activeData.ultimo_mes.data || "—"}</p>
-              <p className={`text-2xl font-bold mt-1 ${(activeData.ultimo_mes.mensal ?? 0) >= 0 ? "text-slate-800" : "text-red-600"}`}>
-                {fmtPerc(activeData.ultimo_mes.mensal)}
-              </p>
-              <p className="text-xs text-slate-400 mt-1">variação mensal</p>
-            </div>
+        {activeData ? (
+          <>
+            {/* Resumo */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-brand-primary" />
+                    Resumo — {tabMeta.label}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">{tabMeta.hint}</p>
+                </div>
+                <span className="text-xs text-slate-400 bg-slate-50 border border-slate-200 rounded-md px-2 py-1">
+                  {activeData.fonte}
+                </span>
+              </div>
 
-            {/* Acumulado Ano */}
-            <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-              <p className="text-xs text-slate-500 font-medium uppercase tracking-wider flex items-center gap-1">
-                <TrendingUp className="w-3.5 h-3.5" /> Acum. Ano
-              </p>
-              <p className="text-slate-400 text-xs mt-1">Jan–{activeData.ultimo_mes.data?.split("/")[0] || "—"}</p>
-              <p className="text-2xl font-bold mt-1 text-slate-800">
-                {fmtPerc(activeData.ultimo_mes.acumulado_ano)}
-              </p>
-              <p className="text-xs text-slate-400 mt-1">acumulado no ano</p>
-            </div>
-
-            {/* Acumulado 12m */}
-            <div className="bg-white rounded-xl border border-brand-primary/25 bg-brand-primary/5 p-4 shadow-sm">
-              <p className="text-xs text-slate-700 font-medium uppercase tracking-wider flex items-center gap-1">
-                <Activity className="w-3.5 h-3.5 text-brand-primary" /> Acum. 12 Meses
-              </p>
-              <p className="text-slate-400 text-xs mt-1">últimos 12 meses</p>
-              <p className="text-2xl font-bold mt-1 text-slate-800">
-                {fmtPerc(activeData.ultimo_mes.acumulado_12m)}
-              </p>
-              <p className="text-xs text-slate-400 mt-1">acumulado 12m</p>
-            </div>
-
-            {/* Focus Projeção */}
-            <div className={`bg-white rounded-xl border p-4 shadow-sm ${
-              focusDisponivel ? "border-amber-200 bg-amber-50/50" : "border-slate-200"
-            }`}>
-              <p className={`text-xs font-medium uppercase tracking-wider flex items-center gap-1 ${
-                focusDisponivel ? "text-amber-700" : "text-slate-500"
-              }`}>
-                <Info className="w-3.5 h-3.5" /> {focusLabel}
-              </p>
-              {focusDisponivel ? (
-                <>
-                  <p className="text-slate-400 text-xs mt-1">
-                    {focusProj?.DataReferencia ? `Ref. ${focusProj.DataReferencia}` : "Projeção anual"}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <Card className="p-4 space-y-1">
+                  <p className="text-xs text-slate-500 font-medium uppercase tracking-wider flex items-center gap-1">
+                    <CalendarDays className="w-3.5 h-3.5" /> Último Mês
                   </p>
-                  <p className="text-2xl font-bold mt-1 text-amber-700">
-                    {focusProj?.Mediana != null ? fmtPerc(focusProj.Mediana) : "—"}
+                  <p className="text-slate-400 text-xs">{activeData.ultimo_mes.data || "—"}</p>
+                  <p
+                    className={`text-2xl font-bold ${
+                      (activeData.ultimo_mes.mensal ?? 0) >= 0 ? "text-slate-800" : "text-red-600"
+                    }`}
+                  >
+                    {fmtPerc(activeData.ultimo_mes.mensal)}
                   </p>
-                  <p className="text-xs text-amber-600 mt-1">mediana Focus</p>
-                </>
+                  <p className="text-xs text-slate-400">variação mensal</p>
+                </Card>
+
+                <Card className="p-4 space-y-1">
+                  <p className="text-xs text-slate-500 font-medium uppercase tracking-wider flex items-center gap-1">
+                    <TrendingUp className="w-3.5 h-3.5" /> Acum. Ano
+                  </p>
+                  <p className="text-slate-400 text-xs">
+                    Jan–{activeData.ultimo_mes.data?.split("/")[0] || "—"}
+                  </p>
+                  <p className="text-2xl font-bold text-slate-800">
+                    {fmtPerc(activeData.ultimo_mes.acumulado_ano)}
+                  </p>
+                  <p className="text-xs text-slate-400">acumulado no ano</p>
+                </Card>
+
+                <Card className="p-4 space-y-1 border-brand-primary/30">
+                  <p className="text-xs text-slate-700 font-medium uppercase tracking-wider flex items-center gap-1">
+                    <Activity className="w-3.5 h-3.5 text-brand-primary" /> Acum. 12 Meses
+                  </p>
+                  <p className="text-slate-400 text-xs">últimos 12 meses</p>
+                  <p className="text-2xl font-bold text-slate-800">
+                    {fmtPerc(activeData.ultimo_mes.acumulado_12m)}
+                  </p>
+                  <p className="text-xs text-slate-400">acumulado 12m</p>
+                </Card>
+
+                <Card className="p-4 space-y-1">
+                  <p className="text-xs text-slate-500 font-medium uppercase tracking-wider flex items-center gap-1">
+                    <Info className="w-3.5 h-3.5 text-brand-primary" /> {focusLabel}
+                  </p>
+                  {focusDisponivel ? (
+                    <>
+                      <p className="text-slate-400 text-xs">
+                        {focusProj?.DataReferencia ? `Ref. ${focusProj.DataReferencia}` : "Projeção anual"}
+                      </p>
+                      <p className="text-2xl font-bold text-slate-800">
+                        {focusProj?.Mediana != null ? fmtPerc(focusProj.Mediana) : "—"}
+                      </p>
+                      <p className="text-xs text-slate-400">mediana Focus</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-slate-400 text-xs">Boletim Focus</p>
+                      <p className="text-2xl font-bold text-slate-400">—</p>
+                      <p className="text-xs text-slate-400">sem série Focus para INCC</p>
+                    </>
+                  )}
+                </Card>
+              </div>
+            </div>
+
+            {/* Histórico */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-brand-primary" />
+                    Histórico Mensal — {activeData.indicador}
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Valores mensais e acumulados publicados pelo BCB/SGS.
+                  </p>
+                </div>
+              </div>
+
+              {activeData.historico.length === 0 ? (
+                <div className="p-6 text-center text-sm text-slate-400 bg-slate-50 rounded-lg border border-dashed">
+                  Nenhum histórico disponível para {tabMeta.label}.
+                </div>
               ) : (
-                <>
-                  <p className="text-slate-400 text-xs mt-1">Boletim Focus</p>
-                  <p className="text-2xl font-bold mt-1 text-slate-400">—</p>
-                  <p className="text-xs text-slate-400 mt-1">sem série Focus para INCC</p>
-                </>
+                <div className="rounded-lg border border-slate-200 overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200">
+                          <th className="text-left py-3 px-4 font-semibold text-slate-600 uppercase text-xs tracking-wider">
+                            Período
+                          </th>
+                          <th className="text-right py-3 px-4 font-semibold text-slate-600 uppercase text-xs tracking-wider">
+                            Mensal (%)
+                          </th>
+                          <th className="text-right py-3 px-4 font-semibold text-slate-600 uppercase text-xs tracking-wider">
+                            Acum. Ano (%)
+                          </th>
+                          <th className="text-right py-3 px-4 font-semibold text-slate-600 uppercase text-xs tracking-wider">
+                            Acum. 12m (%)
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[...activeData.historico].reverse().map((item, idx) => (
+                          <tr
+                            key={item.data}
+                            className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${
+                              idx === 0 ? "bg-brand-primary/5 font-semibold" : ""
+                            }`}
+                          >
+                            <td className="py-2.5 px-4 text-slate-700">{fmtData(item.data)}</td>
+                            <td
+                              className={`py-2.5 px-4 text-right font-mono ${
+                                item.valor >= 0 ? "text-slate-800" : "text-red-600"
+                              }`}
+                            >
+                              <span className="flex items-center justify-end gap-1">
+                                {item.valor >= 0 ? (
+                                  <TrendingUp className="w-3 h-3 text-green-500" />
+                                ) : (
+                                  <TrendingDown className="w-3 h-3 text-red-500" />
+                                )}
+                                {fmtPerc(item.valor, 2)}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-4 text-right font-mono text-slate-600">
+                              {fmtPerc(item.acumulado_ano, 2)}
+                            </td>
+                            <td
+                              className={`py-2.5 px-4 text-right font-mono font-semibold ${
+                                idx === 0 ? "text-slate-900" : "text-slate-700"
+                              }`}
+                            >
+                              {fmtPerc(item.acumulado_12m, 2)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               )}
             </div>
-          </div>
 
-          {/* ── Tabela Histórica ───────────────────────────────────────────── */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
-              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
-                Histórico Mensal — {activeData.indicador}
-              </h2>
-              <span className="text-xs text-slate-400 bg-slate-50 border border-slate-200 rounded px-2 py-1">
-                {activeData.fonte}
-              </span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="text-left py-3 px-6 font-semibold text-slate-600 uppercase text-xs tracking-wider">Período</th>
-                    <th className="text-right py-3 px-6 font-semibold text-slate-600 uppercase text-xs tracking-wider">Mensal (%)</th>
-                    <th className="text-right py-3 px-6 font-semibold text-slate-600 uppercase text-xs tracking-wider">Acum. Ano (%)</th>
-                    <th className="text-right py-3 px-6 font-semibold text-slate-600 uppercase text-xs tracking-wider">Acum. 12m (%)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...activeData.historico].reverse().map((item, idx) => (
-                    <tr
-                      key={item.data}
-                      className={`border-b border-slate-50 hover:bg-slate-50 transition-colors ${idx === 0 ? "bg-brand-primary/5 font-semibold" : ""}`}
-                    >
-                      <td className="py-2.5 px-6 text-slate-700">{fmtData(item.data)}</td>
-                      <td className={`py-2.5 px-6 text-right font-mono ${item.valor >= 0 ? "text-slate-800" : "text-red-600"}`}>
-                        <span className="flex items-center justify-end gap-1">
-                          {item.valor >= 0
-                            ? <TrendingUp className="w-3 h-3 text-green-500" />
-                            : <TrendingDown className="w-3 h-3 text-red-500" />
-                          }
-                          {fmtPerc(item.valor, 2)}
-                        </span>
-                      </td>
-                      <td className="py-2.5 px-6 text-right font-mono text-slate-600">{fmtPerc(item.acumulado_ano, 2)}</td>
-                      <td className={`py-2.5 px-6 text-right font-mono font-semibold ${idx === 0 ? "text-slate-900" : "text-slate-700"}`}>
-                        {fmtPerc(item.acumulado_12m, 2)}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <p className="text-xs text-slate-400 text-center pt-2 border-t border-slate-100">
+              Fonte: Banco Central do Brasil — BCB/SGS. {tabMeta.hint} Cache renovado a cada 1 hora.
+              {focus && focusDisponivel && <span> Projeção Focus: {focus.fonte}.</span>}
+            </p>
+          </>
+        ) : (
+          <div className="p-6 text-center text-sm text-slate-400 bg-slate-50 rounded-lg border border-dashed">
+            Nenhum dado carregado para {tabMeta.label}.
           </div>
-
-          {/* ── Nota Rodapé ───────────────────────────────────────────────── */}
-          <p className="text-xs text-slate-400 text-center">
-            Fonte: Banco Central do Brasil — BCB/SGS.
-            {activeTab === "IPCA" ? " Série 433 (IPCA mensal - IBGE)." : activeTab === "INCC" ? " Série 192 (INCC-DI mensal - FGV)." : " Série 189 (IGP-M mensal - FGV)."}
-            {" "}Cache renovado a cada 1 hora.
-            {focus && focusDisponivel && (
-              <span> Projeção Focus: {focus.fonte}.</span>
-            )}
-          </p>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
