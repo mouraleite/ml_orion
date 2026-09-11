@@ -3,7 +3,6 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { isDiretorUser } from "@/lib/roles";
 import { useRouter } from "next/navigation";
-import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { integracaoService, IntegracaoLog, Pendencia } from "@/services/integracao";
@@ -84,8 +83,8 @@ export default function IntegracaoSiengePage() {
   };
 
   return (
-    <div className="p-8 max-w-7xl mx-auto space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="p-8 max-w-[1400px] mx-auto space-y-6 animate-in fade-in duration-300">
+      <div className="flex justify-between items-start gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
             <RefreshCw className="w-6 h-6 text-brand-orange" />
@@ -97,16 +96,16 @@ export default function IntegracaoSiengePage() {
         </div>
       </div>
 
-      <Card className="p-4 border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-end bg-white">
-        <div className="flex-1">
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-4 flex flex-col md:flex-row gap-4 items-end">
+        <div className="flex-1 w-full">
           <label className="block text-xs font-medium text-slate-500 mb-1">Data Início (Reprocessamento)</label>
           <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
         </div>
-        <div className="flex-1">
+        <div className="flex-1 w-full">
           <label className="block text-xs font-medium text-slate-500 mb-1">Data Fim (Reprocessamento)</label>
           <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />
         </div>
-        <div className="flex-none">
+        <div className="flex-none w-full md:w-auto">
           <Button 
             onClick={handleReprocess} 
             disabled={reprocessing}
@@ -116,40 +115,38 @@ export default function IntegracaoSiengePage() {
             Sincronizar Manualmente
           </Button>
         </div>
-      </Card>
+      </div>
 
-      <div className="border-b border-slate-200">
-        <nav className="-mb-px flex space-x-8">
-          <button
-            onClick={() => setActiveTab("PENDENCIAS")}
-            className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
-              activeTab === "PENDENCIAS"
-                ? "border-brand-green text-brand-green"
-                : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
-            }`}
-          >
-            <AlertTriangle className="w-4 h-4" />
-            Pendências de Reconciliação
-            {activeTab === "PENDENCIAS" && pendencias.length > 0 && (
-              <span className="bg-red-100 text-red-600 py-0.5 px-2 rounded-full text-xs">{pendencias.length}</span>
-            )}
-          </button>
-          <button
-            onClick={() => setActiveTab("LOGS")}
-            className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm flex items-center gap-2 ${
-              activeTab === "LOGS"
-                ? "border-brand-green text-brand-green"
-                : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
-            }`}
-          >
-            <Clock className="w-4 h-4" />
-            Histórico de Execuções (Logs)
-          </button>
-        </nav>
+      <div className="flex overflow-x-auto border-b border-slate-200 hide-scrollbar">
+        <button
+          onClick={() => setActiveTab("PENDENCIAS")}
+          className={`whitespace-nowrap px-6 py-3 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 ${
+            activeTab === "PENDENCIAS"
+              ? "border-brand-green text-brand-green"
+              : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+          }`}
+        >
+          <AlertTriangle className="w-4 h-4" />
+          Pendências de Reconciliação
+          {pendencias.length > 0 && (
+            <span className="bg-red-100 text-red-600 py-0.5 px-2 rounded-full text-xs">{pendencias.length}</span>
+          )}
+        </button>
+        <button
+          onClick={() => setActiveTab("LOGS")}
+          className={`whitespace-nowrap px-6 py-3 font-medium text-sm border-b-2 transition-colors flex items-center gap-2 ${
+            activeTab === "LOGS"
+              ? "border-brand-green text-brand-green"
+              : "border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300"
+          }`}
+        >
+          <Clock className="w-4 h-4" />
+          Histórico de Execuções (Logs)
+        </button>
       </div>
 
       {activeTab === "PENDENCIAS" && (
-        <Card className="overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="p-4 bg-slate-50 border-b border-slate-200 text-sm text-slate-600">
             Estes registros vieram do Sienge, porém o <strong>Código do Centro de Custo</strong> ou <strong>Categoria Financeira</strong> não existem no cadastro do ERP ML. 
             Corrija o cadastro e efetue uma nova Sincronização.
@@ -158,14 +155,14 @@ export default function IntegracaoSiengePage() {
             <table className="w-full text-sm text-left">
               <thead className="bg-white text-slate-600 border-b border-slate-200">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Data Recebimento</th>
-                  <th className="px-4 py-3 font-medium">ID Sienge (Trace)</th>
-                  <th className="px-4 py-3 font-medium">Tipo</th>
-                  <th className="px-4 py-3 font-medium">Mês/Ano</th>
-                  <th className="px-4 py-3 font-medium">CC Sienge</th>
-                  <th className="px-4 py-3 font-medium">Plano Sienge</th>
-                  <th className="px-4 py-3 font-medium text-right">Valor</th>
-                  <th className="px-4 py-3 font-medium text-right">VGV</th>
+                  <th className="px-4 py-3 font-semibold">Data Recebimento</th>
+                  <th className="px-4 py-3 font-semibold">ID Sienge (Trace)</th>
+                  <th className="px-4 py-3 font-semibold">Tipo</th>
+                  <th className="px-4 py-3 font-semibold">Mês/Ano</th>
+                  <th className="px-4 py-3 font-semibold">CC Sienge</th>
+                  <th className="px-4 py-3 font-semibold">Plano Sienge</th>
+                  <th className="px-4 py-3 font-semibold text-right">Valor</th>
+                  <th className="px-4 py-3 font-semibold text-right">VGV</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -177,21 +174,24 @@ export default function IntegracaoSiengePage() {
                   </tr>
                 ) : pendencias.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-slate-500 flex flex-col items-center">
-                      <CheckCircle className="w-8 h-8 text-green-500 mb-2" />
-                      Nenhuma pendência encontrada. Excelente!
+                    <td colSpan={8} className="px-4 py-10">
+                      <div className="flex flex-col items-center text-center gap-2">
+                        <CheckCircle className="w-8 h-8 text-brand-green" />
+                        <p className="text-sm font-medium text-slate-600">Nenhuma pendência encontrada</p>
+                        <p className="text-xs text-slate-400">A reconciliação está em dia.</p>
+                      </div>
                     </td>
                   </tr>
                 ) : (
                   pendencias.map((p) => (
-                    <tr key={p.id} className="hover:bg-slate-50/50">
+                    <tr key={p.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 text-slate-500">{formatDate(p.data_integracao)}</td>
                       <td className="px-4 py-3 font-mono text-xs text-slate-500">{p.id_sienge}</td>
                       <td className="px-4 py-3">
                         <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
                           p.tipo === 'Despesa' ? 'bg-red-100 text-red-700' :
-                          p.tipo === 'Receita' ? 'bg-green-100 text-green-700' :
-                          'bg-blue-100 text-blue-700'
+                          p.tipo === 'Receita' ? 'bg-brand-green/10 text-brand-green' :
+                          'bg-slate-100 text-slate-700'
                         }`}>
                           {p.tipo || "Indefinido"}
                         </span>
@@ -207,21 +207,21 @@ export default function IntegracaoSiengePage() {
               </tbody>
             </table>
           </div>
-        </Card>
+        </div>
       )}
 
       {activeTab === "LOGS" && (
-        <Card className="overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
               <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Início</th>
-                  <th className="px-4 py-3 font-medium">Fim</th>
-                  <th className="px-4 py-3 font-medium">Processo</th>
-                  <th className="px-4 py-3 font-medium">Status</th>
-                  <th className="px-4 py-3 font-medium text-right">Volume</th>
-                  <th className="px-4 py-3 font-medium">Erros</th>
+                  <th className="px-4 py-3 font-semibold">Início</th>
+                  <th className="px-4 py-3 font-semibold">Fim</th>
+                  <th className="px-4 py-3 font-semibold">Processo</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
+                  <th className="px-4 py-3 font-semibold text-right">Volume</th>
+                  <th className="px-4 py-3 font-semibold">Erros</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -233,21 +233,25 @@ export default function IntegracaoSiengePage() {
                   </tr>
                 ) : logs.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-                      Nenhum histórico encontrado.
+                    <td colSpan={6} className="px-4 py-10">
+                      <div className="text-center text-sm text-slate-400 bg-slate-50 rounded-lg border border-dashed border-slate-200 py-6 mx-4">
+                        Nenhum histórico encontrado.
+                      </div>
                     </td>
                   </tr>
                 ) : (
                   logs.map((log) => (
-                    <tr key={log.id} className="hover:bg-slate-50/50">
+                    <tr key={log.id} className="hover:bg-slate-50 transition-colors">
                       <td className="px-4 py-3 text-slate-500">{formatDate(log.inicio)}</td>
                       <td className="px-4 py-3 text-slate-500">{formatDate(log.fim || "")}</td>
                       <td className="px-4 py-3 font-medium text-slate-700">{log.processo}</td>
-                      <td className="px-4 py-3 flex items-center gap-1">
-                        {log.status === "SUCESSO" ? <CheckCircle className="w-4 h-4 text-green-500" /> : 
-                         log.status === "PARCIAL" ? <AlertTriangle className="w-4 h-4 text-yellow-500" /> : 
-                         <XCircle className="w-4 h-4 text-red-500" />}
-                        <span className="font-medium text-slate-700">{log.status}</span>
+                      <td className="px-4 py-3">
+                        <span className="inline-flex items-center gap-1.5">
+                          {log.status === "SUCESSO" ? <CheckCircle className="w-4 h-4 text-brand-green" /> : 
+                           log.status === "PARCIAL" ? <AlertTriangle className="w-4 h-4 text-amber-500" /> : 
+                           <XCircle className="w-4 h-4 text-red-500" />}
+                          <span className="font-medium text-slate-700">{log.status}</span>
+                        </span>
                       </td>
                       <td className="px-4 py-3 text-right">{log.volume_processado}</td>
                       <td className="px-4 py-3 text-xs font-mono text-red-500 max-w-xs truncate" title={log.erros || ""}>
@@ -259,7 +263,7 @@ export default function IntegracaoSiengePage() {
               </tbody>
             </table>
           </div>
-        </Card>
+        </div>
       )}
     </div>
   );

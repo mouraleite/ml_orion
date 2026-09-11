@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@/lib/api";
 import { apoioService } from "@/services/apoio";
-import { Search, Plus, Pencil, Trash2, X, Users } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Users } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { confirmDialog } from "@/components/ui/confirmDialog";
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
@@ -134,100 +134,118 @@ export default function ParceriasPage() {
           </h1>
           <p className="text-slate-500 text-sm mt-1">Configure o rateio de parceria por agrupamento Sienge.</p>
         </div>
-        <Button onClick={() => openModal()} className="gap-2">
+        <Button onClick={() => openModal()} className="gap-2 shrink-0">
           <Plus className="w-4 h-4" /> Nova Regra
         </Button>
       </div>
 
       {isLoading ? (
         <AppLoadingState />
+      ) : configs.length === 0 ? (
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-10 text-center space-y-3">
+          <div className="mx-auto w-12 h-12 rounded-full bg-slate-50 border border-dashed border-slate-200 flex items-center justify-center">
+            <Users className="w-5 h-5 text-slate-400" />
+          </div>
+          <p className="text-sm text-slate-600 font-medium">Nenhuma regra de parceria cadastrada</p>
+          <p className="text-xs text-slate-400 max-w-sm mx-auto">Crie a primeira regra para definir quais linhas financeiras entram no rateio de parceria.</p>
+          <Button onClick={() => openModal()} className="gap-2 mt-2">
+            <Plus className="w-4 h-4" /> Nova Regra
+          </Button>
+        </div>
       ) : (
         <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-slate-800">Regras cadastradas</h2>
+            <span className="text-xs font-medium text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
+              {configs.length} {configs.length === 1 ? "regra" : "regras"}
+            </span>
+          </div>
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+            <thead className="bg-white border-b border-slate-200 text-slate-600 font-semibold">
               <tr>
-                <th className="px-6 py-4">Nome da Regra</th>
-                <th className="px-6 py-4">Linhas Rateadas</th>
-                <th className="px-6 py-4 text-right">Ações</th>
+                <th className="px-4 py-3">Nome da Regra</th>
+                <th className="px-4 py-3">Linhas Rateadas</th>
+                <th className="px-4 py-3 text-right">Ações</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {configs.length === 0 ? (
-                <tr>
-                  <td colSpan={3} className="px-6 py-8 text-center text-slate-500">
-                    <div className="p-4 text-sm text-slate-400 bg-slate-50 rounded-lg border border-dashed inline-block">
-                      Nenhuma regra de parceria cadastrada.
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                configs.map((config) => (
+              {configs.map((config) => {
+                const selectedCount = Object.keys(config.rules || {}).filter(k => config.rules[k]).length;
+                return (
                   <tr key={config.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-slate-800">{config.name}</td>
-                    <td className="px-6 py-4 text-slate-600">
-                      {Object.keys(config.rules || {}).filter(k => config.rules[k]).length} selecionadas
+                    <td className="px-4 py-3 font-medium text-slate-800">{config.name}</td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center text-xs font-medium text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
+                        {selectedCount} selecionadas
+                      </span>
                     </td>
-                    <td className="px-6 py-4 text-right space-x-2">
-                      <button onClick={() => openModal(config)} className="text-slate-400 hover:text-brand-green p-1 transition-colors" title="Editar">
+                    <td className="px-4 py-3 text-right space-x-1">
+                      <button onClick={() => openModal(config)} className="text-slate-400 hover:text-brand-green p-1.5 rounded hover:bg-emerald-50 transition-colors" title="Editar">
                         <Pencil className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleDelete(config.id)} className="text-slate-400 hover:text-red-500 p-1 transition-colors" title="Excluir">
+                      <button onClick={() => handleDelete(config.id)} className="text-slate-400 hover:text-red-500 p-1.5 rounded hover:bg-red-50 transition-colors" title="Excluir">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </td>
                   </tr>
-                ))
-              )}
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
 
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
-              <h2 className="text-lg font-bold text-slate-800">
-                {editingId ? "Editar Regra" : "Nova Regra"}
-              </h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600">
+              <div>
+                <h2 className="text-lg font-bold text-slate-800">
+                  {editingId ? "Editar Regra" : "Nova Regra"}
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">Marque as linhas financeiras sujeitas ao rateio.</p>
+              </div>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 rounded hover:bg-slate-200/60">
                 <X className="w-5 h-5" />
               </button>
             </div>
             
-            <div className="p-6 space-y-6 overflow-y-auto">
-              <div className="grid grid-cols-1 gap-4">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-semibold text-slate-700 block">Nome da Regra</label>
-                  <input
-                    type="text"
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                    className="ml-input"
-                    placeholder="Ex: Regra Padrão"
-                  />
-                </div>
+            <div className="p-6 space-y-5 overflow-y-auto">
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-slate-700 block">Nome da Regra</label>
+                <input
+                  type="text"
+                  value={formName}
+                  onChange={(e) => setFormName(e.target.value)}
+                  className="ml-input"
+                  placeholder="Ex: Regra Padrão"
+                />
               </div>
 
               <div className="space-y-3">
-                <div className="flex items-center justify-between gap-4">
-                  <label className="text-sm font-semibold text-slate-700 block">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <label className="text-sm font-semibold text-slate-700">
                     Linhas Financeiras Sujeitas a Rateio
                   </label>
-                  <span className="text-xs text-slate-500 italic shrink-0">
-                    O percentual será lido do campo &quot;Participação&quot; do Centro de Custo.
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-medium text-brand-green bg-brand-green/10 px-2 py-0.5 rounded-full">
+                      {Object.keys(formRules).filter(k => formRules[k]).length} selecionadas
+                    </span>
+                    <span className="text-xs text-slate-500 italic">
+                      % lido de &quot;Participação&quot; do Centro de Custo
+                    </span>
+                  </div>
                 </div>
                 
                 <div className="border border-slate-200 rounded-lg overflow-hidden bg-slate-50">
-                  <div className="p-4 max-h-96 overflow-y-auto space-y-4">
+                  <div className="p-3 max-h-96 overflow-y-auto space-y-3">
                     {visionTree.map((node: any) => (
                       <div key={node.id} className="bg-white p-3 rounded-lg border border-slate-200">
                         <h4 className="text-sm font-semibold text-slate-800 mb-2">{node.codigo} - {node.descricao}</h4>
-                        <div className="pl-2 grid grid-cols-1 md:grid-cols-2 gap-1">
+                        <div className="pl-1 grid grid-cols-1 md:grid-cols-2 gap-0.5">
                           {node.planos_financeiros && node.planos_financeiros.length > 0 ? (
                             node.planos_financeiros.map((plano: any) => (
-                              <label key={plano.id} className="flex items-center gap-2 text-sm p-1 rounded hover:bg-slate-50 cursor-pointer">
+                              <label key={plano.id} className="flex items-center gap-2 text-sm p-1.5 rounded hover:bg-slate-50 cursor-pointer">
                                 <input
                                   type="checkbox"
                                   checked={formRules[plano.name] || false}
@@ -244,7 +262,9 @@ export default function ParceriasPage() {
                       </div>
                     ))}
                     {visionTree.length === 0 && (
-                      <p className="text-sm text-slate-500">Nenhuma árvore de visão encontrada.</p>
+                      <div className="p-4 text-center text-sm text-slate-400 bg-white rounded-lg border border-dashed border-slate-200">
+                        Nenhuma árvore de visão encontrada.
+                      </div>
                     )}
                   </div>
                 </div>

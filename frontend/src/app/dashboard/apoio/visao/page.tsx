@@ -91,6 +91,17 @@ export default function VisoesPage() {
  {/* Cards de Visões */}
  {isLoading ? (
  <AppLoadingState />
+ ) : visoes.length === 0 ? (
+ <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-10 text-center space-y-3">
+ <div className="mx-auto w-12 h-12 rounded-full bg-slate-50 border border-dashed border-slate-200 flex items-center justify-center">
+ <Eye className="w-5 h-5 text-slate-400" />
+ </div>
+ <p className="text-sm text-slate-600 font-medium">Nenhuma visão cadastrada</p>
+ <p className="text-xs text-slate-400 max-w-sm mx-auto">Crie a primeira visão para montar a estrutura DRE.</p>
+ <Button onClick={() => setIsModalOpen(true)} className="gap-2 mt-2">
+ <Plus className="w-4 h-4" /> Nova Visão
+ </Button>
+ </div>
  ) : (
  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
  {visoes.map(visao => (
@@ -100,7 +111,7 @@ export default function VisoesPage() {
  <div className="p-5 flex-1">
  <div className="flex items-start justify-between mb-2">
  <h3 className="font-bold text-slate-800 text-lg leading-tight">{visao.nome}</h3>
- <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+ <div className="flex gap-1 shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
  {!visao.is_padrao && (
  <button
  onClick={() => handleDelete(visao.id)}
@@ -161,7 +172,7 @@ export default function VisoesPage() {
  {isModalOpen && (
  <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
  <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
- <div className="p-5 border-b border-slate-100">
+ <div className="p-5 border-b border-slate-100 bg-slate-50">
  <h3 className="font-bold text-lg text-slate-800">Nova Visão</h3>
  <p className="text-sm text-slate-500 mt-1">Crie uma nova estrutura de cenário DRE.</p>
  </div>

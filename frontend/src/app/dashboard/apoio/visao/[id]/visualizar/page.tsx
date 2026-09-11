@@ -30,7 +30,7 @@ function ReadOnlyVisionNode({ node, indentLevel, isExpanded, onToggle }: {
 
  return (
  <div className="mb-1">
- <div className={`flex items-center justify-between py-2 px-4 rounded-lg transition-colors border-2 border-transparent hover:bg-slate-50 ${isMainNode ? 'bg-slate-50/50' : ''}`}>
+ <div className={`flex items-center justify-between py-2 px-4 rounded-lg transition-colors hover:bg-slate-50 ${isMainNode ? 'bg-slate-50/50' : ''}`}>
  <div className="flex items-center gap-2" style={{ paddingLeft: `${indentLevel * 24}px` }}>
  <button onClick={onToggle} className="p-1 rounded hover:bg-slate-200 transition-colors">
  {isExpanded ? <ChevronDown className="w-4 h-4 text-slate-500" /> : <ChevronRight className="w-4 h-4 text-slate-500" />}
@@ -151,6 +151,17 @@ export default function VisualizarVisaoPage() {
  </div>
  </div>
  <div className="overflow-y-auto p-4 group">
+ {nodes.length === 0 ? (
+ <div className="py-12 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg bg-slate-50">
+ Nenhuma categoria nesta visão.
+ </div>
+ ) : (
+ <>
+ <div className="flex items-center px-4 pb-2 mb-2 border-b border-slate-100 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+ <span className="flex-1">Categoria / Conta</span>
+ <span className="w-32 shrink-0">Código</span>
+ <span className="w-20 text-center shrink-0">Tipo</span>
+ </div>
  {nodes.map(node => (
  <ReadOnlyVisionNode
  key={node.id}
@@ -160,6 +171,8 @@ export default function VisualizarVisaoPage() {
  onToggle={() => setExpandedNodes(prev => ({ ...prev, [node.id]: !prev[node.id] }))}
  />
  ))}
+ </>
+ )}
  </div>
  </div>
  </div>

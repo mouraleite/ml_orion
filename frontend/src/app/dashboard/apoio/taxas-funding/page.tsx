@@ -150,17 +150,24 @@ export default function TaxasFundingPage() {
   ] as const;
 
   return (
-    <div className="p-8 space-y-6 animate-in fade-in duration-300 max-w-6xl mx-auto">
+    <div className="p-8 space-y-6 animate-in fade-in duration-300 max-w-[1400px] mx-auto">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Taxas de Funding (CRI)</h1>
+          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+            <Landmark className="w-6 h-6 text-brand-green" />
+            Taxas de Funding (CRI)
+          </h1>
           <p className="text-slate-500 mt-1 text-sm">
             Configure as tabelas de preços da B3, CVM, ANBIMA e Securitizadoras de forma amigável.
           </p>
         </div>
-        <div className="flex items-center gap-4">
-          {message && <span className="text-sm text-brand-green font-medium">{message}</span>}
-          <Button onClick={handleSave} disabled={isSaving} className="gap-2">
+        <div className="flex items-center gap-3 flex-wrap">
+          {message && (
+            <span className="text-sm font-medium text-brand-green bg-brand-green/10 border border-brand-green/20 px-3 py-1.5 rounded-lg">
+              {message}
+            </span>
+          )}
+          <Button onClick={handleSave} disabled={isSaving} className="gap-2 shrink-0">
             <Save className="w-4 h-4" />
             {isSaving ? "Salvando..." : "Salvar Configurações"}
           </Button>
@@ -186,14 +193,14 @@ export default function TaxasFundingPage() {
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-8 min-h-[500px]">
+        <div className="p-6">
           
           {/* CVM e ANBIMA */}
           {activeTab === "CVM_ANBIMA" && (
             <div className="space-y-8 animate-in fade-in">
               <div className="space-y-4">
-                <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2">Taxas CVM</h3>
-                <div className="grid grid-cols-3 gap-6">
+                <h3 className="text-base font-bold text-slate-800 border-b border-slate-200 pb-2">Taxas CVM</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1">
                     <label className="text-sm font-medium text-slate-700">ICVM 400 (Decimal)</label>
                     <Input type="number" step="0.0001" value={rates.CVM?.ICVM_400} onChange={(e) => updateRate("CVM", "ICVM_400", e.target.value)} />
@@ -210,17 +217,17 @@ export default function TaxasFundingPage() {
               </div>
 
               <div className="space-y-4">
-                <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2 mt-8">Taxas ANBIMA</h3>
-                <div className="grid grid-cols-3 gap-6">
+                <h3 className="text-base font-bold text-slate-800 border-b border-slate-200 pb-2">Taxas ANBIMA</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1">
                     <label className="text-sm font-medium text-slate-700">Taxa de Registro</label>
                     <Input type="number" step="0.000001" value={rates.ANBIMA?.Taxa_Registro} onChange={(e) => updateRate("ANBIMA", "Taxa_Registro", e.target.value)} />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-6 mt-4">
-                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
                     <h4 className="font-semibold text-slate-700 text-sm">Limites ICVM 400 (R$)</h4>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
                         <label className="text-xs text-slate-500">Mínimo</label>
                         <Input type="number" value={rates.ANBIMA?.Min_400} onChange={(e) => updateRate("ANBIMA", "Min_400", e.target.value)} />
@@ -232,9 +239,9 @@ export default function TaxasFundingPage() {
                     </div>
                   </div>
 
-                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-4">
+                  <div className="p-4 bg-slate-50 rounded-lg border border-slate-200 space-y-3">
                     <h4 className="font-semibold text-slate-700 text-sm">Limites ICVM 476 (R$)</h4>
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1">
                         <label className="text-xs text-slate-500">Mínimo</label>
                         <Input type="number" value={rates.ANBIMA?.Min_476} onChange={(e) => updateRate("ANBIMA", "Min_476", e.target.value)} />
@@ -254,56 +261,72 @@ export default function TaxasFundingPage() {
           {activeTab === "B3" && (
             <div className="space-y-8 animate-in fade-in">
               <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                  <h3 className="text-lg font-bold text-slate-800">Tabela Escalonada: Registro B3</h3>
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2 gap-3 flex-wrap">
+                  <h3 className="text-base font-bold text-slate-800">Tabela Escalonada: Registro B3</h3>
                   <Button variant="outline" size="sm" onClick={() => addB3Row("Registro")}>+ Adicionar Faixa</Button>
                 </div>
                 <div className="bg-slate-50 rounded-lg border border-slate-200 p-4">
-                  <div className="grid grid-cols-12 gap-4 mb-2 px-2">
-                    <div className="col-span-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Volume Máximo (R$)</div>
-                    <div className="col-span-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Taxa Decimal</div>
-                    <div className="col-span-2"></div>
-                  </div>
-                  {rates.B3?.Registro?.map((row: any, i: number) => (
-                    <div key={i} className="grid grid-cols-12 gap-4 items-center mb-2">
-                      <div className="col-span-5">
-                        <Input type="number" value={row.max} onChange={(e) => updateB3("Registro", i, "max", e.target.value)} />
-                      </div>
-                      <div className="col-span-5">
-                        <Input type="number" step="0.000001" value={row.rate} onChange={(e) => updateB3("Registro", i, "rate", e.target.value)} />
-                      </div>
-                      <div className="col-span-2 flex justify-end">
-                        <Button variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => removeB3Row("Registro", i)}>Remover</Button>
-                      </div>
+                  {(!rates.B3?.Registro || rates.B3.Registro.length === 0) ? (
+                    <div className="py-8 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg bg-white">
+                      Nenhuma faixa de registro. Clique em &quot;Adicionar Faixa&quot;.
                     </div>
-                  ))}
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-12 gap-4 mb-2 px-2">
+                        <div className="col-span-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Volume Máximo (R$)</div>
+                        <div className="col-span-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Taxa Decimal</div>
+                        <div className="col-span-2"></div>
+                      </div>
+                      {rates.B3.Registro.map((row: any, i: number) => (
+                        <div key={i} className="grid grid-cols-12 gap-4 items-center mb-2">
+                          <div className="col-span-5">
+                            <Input type="number" value={row.max} onChange={(e) => updateB3("Registro", i, "max", e.target.value)} />
+                          </div>
+                          <div className="col-span-5">
+                            <Input type="number" step="0.000001" value={row.rate} onChange={(e) => updateB3("Registro", i, "rate", e.target.value)} />
+                          </div>
+                          <div className="col-span-2 flex justify-end">
+                            <Button variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => removeB3Row("Registro", i)}>Remover</Button>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
               </div>
 
               <div className="space-y-4">
-                <div className="flex items-center justify-between border-b border-slate-200 pb-2 mt-8">
-                  <h3 className="text-lg font-bold text-slate-800">Tabela Escalonada: Custódia B3</h3>
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2 gap-3 flex-wrap">
+                  <h3 className="text-base font-bold text-slate-800">Tabela Escalonada: Custódia B3</h3>
                   <Button variant="outline" size="sm" onClick={() => addB3Row("Custodia")}>+ Adicionar Faixa</Button>
                 </div>
                 <div className="bg-slate-50 rounded-lg border border-slate-200 p-4">
-                  <div className="grid grid-cols-12 gap-4 mb-2 px-2">
-                    <div className="col-span-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Volume Máximo (R$)</div>
-                    <div className="col-span-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Taxa Decimal</div>
-                    <div className="col-span-2"></div>
-                  </div>
-                  {rates.B3?.Custodia?.map((row: any, i: number) => (
-                    <div key={i} className="grid grid-cols-12 gap-4 items-center mb-2">
-                      <div className="col-span-5">
-                        <Input type="number" value={row.max} onChange={(e) => updateB3("Custodia", i, "max", e.target.value)} />
-                      </div>
-                      <div className="col-span-5">
-                        <Input type="number" step="0.000001" value={row.rate} onChange={(e) => updateB3("Custodia", i, "rate", e.target.value)} />
-                      </div>
-                      <div className="col-span-2 flex justify-end">
-                        <Button variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => removeB3Row("Custodia", i)}>Remover</Button>
-                      </div>
+                  {(!rates.B3?.Custodia || rates.B3.Custodia.length === 0) ? (
+                    <div className="py-8 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg bg-white">
+                      Nenhuma faixa de custódia. Clique em &quot;Adicionar Faixa&quot;.
                     </div>
-                  ))}
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-12 gap-4 mb-2 px-2">
+                        <div className="col-span-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Volume Máximo (R$)</div>
+                        <div className="col-span-5 text-xs font-bold text-slate-500 uppercase tracking-wider">Taxa Decimal</div>
+                        <div className="col-span-2"></div>
+                      </div>
+                      {rates.B3.Custodia.map((row: any, i: number) => (
+                        <div key={i} className="grid grid-cols-12 gap-4 items-center mb-2">
+                          <div className="col-span-5">
+                            <Input type="number" value={row.max} onChange={(e) => updateB3("Custodia", i, "max", e.target.value)} />
+                          </div>
+                          <div className="col-span-5">
+                            <Input type="number" step="0.000001" value={row.rate} onChange={(e) => updateB3("Custodia", i, "rate", e.target.value)} />
+                          </div>
+                          <div className="col-span-2 flex justify-end">
+                            <Button variant="ghost" className="text-red-500 hover:text-red-700 hover:bg-red-50" onClick={() => removeB3Row("Custodia", i)}>Remover</Button>
+                          </div>
+                        </div>
+                      ))}
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -311,71 +334,69 @@ export default function TaxasFundingPage() {
 
           {/* Securitizadoras */}
           {activeTab === "Securitizadoras" && (
-            <div className="space-y-8 animate-in fade-in">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-2">
-                <h3 className="text-lg font-bold text-slate-800">Custos Fixos por Securitizadora</h3>
+            <div className="space-y-6 animate-in fade-in">
+              <div className="flex items-center justify-between border-b border-slate-200 pb-2 gap-3 flex-wrap">
+                <h3 className="text-base font-bold text-slate-800">Custos Fixos por Securitizadora</h3>
                 <Button variant="outline" size="sm" onClick={addSecuritizadora}>+ Nova Securitizadora</Button>
               </div>
               
-              <div className="grid gap-6">
-                {Object.keys(rates.Securitizadoras || {}).map((secName) => (
-                  <div key={secName} className="p-5 bg-slate-50 rounded-xl border border-slate-200 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h4 className="font-bold text-brand-green">{secName}</h4>
-                      <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8" onClick={() => removeSecuritizadora(secName)}>
-                        Excluir
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-3 md:grid-cols-5 gap-4">
-                      
-                      <div className="space-y-1">
-                        <label className="text-xs text-slate-500 font-medium">Fiduciário (Implantação)</label>
-                        <Input type="number" value={rates.Securitizadoras[secName].Agente_Fiduciario_Implantacao} onChange={(e) => updateSecuritizadora(secName, "Agente_Fiduciario_Implantacao", e.target.value)} />
-                      </div>
-                      
-                      <div className="space-y-1">
-                        <label className="text-xs text-slate-500 font-medium">Fiduciário (Recorrente)</label>
-                        <Input type="number" value={rates.Securitizadoras[secName].Agente_Fiduciario_Recorrente} onChange={(e) => updateSecuritizadora(secName, "Agente_Fiduciario_Recorrente", e.target.value)} />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-xs text-slate-500 font-medium">Instituição Custodiante</label>
-                        <Input type="number" value={rates.Securitizadoras[secName].Instituicao_Custodiante} onChange={(e) => updateSecuritizadora(secName, "Instituicao_Custodiante", e.target.value)} />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-xs text-slate-500 font-medium">Registro de Lastro</label>
-                        <Input type="number" value={rates.Securitizadoras[secName].Registro_Lastro} onChange={(e) => updateSecuritizadora(secName, "Registro_Lastro", e.target.value)} />
-                      </div>
-
-                      <div className="space-y-1">
-                        <label className="text-xs text-slate-500 font-medium">Agente Liquidante</label>
-                        <Input type="number" value={rates.Securitizadoras[secName].Liquidante} onChange={(e) => updateSecuritizadora(secName, "Liquidante", e.target.value)} />
-                      </div>
-
-                    </div>
+              <div className="grid gap-4">
+                {Object.keys(rates.Securitizadoras || {}).length === 0 ? (
+                  <div className="py-8 text-center text-sm text-slate-400 border border-dashed border-slate-200 rounded-lg bg-slate-50">
+                    Nenhuma securitizadora cadastrada.
                   </div>
-                ))}
+                ) : (
+                  Object.keys(rates.Securitizadoras || {}).map((secName) => (
+                    <div key={secName} className="p-4 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="font-bold text-brand-green text-sm">{secName}</h4>
+                        <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 hover:bg-red-50 h-8" onClick={() => removeSecuritizadora(secName)}>
+                          Excluir
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-xs text-slate-500 font-medium">Fiduciário (Implantação)</label>
+                          <Input type="number" value={rates.Securitizadoras[secName].Agente_Fiduciario_Implantacao} onChange={(e) => updateSecuritizadora(secName, "Agente_Fiduciario_Implantacao", e.target.value)} />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-slate-500 font-medium">Fiduciário (Recorrente)</label>
+                          <Input type="number" value={rates.Securitizadoras[secName].Agente_Fiduciario_Recorrente} onChange={(e) => updateSecuritizadora(secName, "Agente_Fiduciario_Recorrente", e.target.value)} />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-slate-500 font-medium">Instituição Custodiante</label>
+                          <Input type="number" value={rates.Securitizadoras[secName].Instituicao_Custodiante} onChange={(e) => updateSecuritizadora(secName, "Instituicao_Custodiante", e.target.value)} />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-slate-500 font-medium">Registro de Lastro</label>
+                          <Input type="number" value={rates.Securitizadoras[secName].Registro_Lastro} onChange={(e) => updateSecuritizadora(secName, "Registro_Lastro", e.target.value)} />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-slate-500 font-medium">Agente Liquidante</label>
+                          <Input type="number" value={rates.Securitizadoras[secName].Liquidante} onChange={(e) => updateSecuritizadora(secName, "Liquidante", e.target.value)} />
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           )}
 
           {/* Gross Up */}
           {activeTab === "GrossUp" && (
-            <div className="space-y-6 animate-in fade-in">
-              <h3 className="text-lg font-bold text-slate-800 border-b border-slate-200 pb-2">Prestador Gross Up (%)</h3>
+            <div className="space-y-4 animate-in fade-in">
+              <h3 className="text-base font-bold text-slate-800 border-b border-slate-200 pb-2">Prestador Gross Up (%)</h3>
               
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                 {Object.keys(rates.Prestador_GrossUp || {}).map((prestador) => (
-                  <div key={prestador} className="space-y-1 bg-slate-50 p-4 rounded-lg border border-slate-200">
+                  <div key={prestador} className="space-y-1.5 bg-slate-50 p-4 rounded-lg border border-slate-200">
                     <label className="text-sm font-medium text-slate-700">{prestador}</label>
-                    <div className="relative">
-                      <Input 
-                        type="number" step="0.0001"
-                        value={rates.Prestador_GrossUp[prestador]} 
-                        onChange={(e) => updateRate("Prestador_GrossUp", prestador, e.target.value)} 
-                      />
-                    </div>
+                    <Input 
+                      type="number" step="0.0001"
+                      value={rates.Prestador_GrossUp[prestador]} 
+                      onChange={(e) => updateRate("Prestador_GrossUp", prestador, e.target.value)} 
+                    />
                   </div>
                 ))}
               </div>

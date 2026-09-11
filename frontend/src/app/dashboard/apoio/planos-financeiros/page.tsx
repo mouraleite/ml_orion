@@ -129,7 +129,7 @@ export default function PlanosFinanceirosPage() {
  const tiposUnicos = Array.from(new Set(planos.map(p => p.tpConta).filter(Boolean))).sort();
 
  return (
- <div className="p-8 space-y-6 animate-in fade-in duration-300">
+ <div className="p-8 max-w-[1400px] mx-auto space-y-6 animate-in fade-in duration-300">
  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
  <div>
  <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
@@ -201,9 +201,15 @@ export default function PlanosFinanceirosPage() {
  </CollapsibleFilterPanel>
 
  <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+ <div className="px-4 py-3 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+ <h2 className="text-sm font-semibold text-slate-800">Resultados</h2>
+ <span className="text-xs font-medium text-slate-500 bg-white border border-slate-200 px-2 py-0.5 rounded-full">
+ {sortedPlanos.length} {sortedPlanos.length === 1 ? "plano" : "planos"}
+ </span>
+ </div>
  <div className="overflow-x-auto">
  <table className="w-full text-left text-sm">
- <thead className="bg-slate-50 text-slate-600 font-semibold border-b border-slate-200">
+ <thead className="bg-white text-slate-600 font-semibold border-b border-slate-200 sticky top-0">
  <tr>
  <th className="px-4 py-3 whitespace-nowrap cursor-pointer group select-none hover:bg-slate-100/50 transition-colors" onClick={() => handleSort('db_sienge_id')}>
  <div className="flex items-center gap-2">ID Sienge {renderSortIcon('db_sienge_id')}</div>
@@ -237,8 +243,14 @@ export default function PlanosFinanceirosPage() {
  </tr>
  ) : sortedPlanos.length === 0 ? (
  <tr>
- <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
- Nenhum plano financeiro encontrado.
+ <td colSpan={7} className="px-6 py-10">
+ <div className="text-center space-y-2">
+ <p className="text-sm font-medium text-slate-600">Nenhum plano financeiro encontrado</p>
+ <p className="text-xs text-slate-400">Ajuste os filtros ou limpe a busca.</p>
+ <button type="button" onClick={limparFiltros} className="text-xs font-semibold text-brand-green hover:underline">
+ Limpar filtros
+ </button>
+ </div>
  </td>
  </tr>
  ) : sortedPlanos.map((plano, idx) => (

@@ -81,28 +81,39 @@ export default function PlanosDePagamentoPage() {
  }
 
  return (
- <div className="p-8 max-w-[1600px] animate-in fade-in duration-300">
- <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+ <div className="p-8 max-w-[1600px] mx-auto animate-in fade-in duration-300 space-y-6">
+ <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
  <div>
  <h1 className="text-2xl font-bold text-slate-800">Planos de Pagamento</h1>
  <p className="text-slate-500 text-sm mt-1">Gerencie os templates globais de planos de pagamento e suas condições.</p>
  </div>
  
- <div className="flex items-center gap-3">
+ <div className="flex items-center gap-2 flex-wrap">
+ {message && (
+ <span className="text-sm font-medium text-brand-green bg-brand-green/10 border border-brand-green/20 px-3 py-1.5 rounded-lg">
+ {message}
+ </span>
+ )}
  {plans.length === 0 && (
- <Button variant="outline" onClick={handleSeed} className="flex items-center gap-2">
+ <Button variant="outline" onClick={handleSeed} className="gap-2">
  <RefreshCw className="w-4 h-4" /> Semear Planos Padrão
  </Button>
  )}
- <Button variant="outline" onClick={() => setPlans([...plans, { nome:"Novo Plano", condicoes_json: [{nome:"Sinal", perc: 100}] }])} className="flex items-center gap-2 border-dashed">
+ <Button variant="outline" onClick={() => setPlans([...plans, { nome:"Novo Plano", condicoes_json: [{nome:"Sinal", perc: 100}] }])} className="gap-2 border-dashed">
  <Plus className="w-4 h-4" /> Novo Plano
  </Button>
- {message && <span className="text-sm text-green-600 font-medium">{message}</span>}
- <Button onClick={handleSaveAll} disabled={isSaving} className="flex items-center gap-2">
+ <Button onClick={handleSaveAll} disabled={isSaving} className="gap-2">
  <Save className="w-4 h-4" /> {isSaving ?"Salvando..." :"Salvar Alterações"}
  </Button>
  </div>
  </div>
+
+ {plans.length === 0 ? (
+ <div className="bg-white rounded-xl border border-dashed border-slate-200 p-10 text-center space-y-3">
+ <p className="text-sm font-medium text-slate-600">Nenhum plano de pagamento cadastrado</p>
+ <p className="text-xs text-slate-400">Use &quot;Semear Planos Padrão&quot; ou crie um novo plano.</p>
+ </div>
+ ) : null}
 
  <div className="flex flex-wrap gap-6 items-stretch">
  {plans.map((plano, pIdx) => {
@@ -111,8 +122,8 @@ export default function PlanosDePagamentoPage() {
  const isTotalValid = Math.abs(totalPerc - 100) < 0.01;
 
  return (
- <div key={pIdx} className="w-[320px] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
- <div className="bg-slate-50 px-4 py-3 border-b flex justify-between items-center gap-2 min-h-[64px]">
+ <div key={pIdx} className="w-[320px] min-h-[280px] bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
+ <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex justify-between items-center gap-2 min-h-[64px]">
  <textarea 
  className="font-bold text-slate-700 bg-transparent border-none outline-none focus:ring-1 focus:ring-brand-green rounded px-1 w-full text-sm leading-tight resize-none"
  value={plano.nome}
