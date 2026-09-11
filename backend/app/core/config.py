@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     AZURE_TENANT_ID: str = ""
     AZURE_CLIENT_ID: str = ""
 
+    # Segredo para disparo externo do sync (cron). Vazio = rota /sync/cron desligada.
+    CRON_SECRET: str = ""
+
     # Sienge API (credenciais em .env; defaults mantêm compatibilidade local)
     SIENGE_SUBDOMAIN: str = "mouraleite"
     SIENGE_USER: str = "mouraleite-contas-a-pagar"

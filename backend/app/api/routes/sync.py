@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends, BackgroundTasks, Header, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime
 from app.db.database import get_db
 from app.api import deps
 from app.schemas.user import UserResponse
 from app.services.sienge_sync import sync_all_sienge_data
+from app.core.config import settings
+from app.core.scheduler import daily_sienge_sync
 
 router = APIRouter()
 
@@ -35,3 +37,31 @@ def trigger_sienge_sync(
     background_tasks.add_task(sync_all_sienge_data, db, full_load)
     
     return {"message": "Sincronismo com Sienge iniciado em background.", "full_load": full_load}
+
+
+@router.post("/cron")
+def trigger_cron_sync(
+    background_tasks: BackgroundTasks,
+    x_cron_secret: str | None = Header(default=None, alias="X-Cron-Secret"),
+):
+    """
+    Disparo externo (cron-job.org etc.) do sync completo diário.
+    Requer header X-Cron-Secret igual a CRON_SECRET no ambiente.
+    Acorda a API no plano free e roda o mesmo job do APScheduler.
+    """
+    expected = (settings.CRON_SECRET or "").strip()
+    if not expected:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="CRON_SECRET não configurado no servidor.",
+        )
+    if not x_cron_secret or x_cron_secret.strip() != expected:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Segredo de cron inválido.",
+        )
+    background_tasks.add_task(daily_sienge_sync)
+    return {
+        "message": "Sync diário iniciado em background.",
+        "schedule_hint": "09:00 e 14:00 America/Sao_Paulo",
+    }
