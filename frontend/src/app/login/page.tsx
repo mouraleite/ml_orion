@@ -26,6 +26,9 @@ function microsoftErrorMessage(err: unknown): string {
   return "Não foi possível entrar com Microsoft.";
 }
 
+/** Evita dois POSTs /auth/microsoft no Strict Mode. */
+let microsoftSsoExchange: Promise<"ok" | "skip" | "error"> | null = null;
+
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -55,24 +58,38 @@ export default function LoginPage() {
   // Volta da Microsoft (redirect): troca id_token pelo JWT do ERP.
   useEffect(() => {
     if (!isMicrosoftAuthConfigured()) return;
-    let cancelled = false;
+    let alive = true;
+
+    if (!microsoftSsoExchange) {
+      microsoftSsoExchange = (async () => {
+        const idToken = await consumeMicrosoftRedirectIdToken();
+        if (!idToken) return "skip";
+        const { data } = await api.post("/auth/microsoft", { id_token: idToken });
+        await login(data.access_token);
+        return "ok";
+      })().catch((err: unknown) => {
+        // Propaga para o efeito atual poder mostrar o erro.
+        throw err;
+      });
+    }
+
     (async () => {
       try {
-        const idToken = await consumeMicrosoftRedirectIdToken();
-        if (!idToken || cancelled) return;
-        setMsLoading(true);
-        setError("");
-        const { data } = await api.post("/auth/microsoft", { id_token: idToken });
-        if (cancelled) return;
-        await login(data.access_token);
+        if (alive) setMsLoading(true);
+        const result = await microsoftSsoExchange;
+        if (result === "skip") {
+          microsoftSsoExchange = null;
+        }
       } catch (err: unknown) {
-        if (!cancelled) setError(microsoftErrorMessage(err));
+        microsoftSsoExchange = null;
+        if (alive) setError(microsoftErrorMessage(err));
       } finally {
-        if (!cancelled) setMsLoading(false);
+        if (alive) setMsLoading(false);
       }
     })();
+
     return () => {
-      cancelled = true;
+      alive = false;
     };
   }, [login]);
 

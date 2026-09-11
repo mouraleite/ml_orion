@@ -73,20 +73,28 @@ function hasMicrosoftRedirectResponse(): boolean {
 }
 
 /** Se o usuário voltou do login Microsoft, devolve o id_token; senão null. */
+let redirectConsumePromise: Promise<string | null> | null = null;
+
 export async function consumeMicrosoftRedirectIdToken(): Promise<string | null> {
-  // Evita reprocessar cache/hash antigo quando não há resposta OAuth na URL.
-  if (!hasMicrosoftRedirectResponse()) {
-    await getMsalInstance();
-    return null;
+  // Uma única troca code→token por carga da página (evita Strict Mode / remount).
+  if (!redirectConsumePromise) {
+    redirectConsumePromise = (async () => {
+      const hadResponse = hasMicrosoftRedirectResponse();
+      await getMsalInstance();
+      if (!hadResponse) return null;
+      const result = await redirectPromise;
+      const idToken = result?.idToken?.trim() || null;
+      if (typeof window !== "undefined" && window.location.hash) {
+        window.history.replaceState(
+          {},
+          document.title,
+          window.location.pathname + window.location.search,
+        );
+      }
+      return idToken;
+    })();
   }
-  await getMsalInstance();
-  const result = await redirectPromise;
-  const idToken = result?.idToken?.trim() || null;
-  // Limpa o hash da URL para não reenviar o mesmo code ao recarregar.
-  if (typeof window !== "undefined" && window.location.hash) {
-    window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
-  }
-  return idToken;
+  return redirectConsumePromise;
 }
 
 /** Redireciona a janela inteira para a tela de login da Microsoft. */
