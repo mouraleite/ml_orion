@@ -46,10 +46,26 @@ def validar_id_token_microsoft(id_token: str) -> dict[str, Any]:
                 f"https://login.microsoftonline.com/{tenant}/v2.0",
                 f"https://sts.windows.net/{tenant}/",
             ],
+            leeway=120,
             options={"require": ["exp", "iat", "aud", "iss"]},
         )
+    except jwt.ExpiredSignatureError as exc:
+        raise HTTPException(status_code=401, detail="Token Microsoft expirado. Tente entrar de novo.") from exc
+    except jwt.InvalidAudienceError as exc:
+        raise HTTPException(
+            status_code=401,
+            detail="Token Microsoft com Client ID diferente do configurado na API (AZURE_CLIENT_ID).",
+        ) from exc
+    except jwt.InvalidIssuerError as exc:
+        raise HTTPException(
+            status_code=401,
+            detail="Token Microsoft com Tenant diferente do configurado na API (AZURE_TENANT_ID).",
+        ) from exc
     except jwt.PyJWTError as exc:
-        raise HTTPException(status_code=401, detail="Token Microsoft inválido ou expirado.") from exc
+        raise HTTPException(
+            status_code=401,
+            detail=f"Token Microsoft inválido ({type(exc).__name__}).",
+        ) from exc
 
     oid = (payload.get("oid") or payload.get("sub") or "").strip()
     if not oid:

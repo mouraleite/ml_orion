@@ -55,13 +55,38 @@ export async function getMsalInstance(): Promise<PublicClientApplication> {
 
 const loginRequest = {
   scopes: ["openid", "profile", "email"],
+  // Força a UI da Microsoft (escolha de conta), em vez de SSO silencioso.
+  prompt: "select_account" as const,
 };
+
+function hasMicrosoftRedirectResponse(): boolean {
+  if (typeof window === "undefined") return false;
+  const hash = window.location.hash || "";
+  const search = window.location.search || "";
+  return (
+    /[#&?]code=/i.test(hash) ||
+    /[#&?]code=/i.test(search) ||
+    /[#&?]error=/i.test(hash) ||
+    /[#&?]error=/i.test(search) ||
+    /[#&?]client_info=/i.test(hash)
+  );
+}
 
 /** Se o usuário voltou do login Microsoft, devolve o id_token; senão null. */
 export async function consumeMicrosoftRedirectIdToken(): Promise<string | null> {
+  // Evita reprocessar cache/hash antigo quando não há resposta OAuth na URL.
+  if (!hasMicrosoftRedirectResponse()) {
+    await getMsalInstance();
+    return null;
+  }
   await getMsalInstance();
   const result = await redirectPromise;
-  return result?.idToken?.trim() || null;
+  const idToken = result?.idToken?.trim() || null;
+  // Limpa o hash da URL para não reenviar o mesmo code ao recarregar.
+  if (typeof window !== "undefined" && window.location.hash) {
+    window.history.replaceState({}, document.title, window.location.pathname + window.location.search);
+  }
+  return idToken;
 }
 
 /** Redireciona a janela inteira para a tela de login da Microsoft. */
