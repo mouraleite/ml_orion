@@ -10,7 +10,8 @@ celery==5.3.6
 redis==5.0.3
 numpy==1.26.4
 python-multipart==0.0.9
-PyJWT==2.8.0
+PyJWT[crypto]==2.8.0
+cryptography>=42.0.0
 passlib[bcrypt]==1.7.4
 bcrypt==3.2.0
 python-dotenv==1.0.1
