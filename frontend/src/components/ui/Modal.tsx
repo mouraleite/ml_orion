@@ -37,7 +37,7 @@ export function Modal({ isOpen, onClose, title, children, className = "", size }
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Overlay */}
       <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
@@ -45,10 +45,12 @@ export function Modal({ isOpen, onClose, title, children, className = "", size }
       />
 
       {/* Modal Content */}
-      <div className={`relative z-50 w-full ${sizeClass} rounded-xl bg-white shadow-xl border border-slate-200 p-6 ${className}`}>
+      <div
+        className={`relative z-50 w-full ${sizeClass} max-h-[90vh] flex flex-col rounded-xl bg-white shadow-xl border border-slate-200 ${className}`}
+      >
         {title && (
-          <div className="flex items-center justify-between mb-5 pb-4 border-b border-slate-200">
-            <h2 className="text-lg font-bold text-slate-900">{title}</h2>
+          <div className="flex items-center justify-between shrink-0 px-6 pt-6 pb-4 border-b border-slate-200">
+            <h2 className="text-lg font-bold text-slate-900 pr-2">{title}</h2>
             <button
               onClick={onClose}
               className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-orange"
@@ -61,13 +63,13 @@ export function Modal({ isOpen, onClose, title, children, className = "", size }
         {!title && (
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-orange"
+            className="absolute top-4 right-4 z-10 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-orange"
           >
             <X className="h-5 w-5" />
             <span className="sr-only">Fechar</span>
           </button>
         )}
-        <div className="text-slate-800">
+        <div className="text-slate-800 flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-5">
           {children}
         </div>
       </div>
