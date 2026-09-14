@@ -740,9 +740,9 @@ export default function EmpresasPage() {
             ) : partners.length === 0 ? (
               <p className="text-sm text-slate-500">Nenhum sócio vinculado a esta empresa.</p>
             ) : (
-              <div className="border border-slate-200 rounded-xl max-h-[min(40vh,320px)] overflow-y-auto">
+              <div className="max-h-72 overflow-y-auto rounded-xl border border-slate-200">
                 <table className="w-full text-left text-sm">
-                  <thead className="bg-slate-50 text-slate-600 sticky top-0 z-[1]">
+                  <thead className="sticky top-0 z-[1] bg-slate-50 text-slate-600">
                     <tr>
                       <th className="p-3">Nome</th>
                       <th className="p-3">Tipo</th>

@@ -34,43 +34,56 @@ export function Modal({ isOpen, onClose, title, children, className = "", size }
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen, onClose]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 overflow-y-auto overscroll-contain">
       {/* Overlay */}
       <div
         className="fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       />
 
-      {/* Modal Content */}
-      <div
-        className={`relative z-50 w-full ${sizeClass} max-h-[90vh] flex flex-col rounded-xl bg-white shadow-xl border border-slate-200 ${className}`}
-      >
-        {title && (
-          <div className="flex items-center justify-between shrink-0 px-6 pt-6 pb-4 border-b border-slate-200">
-            <h2 className="text-lg font-bold text-slate-900 pr-2">{title}</h2>
+      {/* Centering + scrollable viewport */}
+      <div className="relative z-50 flex min-h-full items-center justify-center p-4">
+        <div
+          className={`relative flex w-full ${sizeClass} max-h-[calc(100dvh-2rem)] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl ${className}`}
+          role="dialog"
+          aria-modal="true"
+        >
+          {title && (
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-200 px-6 pb-4 pt-6">
+              <h2 className="pr-2 text-lg font-bold text-slate-900">{title}</h2>
+              <button
+                onClick={onClose}
+                className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-orange"
+              >
+                <X className="h-5 w-5" />
+                <span className="sr-only">Fechar</span>
+              </button>
+            </div>
+          )}
+          {!title && (
             <button
               onClick={onClose}
-              className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-orange"
+              className="absolute right-4 top-4 z-10 rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-600 focus:outline-none focus:ring-2 focus:ring-brand-orange"
             >
               <X className="h-5 w-5" />
               <span className="sr-only">Fechar</span>
             </button>
+          )}
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-5 text-slate-800">
+            {children}
           </div>
-        )}
-        {!title && (
-          <button
-            onClick={onClose}
-            className="absolute top-4 right-4 z-10 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors focus:outline-none focus:ring-2 focus:ring-brand-orange"
-          >
-            <X className="h-5 w-5" />
-            <span className="sr-only">Fechar</span>
-          </button>
-        )}
-        <div className="text-slate-800 flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-5">
-          {children}
         </div>
       </div>
     </div>
