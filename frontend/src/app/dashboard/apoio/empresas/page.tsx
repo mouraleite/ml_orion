@@ -34,6 +34,10 @@ function formatCnpj(value?: string) {
   return `${digits.slice(0, 2)}.${digits.slice(2, 5)}.${digits.slice(5, 8)}/${digits.slice(8, 12)}-${digits.slice(12)}`;
 }
 
+function cnpjDigits(value?: string) {
+  return String(value || "").replace(/\D/g, "");
+}
+
 function compareId(a: unknown, b: unknown) {
   const na = Number(a);
   const nb = Number(b);
@@ -141,14 +145,35 @@ export default function EmpresasPage() {
     return { total: empresas.length, pendentes, byTipo };
   }, [empresas]);
 
+  /** CNPJs com mais de um id Sienge (duplicata no cadastro/Sienge). */
+  const cnpjDuplicados = useMemo(() => {
+    const byCnpj = new Map<string, any[]>();
+    for (const emp of empresas) {
+      const digits = cnpjDigits(emp.cnpj);
+      if (digits.length !== 14) continue;
+      const list = byCnpj.get(digits) || [];
+      list.push(emp);
+      byCnpj.set(digits, list);
+    }
+    return [...byCnpj.entries()]
+      .filter(([, list]) => list.length > 1)
+      .map(([digits, list]) => ({
+        digits,
+        cnpj: formatCnpj(digits),
+        empresas: [...list].sort((a, b) => compareId(a.id, b.id)),
+      }));
+  }, [empresas]);
+
+  const cnpjDuplicadoSet = useMemo(() => new Set(cnpjDuplicados.map((g) => g.digits)), [cnpjDuplicados]);
+
   const filteredEmpresas = useMemo(() => {
     const q = busca.trim().toLowerCase();
     const qDigits = q.replace(/\D/g, "");
     return empresas.filter((emp) => {
       if (q) {
         const hay = `${emp.razaoSocial || ""} ${emp.nomeFantasia || ""} ${emp.id || ""}`.toLowerCase();
-        const cnpjDigits = String(emp.cnpj || "").replace(/\D/g, "");
-        if (!hay.includes(q) && !(qDigits && cnpjDigits.includes(qDigits))) return false;
+        const digits = cnpjDigits(emp.cnpj);
+        if (!hay.includes(q) && !(qDigits && digits.includes(qDigits))) return false;
       }
       if (filtroStatus && emp.status !== filtroStatus) return false;
       if (filtroTipo === "Pendente" && emp.tipo_empresa) return false;
@@ -468,6 +493,50 @@ export default function EmpresasPage() {
         </div>
       </CollapsibleFilterPanel>
 
+      {cnpjDuplicados.length > 0 ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <div className="flex items-start gap-2.5">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <p className="font-semibold text-amber-900">
+                {cnpjDuplicados.length === 1
+                  ? "CNPJ duplicado no cadastro"
+                  : `${cnpjDuplicados.length} CNPJs duplicados no cadastro`}
+              </p>
+              <p className="text-xs text-amber-800/90">
+                O Sienge enviou mais de um ID com o mesmo CNPJ. Confira qual manter ativa; a outra costuma ser cadastro antigo.
+              </p>
+              <ul className="space-y-1.5">
+                {cnpjDuplicados.map((grupo) => (
+                  <li key={grupo.digits} className="text-xs text-amber-900">
+                    <button
+                      type="button"
+                      onClick={() => setBusca(grupo.cnpj)}
+                      className="font-mono font-semibold underline decoration-amber-400/80 underline-offset-2 hover:text-amber-700"
+                      title="Filtrar por este CNPJ"
+                    >
+                      {grupo.cnpj}
+                    </button>
+                    <span className="text-amber-800/80"> — IDs </span>
+                    <span className="font-semibold">
+                      {grupo.empresas
+                        .map((e) => {
+                          const label =
+                            e.nomeFantasia && e.nomeFantasia !== "N/A"
+                              ? e.nomeFantasia
+                              : e.razaoSocial || "—";
+                          return `${e.id} (${label})`;
+                        })
+                        .join(" · ")}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
         <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between gap-3">
           <p className="text-xs text-slate-500">
@@ -507,8 +576,14 @@ export default function EmpresasPage() {
                   </td>
                 </tr>
               ) : (
-                sortedEmpresas.map((emp) => (
-                  <tr key={emp.id} className="hover:bg-slate-50/80 transition-colors">
+                sortedEmpresas.map((emp) => {
+                  const digits = cnpjDigits(emp.cnpj);
+                  const isCnpjDuplicado = digits.length === 14 && cnpjDuplicadoSet.has(digits);
+                  return (
+                  <tr
+                    key={emp.id}
+                    className={`transition-colors ${isCnpjDuplicado ? "bg-amber-50/70 hover:bg-amber-50" : "hover:bg-slate-50/80"}`}
+                  >
                     <td className="px-4 py-3 text-slate-500 font-mono text-xs whitespace-nowrap">{emp.id}</td>
                     <td className="px-4 py-3 min-w-[220px] max-w-[360px]">
                       <p className="font-semibold text-slate-800 leading-tight truncate" title={emp.nomeFantasia || emp.razaoSocial}>
@@ -520,7 +595,17 @@ export default function EmpresasPage() {
                         </p>
                       ) : null}
                     </td>
-                    <td className="px-4 py-3 text-slate-500 whitespace-nowrap font-mono text-xs">{formatCnpj(emp.cnpj)}</td>
+                    <td className="px-4 py-3 text-slate-500 whitespace-nowrap font-mono text-xs">
+                      <div className="flex flex-col items-start gap-1">
+                        <span>{formatCnpj(emp.cnpj)}</span>
+                        {isCnpjDuplicado ? (
+                          <span className="inline-flex items-center gap-1 rounded-full border border-amber-300 bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                            <AlertCircle className="h-3 w-3" />
+                            CNPJ duplicado
+                          </span>
+                        ) : null}
+                      </div>
+                    </td>
                     <td className="px-4 py-3 whitespace-nowrap">
                       <button
                         type="button"
@@ -594,7 +679,8 @@ export default function EmpresasPage() {
                       </div>
                     </td>
                   </tr>
-                ))
+                  );
+                })
               )}
             </tbody>
           </table>

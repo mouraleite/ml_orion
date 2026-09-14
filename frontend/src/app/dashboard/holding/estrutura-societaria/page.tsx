@@ -40,8 +40,11 @@ interface SocioHolding {
   fromApoio?: boolean;
 }
 
-/** Organograma oficial — sócios da Moura Leite. Só desenho; não entra no fator de consolidação. */
-const SOCIOS_OFICIAIS_MLDU: SocioHolding[] = [
+/**
+ * Fallback visual se o cadastro de sócios da Moura Leite estiver vazio.
+ * Só desenho; não entra no fator de consolidação.
+ */
+const SOCIOS_FALLBACK_MLDU: SocioHolding[] = [
   { id: -1, name: "SOMA", percentage: 29.49, natureza: "PJ" },
   { id: -2, name: "OCA", percentage: 29.49, natureza: "PJ" },
   { id: -3, name: "PR&F", percentage: 29.49, natureza: "PJ" },
@@ -59,40 +62,72 @@ function normalizeName(value?: string | null) {
     .replace(/[^a-z0-9&]/g, "");
 }
 
-const SHAREHOLDER_NAME_KEYS = new Set(SOCIOS_OFICIAIS_MLDU.map((s) => normalizeName(s.name)));
+function findMouraLeiteCompany(emps: any[]) {
+  const bySienge = emps.find((e) => String(e.id) === "1");
+  if (bySienge) return bySienge;
+  return emps.find((e) => {
+    const n = normalizeName(`${e.nomeFantasia || ""} ${e.razaoSocial || ""}`);
+    return n.includes("mouraleite") || n === "mldu";
+  });
+}
 
-function inferNatureza(s: { natureza?: string; tipo?: string; partner_company_id?: number | null; partner_user_id?: number | null; partner_name?: string }): "PJ" | "PF" {
+function inferNatureza(s: {
+  natureza?: string;
+  tipo?: string;
+  partner_company_id?: number | null;
+  partner_user_id?: number | null;
+  partner_name?: string;
+}): "PJ" | "PF" {
   if (s.natureza === "PJ" || s.natureza === "PF") return s.natureza;
   if (s.partner_company_id) return "PJ";
   if (s.partner_user_id || (s.tipo || "").toUpperCase().includes("PF")) return "PF";
-  const official = SOCIOS_OFICIAIS_MLDU.find((o) => normalizeName(o.name) === normalizeName(s.partner_name));
-  return official?.natureza || "PF";
+  return "PF";
+}
+
+/** Nome curto para o organograma (PJ mantém fantasia; PF usa o primeiro nome). */
+function shortSocioLabel(fullName: string, natureza: "PJ" | "PF") {
+  const cleaned = fullName.trim();
+  if (!cleaned) return "Sócio";
+  if (natureza === "PJ") return cleaned;
+  const first = cleaned.split(/\s+/).find(Boolean) || cleaned;
+  return first.toUpperCase();
 }
 
 function mapSociosFromApoio(raw: any[]): SocioHolding[] {
-  return raw
-    .map((s, idx) => ({
-      id: s.id ?? idx,
-      name: String(s.partner_name || s.tipo || "Sócio").trim(),
-      percentage: Number(s.percentage) || 0,
-      natureza: inferNatureza(s),
-      fromApoio: true,
-    }))
+  const mapped = raw
+    .map((s, idx) => {
+      const natureza = inferNatureza(s);
+      const fullName = String(s.partner_name || s.tipo || "Sócio").trim();
+      return {
+        id: s.id ?? idx,
+        name: shortSocioLabel(fullName, natureza),
+        percentage: Number(s.percentage) || 0,
+        natureza,
+        fromApoio: true,
+      };
+    })
     .filter((s) => s.name);
+  // PJ à esquerda, depois PF; empate por % decrescente
+  return mapped.sort((a, b) => {
+    if (a.natureza !== b.natureza) return a.natureza === "PJ" ? -1 : 1;
+    return b.percentage - a.percentage;
+  });
 }
 
 function sociosParaExibir(mapped: SocioHolding[]): SocioHolding[] {
-  if (!mapped.length) return SOCIOS_OFICIAIS_MLDU;
-  const keys = new Set(mapped.map((s) => normalizeName(s.name)));
-  const missing = SOCIOS_OFICIAIS_MLDU.filter((s) => !keys.has(normalizeName(s.name)));
-  return [...mapped, ...missing];
+  return mapped.length ? mapped : SOCIOS_FALLBACK_MLDU;
 }
 
-function isShareholderCompany(node: { nome_fantasia?: string; razao_social?: string }) {
-  return (
-    SHAREHOLDER_NAME_KEYS.has(normalizeName(node.nome_fantasia)) ||
-    SHAREHOLDER_NAME_KEYS.has(normalizeName(node.razao_social))
+function isShareholderCompany(
+  node: { nome_fantasia?: string; razao_social?: string },
+  socios: SocioHolding[]
+) {
+  const keys = new Set(
+    [...SOCIOS_FALLBACK_MLDU, ...socios]
+      .filter((s) => s.natureza === "PJ")
+      .map((s) => normalizeName(s.name))
   );
+  return keys.has(normalizeName(node.nome_fantasia)) || keys.has(normalizeName(node.razao_social));
 }
 
 interface OrgActions {
@@ -270,13 +305,13 @@ export default function EstruturaSocietariaPage() {
       if (estrutura.message && !estrutura.root) {
         setError(estrutura.message);
       }
-      const mldu = emps.find((e: any) => String(e.id) === "1");
+      const mldu = findMouraLeiteCompany(emps);
       if (mldu?.db_id) {
         const socios = await apoioService.getCompanyPartners(mldu.db_id);
         const mapped = mapSociosFromApoio(Array.isArray(socios) ? socios : []);
         setSociosHolding(sociosParaExibir(mapped));
       } else {
-        setSociosHolding(SOCIOS_OFICIAIS_MLDU);
+        setSociosHolding(SOCIOS_FALLBACK_MLDU);
       }
     } catch (e: any) {
       setError(e.response?.data?.detail || "Erro ao carregar estrutura.");
@@ -565,7 +600,7 @@ export default function EstruturaSocietariaPage() {
         </div>
       </div>
 
-      {semVinculo.filter((e) => !isShareholderCompany(e)).length > 0 ? (
+      {semVinculo.filter((e) => !isShareholderCompany(e, sociosHolding)).length > 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 p-5">
           <div className="flex items-start gap-2 mb-3">
             <Info className="w-4 h-4 text-slate-400 mt-0.5 shrink-0" />
@@ -577,7 +612,7 @@ export default function EstruturaSocietariaPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            {semVinculo.filter((e) => !isShareholderCompany(e)).map((e) => (
+            {semVinculo.filter((e) => !isShareholderCompany(e, sociosHolding)).map((e) => (
               <button
                 key={e.company_id}
                 type="button"
