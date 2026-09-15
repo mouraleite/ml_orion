@@ -264,6 +264,15 @@ function buildComparativoInsights(
     (a, b) => b.absVarRs - a.absVarRs,
   );
 
+  const todasLinhasRaw = [
+    ...rawInc.map((i) => ({ ...i, categoriaComparativo: "Inclusão" as const })),
+    ...rawExc.map((i) => ({ ...i, categoriaComparativo: "Exclusão" as const })),
+    ...rawAlt.map((i) => ({
+      ...i,
+      categoriaComparativo: (i.absVarRs > minVar ? "Alteração" : "Sem variação") as const,
+    })),
+  ].sort((a, b) => b.absVarRs - a.absVarRs);
+
   const globalVarRs = globalTotalB - globalTotalA;
   const globalVarPerc = globalTotalA !== 0 ? globalVarRs / Math.abs(globalTotalA) : 0;
 
@@ -354,6 +363,11 @@ function buildComparativoInsights(
     shareAbs: item.absVarRs / totalAbsVar,
   }));
 
+  const todasLinhas = todasLinhasRaw.map((item) => ({
+    ...item,
+    shareAbs: totalAbsVar > 0 ? item.absVarRs / totalAbsVar : 0,
+  }));
+
   let narrative = "";
   if (allItems.length === 0) {
     narrative = "As duas versões são equivalentes no total — não há desvios materiais por produto/plano.";
@@ -373,6 +387,7 @@ function buildComparativoInsights(
     processedAlt: processedAltChanged,
     processedAltUnchanged,
     allItems: itemsWithShare,
+    todasLinhas,
     favorableItems,
     unfavorableItems,
     impactInc,
@@ -2706,7 +2721,7 @@ function TabComparativo({
   const [idB, setIdB] = useState<string>("");
   const [result, setResult] = useState<any>(null);
   const [loading, setLoading] = useState(false);
-  const [resultView, setResultView] = useState<"destaques" | "alteracoes" | "inclusoes" | "exclusoes">("destaques");
+  const [resultView, setResultView] = useState<"todas" | "destaques" | "alteracoes" | "inclusoes" | "exclusoes">("destaques");
   const [desvioFilter, setDesvioFilter] = useState<"todos" | "favoravel" | "desfavoravel">("todos");
   const [visao, setVisao] = useState<"executiva" | "analitica">("executiva");
   const [buscaAnalitica, setBuscaAnalitica] = useState("");
@@ -2845,8 +2860,16 @@ function TabComparativo({
     if (desvioFilter === "favoravel") items = items.filter((i) => i.favoravel && i.varRs !== 0);
     if (desvioFilter === "desfavoravel") items = items.filter((i) => !i.favoravel && i.varRs !== 0);
     const filtered = items.filter(matchesAnalitico);
-    return visao === "executiva" ? filtered.slice(0, 5) : filtered;
+    return visao === "executiva" ? filtered.slice(0, 5) : filtered.slice(0, 10);
   }, [insights, desvioFilter, matchesAnalitico, visao]);
+
+  const filteredTodas = useMemo(() => {
+    if (!insights) return [];
+    let items = insights.todasLinhas || [];
+    if (desvioFilter === "favoravel") items = items.filter((i) => i.favoravel && i.varRs !== 0);
+    if (desvioFilter === "desfavoravel") items = items.filter((i) => !i.favoravel && i.varRs !== 0);
+    return items.filter(matchesAnalitico);
+  }, [insights, desvioFilter, matchesAnalitico]);
 
   const filteredInclusoes = useMemo(() => {
     if (!insights) return [];
@@ -2880,13 +2903,24 @@ function TabComparativo({
 
   const exportarComparativo = () => {
     if (!insights) return;
+    const linhas = insights.todasLinhas || [];
     if (analiticoModo === "mes") {
-      const headers = ["Produto", "Plano", ...visibleMesesLabels.map((l) => `Var ${l}`), varColLabel, "Var. %", "Peso %", "Favorável"];
-      const rows = insights.allItems.map((item) => {
+      const headers = [
+        "Tipo",
+        "Produto",
+        "Plano",
+        ...visibleMesesLabels.map((l) => `Var ${l}`),
+        varColLabel,
+        "Var. %",
+        "Peso %",
+        "Favorável",
+      ];
+      const rows = linhas.map((item) => {
         const prodId = item.versao_a?.produto_id ?? item.produto_id;
         const planoId = item.versao_a?.plano_financeiro_id ?? item.plano_financeiro_id;
         const varsMes = visibleMesesStr.map((mes) => processComparativoItemMes(item, mes, tipo, result, vendasMetric).varRs);
         return [
+          item.categoriaComparativo || "",
           getProdNome(prodId),
           getPlanoNome(planoId),
           ...varsMes,
@@ -2896,14 +2930,25 @@ function TabComparativo({
           item.favoravel ? "Sim" : "Não",
         ];
       });
-      exportDataToExcel(headers, rows, `comparativo_${tipo}_${ano}_por_mes.xlsx`);
+      exportDataToExcel(headers, rows, `comparativo_${tipo}_${ano}_completo_por_mes.xlsx`);
       return;
     }
-    const headers = ["Produto", "Plano", getNomeVersao(idA), getNomeVersao(idB), varColLabel, "Var. %", "Peso %", "Favorável"];
-    const rows = insights.allItems.map((item) => {
+    const headers = [
+      "Tipo",
+      "Produto",
+      "Plano",
+      getNomeVersao(idA),
+      getNomeVersao(idB),
+      varColLabel,
+      "Var. %",
+      "Peso %",
+      "Favorável",
+    ];
+    const rows = linhas.map((item) => {
       const prodId = item.versao_a?.produto_id ?? item.produto_id;
       const planoId = item.versao_a?.plano_financeiro_id ?? item.plano_financeiro_id;
       return [
+        item.categoriaComparativo || "",
         getProdNome(prodId),
         getPlanoNome(planoId),
         item.valA,
@@ -2914,17 +2959,18 @@ function TabComparativo({
         item.favoravel ? "Sim" : "Não",
       ];
     });
-    exportDataToExcel(headers, rows, `comparativo_${tipo}_${ano}.xlsx`);
+    exportDataToExcel(headers, rows, `comparativo_${tipo}_${ano}_completo.xlsx`);
   };
 
   const resultTabs = insights ? [
+    { id: "todas" as const, label: "Todas as linhas", count: insights.counts.totalLinhas },
     { id: "destaques" as const, label: "Destaques", count: Math.min(insights.allItems.length, 10) },
     { id: "alteracoes" as const, label: "Alterações", count: insights.processedAlt.length },
     { id: "inclusoes" as const, label: "Inclusões", count: insights.processedInc.length },
     { id: "exclusoes" as const, label: "Exclusões", count: insights.processedExc.length },
-  ].filter((t) => t.id === "destaques" || t.count > 0) : [];
+  ].filter((t) => t.id === "todas" || t.id === "destaques" || t.count > 0) : [];
 
-  const renderComparisonRow = (alt: any, i: number, opts?: { rank?: number; compact?: boolean; showShare?: boolean; porMes?: boolean }) => {
+  const renderComparisonRow = (alt: any, i: number, opts?: { rank?: number; compact?: boolean; showShare?: boolean; porMes?: boolean; showTipo?: boolean }) => {
     const prodId = alt.versao_a?.produto_id ?? alt.produto_id;
     const planoId = alt.versao_a?.plano_financeiro_id ?? alt.plano_financeiro_id;
     const py = opts?.compact ? "py-2.5" : "py-3.5";
@@ -2934,6 +2980,13 @@ function TabComparativo({
       <tr key={i} className="group hover:bg-slate-50/80 border-b border-slate-100 transition-colors">
         {opts?.rank != null && (
           <td className={`px-3 ${py} text-xs font-semibold text-slate-400 tabular-nums w-10`}>{opts.rank}</td>
+        )}
+        {opts?.showTipo && (
+          <td className={`px-3 ${py} whitespace-nowrap`}>
+            <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-slate-100 text-slate-600">
+              {alt.categoriaComparativo || "—"}
+            </span>
+          </td>
         )}
         <td className={`px-4 ${py} font-medium text-slate-800 text-sm min-w-[200px] max-w-[260px] sticky left-0 z-10 ${stickyBg}`}>
           <span className="line-clamp-3">{getProdNome(prodId)}</span>
@@ -2986,12 +3039,13 @@ function TabComparativo({
     );
   };
 
-  const tableHead = (opts?: { rank?: boolean; share?: boolean; porMes?: boolean }) => {
+  const tableHead = (opts?: { rank?: boolean; share?: boolean; porMes?: boolean; showTipo?: boolean }) => {
     const porMes = opts?.porMes && visibleMesesStr.length > 0;
     return (
     <thead className="text-[11px] text-slate-500 uppercase tracking-wide bg-slate-50/95 sticky top-0 z-20 shadow-[0_1px_0_0_#e2e8f0]">
       <tr>
         {opts?.rank && <th className="px-3 py-3 font-semibold border-b border-slate-200 w-10 bg-slate-50/95">#</th>}
+        {opts?.showTipo && <th className="px-3 py-3 font-semibold border-b border-slate-200 whitespace-nowrap">Tipo</th>}
         <th className="px-4 py-3 font-semibold border-b border-slate-200 min-w-[200px] sticky left-0 z-20 bg-slate-50/95">Produto</th>
         <th className="px-4 py-3 font-semibold border-b border-slate-200 min-w-[160px] sticky left-[200px] z-20 bg-slate-50/95 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.06)]">Plano</th>
         {!porMes && (
@@ -3507,7 +3561,7 @@ function TabComparativo({
                     Por mês
                   </button>
                 </div>
-                {(resultView === "destaques" || resultView === "alteracoes") && insights.counts.comDesvio > 0 && (
+                {(resultView === "todas" || resultView === "destaques" || resultView === "alteracoes") && insights.counts.comDesvio > 0 && (
                   <div className="flex items-center gap-1">
                     {(["todos", "favoravel", "desfavoravel"] as const).map((f) => (
                       <button
@@ -3527,18 +3581,39 @@ function TabComparativo({
                     ))}
                   </div>
                 )}
-                <button
-                  type="button"
-                  onClick={exportarComparativo}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 border border-slate-200 bg-white hover:bg-slate-50"
-                >
-                  <Download className="w-3.5 h-3.5" />
-                  Excel
-                </button>
+                <div className="flex flex-col items-end gap-0.5">
+                  <button
+                    type="button"
+                    onClick={exportarComparativo}
+                    title={`Exporta as ${insights.counts.totalLinhas} linhas do comparativo (completo), não só a aba atual`}
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 border border-slate-200 bg-white hover:bg-slate-50"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    Excel completo
+                  </button>
+                  <span className="text-[10px] text-slate-500 max-w-[230px] text-right leading-tight">
+                    Exporta todas as {insights.counts.totalLinhas} linhas — não só o que está na aba
+                  </span>
+                </div>
               </div>
             </div>
 
             <div className="flex-1 min-h-0 overflow-auto budget-matrix-scroll">
+              {resultView === "todas" && (
+                filteredTodas.length > 0 ? (
+                  <table className="w-full text-left border-collapse min-w-[880px]">
+                    {tableHead({ showTipo: true, porMes: analiticoModo === "mes" })}
+                    <tbody>
+                      {filteredTodas.map((alt, i) =>
+                        renderComparisonRow(alt, i, { showTipo: true, compact: true, porMes: analiticoModo === "mes" })
+                      )}
+                    </tbody>
+                  </table>
+                ) : (
+                  <p className="p-8 text-center text-sm text-slate-500">Nenhuma linha neste filtro.</p>
+                )
+              )}
+
               {resultView === "destaques" && (
                 filteredDestaques.length > 0 ? (
                   <table className="w-full text-left border-collapse min-w-[800px]">

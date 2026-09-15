@@ -23,9 +23,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sqlalchemy import func
 
-from app.db.session import SessionLocal
+from app.db.database import SessionLocal
 from app.models.orcamento import Orcamento, OrcamentoItem
 from app.models.forecast import Forecast
+from app.models.user import User  # noqa: F401 — necessário para mapper Orcamento
 
 CARGA = "Carga Inicial Sienge 2026"
 COPIA = "Orçamento"
