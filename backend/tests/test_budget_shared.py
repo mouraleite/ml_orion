@@ -144,6 +144,7 @@ def test_format_visualizacao_versao_label():
     assert format_visualizacao_versao_label("1ª versão", kind="orcamento") == "Orçamento"
     assert format_visualizacao_versao_label("1º versão", kind="orcamento") == "Orçamento"
     assert format_visualizacao_versao_label("Orçamento Vendas 2026", kind="orcamento") == "Orçamento"
+    assert format_visualizacao_versao_label("Carga Inicial Sienge 2026", kind="orcamento") == "Orçamento"
     assert format_visualizacao_versao_label("Forecast - 2+10", kind="forecast") == "Forecast - 2+10"
     assert format_visualizacao_versao_label("Forecast 8+4", kind="forecast") == "Forecast - 8+4"
     assert format_visualizacao_versao_label("2+10", kind="forecast") == "Forecast - 2+10"
@@ -165,6 +166,29 @@ def test_ordenar_versoes_orçamento_depois_forecasts():
     out = ordenar_e_dedupar_labels_versao(versoes)
     assert [v["descricao"] for v in out] == ["Orçamento", "Forecast - 1+11", "Forecast - 8+4"]
     assert out[0]["id"] == "OC_1ª versão"
+
+
+def test_dedupe_carga_inicial_sienge_vira_orcamento_unico():
+    """Cópia 'Orçamento' e 'Carga Inicial Sienge' não devem aparecer juntas no dropdown."""
+    from app.services.budget_shared import format_visualizacao_versao_label, ordenar_e_dedupar_labels_versao
+
+    versoes = [
+        {
+            "id": "OC_Orçamento",
+            "descricao": format_visualizacao_versao_label("Orçamento", kind="orcamento"),
+        },
+        {
+            "id": "OC_Carga Inicial Sienge 2026",
+            "descricao": format_visualizacao_versao_label("Carga Inicial Sienge 2026", kind="orcamento"),
+        },
+        {
+            "id": "FC_Forecast - 8+4",
+            "descricao": format_visualizacao_versao_label("Forecast - 8+4", kind="forecast"),
+        },
+    ]
+    out = ordenar_e_dedupar_labels_versao(versoes)
+    assert [v["descricao"] for v in out] == ["Orçamento", "Forecast - 8+4"]
+    assert out[0]["id"] == "OC_Carga Inicial Sienge 2026"
 
 
 def test_build_empresas_map_usa_id_sienge():

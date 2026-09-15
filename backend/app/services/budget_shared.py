@@ -552,6 +552,8 @@ def format_visualizacao_versao_label(descricao: str | None, *, kind: str) -> str
             or low in ("orçamento", "orcamento", "orçamento base", "orcamento base")
             or "orçamento vendas" in low
             or "orcamento vendas" in low
+            # Mesma base orçada da carga Sienge — um só rótulo no comparativo
+            or "carga inicial sienge" in low
         ):
             return "Orçamento"
         if low.startswith("orçamento") or low.startswith("orcamento"):
@@ -566,6 +568,9 @@ def format_visualizacao_versao_label(descricao: str | None, *, kind: str) -> str
 
 def _score_id_versao_para_dedupe(versao_id: str) -> int:
     low = (versao_id or "").lower()
+    # Preferir a carga Sienge quando colide com o rótulo genérico "Orçamento"
+    if "carga inicial" in low:
+        return 3
     if "1ª" in versao_id or "1º" in versao_id or "vers" in low:
         return 2
     if "orçamento vendas" in low or "orcamento vendas" in low:
