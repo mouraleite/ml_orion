@@ -167,6 +167,7 @@ export function DfcComparativoPanel({
   const [versoes, setVersoes] = useState<{ id: string; descricao: string }[]>([]);
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(false);
+  const [erro, setErro] = useState("");
   const [expanded, setExpanded] = useState<Set<number>>(new Set());
   const [porMes, setPorMes] = useState(false);
 
@@ -178,9 +179,11 @@ export function DfcComparativoPanel({
   const load = useCallback(async () => {
     if (!isDepartmentContextId(deptId) || !versaoA || !versaoB) {
       setData(null);
+      setErro("");
       return;
     }
     setLoading(true);
+    setErro("");
     try {
       const res = await orcamentoService.getDfcComparativo(
         ano,
@@ -197,6 +200,7 @@ export function DfcComparativoPanel({
     } catch (e) {
       console.error(e);
       setData(null);
+      setErro("A consulta demorou demais ou falhou. Clique em Comparar no DFC de novo.");
     } finally {
       setLoading(false);
     }
@@ -332,6 +336,8 @@ export function DfcComparativoPanel({
           <p className="p-8 text-center text-sm text-slate-500">Selecione as duas versões para montar o DFC comparativo.</p>
         ) : loading ? (
           <div className="p-6"><AppLoadingState /></div>
+        ) : erro ? (
+          <p className="p-8 text-center text-sm text-amber-800">{erro}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className={`w-full text-sm ${porMes ? "min-w-[2200px]" : "min-w-[720px]"}`}>

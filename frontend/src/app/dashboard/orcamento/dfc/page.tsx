@@ -230,7 +230,10 @@ export default function OrcamentoDfcPage() {
   }, [onN1, onOrcado, onForecast]);
 
   const load = useCallback(async () => {
-    if (!isDepartmentContextId(deptId)) return;
+    if (modoComparar || !isDepartmentContextId(deptId)) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const res = await orcamentoService.getDfc(
@@ -254,7 +257,7 @@ export default function OrcamentoDfcPage() {
     } finally {
       setLoading(false);
     }
-  }, [ano, deptId, holdingMldu, meses, empresaIdsKey, forecastId]);
+  }, [ano, deptId, holdingMldu, meses, empresaIdsKey, forecastId, modoComparar]);
 
   useEffect(() => { load(); }, [load]);
 
