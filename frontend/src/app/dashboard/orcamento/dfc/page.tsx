@@ -2,7 +2,8 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronRight, FileSpreadsheet } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { ChevronDown, ChevronRight, FileSpreadsheet, GitCompare } from "lucide-react";
 import { orcamentoService } from "@/services/orcamento";
 import { HoldingMlduBanner } from "@/components/shared/HoldingMlduBanner";
 import { useHoldingMldu } from "@/hooks/useHoldingMldu";
@@ -12,6 +13,7 @@ import { OrcamentoHeroStrip } from "@/components/orcamento/OrcamentoHeroStrip";
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
 import { useEmpresaCadastroFilter } from "@/hooks/useEmpresaCadastroFilter";
 import { formatMoedaCompact, formatPerc, isDesvioFavoravel, MATERIALITY_THRESHOLD } from "@/lib/orcamentoDesvioUi";
+import { DfcComparativoPanel } from "@/components/orcamento/DfcComparativoPanel";
 
 const MESES_STR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"] as const;
 const MESES_LABEL = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -190,9 +192,15 @@ function DfcLine({
 }
 
 export default function OrcamentoDfcPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const modoComparar = searchParams.get("modo") === "comparar";
   const deptId = useActiveDepartmentId();
   const { holdingMldu, setHoldingMldu, canUseHoldingMldu } = useHoldingMldu("orcamento");
-  const [ano, setAno] = useState(new Date().getFullYear());
+  const [ano, setAno] = useState(() => {
+    const fromUrl = Number(searchParams.get("ano"));
+    return fromUrl > 2000 ? fromUrl : new Date().getFullYear();
+  });
   const [meses, setMeses] = useState<string[]>([]);
   const { filtroEmpresaIds, setFiltroEmpresaIds, empresaOpcoes, empresaIdsKey } = useEmpresaCadastroFilter();
   const [data, setData] = useState<any>(null);
@@ -204,6 +212,14 @@ export default function OrcamentoDfcPage() {
   const [onAhAvMensal, setOnAhAvMensal] = useState(false);
   const [forecastId, setForecastId] = useState<number | undefined>();
   const [forecasts, setForecasts] = useState<{ id: number; descricao: string }[]>([]);
+
+  const setModo = (comparar: boolean) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (comparar) params.set("modo", "comparar");
+    else params.delete("modo");
+    params.set("ano", String(ano));
+    router.replace(`/dashboard/orcamento/dfc?${params.toString()}`);
+  };
 
   const active = useMemo<SerieKey[]>(() => {
     const keys: SerieKey[] = ["real"];
@@ -269,11 +285,36 @@ export default function OrcamentoDfcPage() {
 
   return (
     <div className="space-y-6 pb-10">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">DFC</h1>
-        <p className="text-slate-500 text-sm mt-1">
-          Demonstrativo pela {visaoNome} — realizado {ano} vs {ano - 1}, orçado e forecast. Saídas negativas.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">DFC</h1>
+          <p className="text-slate-500 text-sm mt-1">
+            {modoComparar
+              ? `Comparativo de versões pela ${visaoNome} — mesma estrutura do demonstrativo.`
+              : `Demonstrativo pela ${visaoNome} — realizado ${ano} vs ${ano - 1}, orçado e forecast. Saídas negativas.`}
+          </p>
+        </div>
+        <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-0.5">
+          <button
+            type="button"
+            onClick={() => setModo(false)}
+            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+              !modoComparar ? "bg-slate-800 text-white" : "text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            Demonstrativo
+          </button>
+          <button
+            type="button"
+            onClick={() => setModo(true)}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+              modoComparar ? "bg-slate-800 text-white" : "text-slate-600 hover:bg-slate-50"
+            }`}
+          >
+            <GitCompare className="w-3.5 h-3.5" />
+            Comparar versões
+          </button>
+        </div>
       </div>
 
       <OrcamentoFlyoutFilterBar
@@ -288,15 +329,27 @@ export default function OrcamentoDfcPage() {
         ano={ano}
         onAnoChange={setAno}
         showModo={false}
-        forecasts={forecasts}
-        forecastId={onForecast ? (forecastId || "") : ""}
-        onForecastIdChange={onForecast ? (id) => setForecastId(id || undefined) : undefined}
-        onRefresh={load}
+        forecasts={modoComparar ? [] : forecasts}
+        forecastId={!modoComparar && onForecast ? (forecastId || "") : ""}
+        onForecastIdChange={!modoComparar && onForecast ? (id) => setForecastId(id || undefined) : undefined}
+        onRefresh={modoComparar ? undefined : load}
         loading={loading}
       />
 
       {holdingMldu && <HoldingMlduBanner avisos={data?.holding_avisos} />}
 
+      {modoComparar ? (
+        <DfcComparativoPanel
+          ano={ano}
+          deptId={deptId}
+          holdingMldu={holdingMldu}
+          meses={meses}
+          empresaIds={filtroEmpresaIds}
+          initialVersaoA={searchParams.get("versao_a") || undefined}
+          initialVersaoB={searchParams.get("versao_b") || undefined}
+        />
+      ) : (
+        <>
       {!loading && (
         <OrcamentoHeroStrip
           refLabel={`Realizado ${ano - 1}`}
@@ -453,6 +506,8 @@ export default function OrcamentoDfcPage() {
         Cada mês mostra as séries ligadas (Real {ano}, Real {ano - 1}, Orçado; Forecast opcional). AH e AV no total do ano; mensal é opcional (AV sobre as entradas daquele mês).
         {" "}Não substitui <Link href="/dashboard/orcamento/geracao-caixa" className="text-ml-green font-semibold hover:underline">Geração de Caixa</Link>.
       </p>
+        </>
+      )}
     </div>
   );
 }

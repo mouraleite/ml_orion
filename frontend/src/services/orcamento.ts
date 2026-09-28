@@ -237,6 +237,23 @@ export const orcamentoService = {
     );
   },
 
+  getDfcComparativo: async (
+    ano: number,
+    deptId: number,
+    versaoA: string,
+    versaoB: string,
+    holdingMldu: boolean = false,
+    meses?: string[],
+    empresaIds?: string[],
+  ) => {
+    let url =
+      `/dashboard/dfc/${ano}/comparativo?${buildBudgetQuery(false, holdingMldu)}` +
+      `&versao_a=${encodeURIComponent(versaoA)}&versao_b=${encodeURIComponent(versaoB)}`;
+    if (meses && meses.length > 0) url += `&meses=${meses.join(",")}`;
+    if (empresaIds && empresaIds.length > 0) url += `&empresa_ids=${empresaIds.map(encodeURIComponent).join(",")}`;
+    return acompGet(url, deptId).then((r) => r.data);
+  },
+
   getForecastsDisponiveis: async (ano: number, deptId: number, consolidado: boolean = false) => {
     return cachedRead(
       `dash:forecasts:${ano}:${deptId}:${consolidado}`,

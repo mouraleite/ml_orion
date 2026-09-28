@@ -16,11 +16,18 @@ from app.models.vision import Vision, VisionNode
 from app.api.deps import get_db, get_current_user, get_active_department
 from app.core.roles import is_gestor_user
 from app.models.forecast import Forecast
+from app.services.orcamento_dfc import montar_dfc, montar_dfc_comparativo, par_ids_forecast_dfc
+from app.services.holding_consolidation import maybe_apply_holding_mldu
 from app.services.budget_shared import (
     merge_opcoes_produtos,
     filter_itens_por_empresa_ids,
     expand_empresa_filter_ids,
     list_forecast_versoes_disponiveis,
+    list_visualizacao_versoes_disponiveis,
+    ordenar_e_dedupar_labels_versao,
+    extract_visualizacao_itens,
+    build_empresas_map,
+    build_opcoes_produtos,
 )
 from app.services.calculations import (
     agregar_serie_vendas_liquido,
@@ -35,7 +42,6 @@ from app.api.routes.acompanhamento import (
     get_acompanhamento_vendas,
     MESES_STR
 )
-from app.services.orcamento_dfc import montar_dfc, par_ids_forecast_dfc
 from app.services.realizado_sienge import (
     FONTE_REALIZADO_DESPESAS,
     build_planos_maps,
@@ -590,6 +596,98 @@ def get_orcamento_dfc(
         response["holding_mldu"] = True
         response["holding_avisos"] = avisos
     return response
+
+
+def _versoes_dfc_comparativo(db: Session, ano: int, dept_id: int) -> List[Dict]:
+    """Mesmas opções do Comparativo consolidado (OC_/FC_), rótulo único Orçamento."""
+    seen: Dict[str, Dict] = {}
+    for t in ("DESPESAS", "RECEITAS"):
+        for v in list_visualizacao_versoes_disponiveis(db, ano, t, dept_id):
+            seen.setdefault(v["id"], v)
+    return ordenar_e_dedupar_labels_versao(list(seen.values()))
+
+
+@router.get("/dfc/{ano}/comparativo")
+def get_orcamento_dfc_comparativo(
+    ano: int,
+    versao_a: str,
+    versao_b: str,
+    holding_mldu: bool = False,
+    meses: Optional[str] = None,
+    empresa_ids: Optional[str] = None,
+    db: Session = Depends(get_db),
+    dept: Departamento = Depends(get_active_department),
+    current_user=Depends(get_current_user),
+):
+    """DFC lado a lado: duas versões (OC_/FC_) na Visão padrão — sem recalcular fórmulas."""
+    _ = current_user
+    vision, nodes_spec = _visao_padrao_spec(db)
+    if not nodes_spec:
+        return {
+            "ano": ano,
+            "modo": "comparativo",
+            "visao": None,
+            "versao_a": versao_a,
+            "versao_b": versao_b,
+            "linhas": [],
+            "versoes_disponiveis": _versoes_dfc_comparativo(db, ano, dept.id),
+            "message": "Nenhuma Visão DFC cadastrada.",
+        }
+
+    meses_validos = [m.strip() for m in meses.split(",")] if meses else list(MESES_STR)
+    meses_validos = [m for m in meses_validos if m in MESES_STR] or list(MESES_STR)
+
+    rec_a = extract_visualizacao_itens(db, ano, "RECEITAS", dept.id, versao_a)
+    desp_a = extract_visualizacao_itens(db, ano, "DESPESAS", dept.id, versao_a)
+    rec_b = extract_visualizacao_itens(db, ano, "RECEITAS", dept.id, versao_b)
+    desp_b = extract_visualizacao_itens(db, ano, "DESPESAS", dept.id, versao_b)
+
+    ids_empresa = [e.strip() for e in empresa_ids.split(",")] if empresa_ids else []
+    ids_empresa = expand_empresa_filter_ids(db, ids_empresa)
+    if ids_empresa:
+        produtos = db.query(CostCenter).filter(CostCenter.status == "Ativo").all()
+        empresas_map = build_empresas_map(db)
+        opcoes = build_opcoes_produtos(produtos, empresas_map)
+        rec_a = filter_itens_por_empresa_ids(rec_a, opcoes, ids_empresa)
+        desp_a = filter_itens_por_empresa_ids(desp_a, opcoes, ids_empresa)
+        rec_b = filter_itens_por_empresa_ids(rec_b, opcoes, ids_empresa)
+        desp_b = filter_itens_por_empresa_ids(desp_b, opcoes, ids_empresa)
+
+    holding_avisos: List[str] = []
+    if holding_mldu:
+        def _escala(itens: list) -> list:
+            scaled = maybe_apply_holding_mldu(
+                db, True, {"itens": itens}, item_kind="visualizacao_monthly",
+            )
+            holding_avisos.extend(scaled.get("holding_avisos") or [])
+            return scaled.get("itens") or []
+
+        rec_a, desp_a = _escala(rec_a), _escala(desp_a)
+        rec_b, desp_b = _escala(rec_b), _escala(desp_b)
+
+    arvore = montar_dfc_comparativo(nodes_spec, rec_a, desp_a, rec_b, desp_b, meses_validos)
+    versoes = _versoes_dfc_comparativo(db, ano, dept.id)
+    nome = {v["id"]: v.get("descricao") or v["id"] for v in versoes}
+
+    return {
+        "ano": ano,
+        "modo": "comparativo",
+        "meses_selecionados": meses_validos,
+        "visao": (
+            {"id": vision.id, "nome": vision.nome, "is_padrao": bool(vision.is_padrao)}
+            if vision
+            else None
+        ),
+        "versao_a": versao_a,
+        "versao_b": versao_b,
+        "label_a": nome.get(versao_a, versao_a),
+        "label_b": nome.get(versao_b, versao_b),
+        "versoes_disponiveis": versoes,
+        "holding_mldu": bool(holding_mldu),
+        "holding_avisos": list(dict.fromkeys(holding_avisos)),
+        **arvore,
+    }
+
 
 # ==================== REALIZADO DESPESAS (Contas a Pagar — drill) ====================
 

@@ -276,3 +276,147 @@ def montar_dfc(
         "ah_liquido": ratio_ah(liquido, liquido_n1),
         "av_liquido": ratio_av(liquido, total_entradas),
     }
+
+
+def _agregar_visualizacao_por_plano(itens: List[dict]) -> Dict[int, Dict[str, float]]:
+    """Soma linhas produto×plano da visualização em série mensal por plano."""
+    out: Dict[int, Dict[str, float]] = {}
+    for item in itens or []:
+        pid = item.get("plano_financeiro_id")
+        if pid is None:
+            continue
+        bucket = out.setdefault(pid, _empty_meses())
+        for m in MESES_STR:
+            bucket[m] += float(item.get(m, 0.0) or 0.0)
+    return out
+
+
+def montar_dfc_comparativo(
+    nodes: List[dict],
+    rec_a: List[dict],
+    desp_a: List[dict],
+    rec_b: List[dict],
+    desp_b: List[dict],
+    meses: Optional[Iterable[str]] = None,
+) -> Dict[str, Any]:
+    """Árvore DFC comparando duas versões (mesma Visão). Não recalcula orçado/forecast."""
+    rec_a_map = _agregar_visualizacao_por_plano(rec_a)
+    desp_a_map = _agregar_visualizacao_por_plano(desp_a)
+    rec_b_map = _agregar_visualizacao_por_plano(rec_b)
+    desp_b_map = _agregar_visualizacao_por_plano(desp_b)
+
+    mapped_ids = set()
+    linhas: List[Dict[str, Any]] = []
+
+    for node in nodes or []:
+        row = {
+            "kind": "categoria",
+            "id": node.get("id"),
+            "codigo": node.get("codigo") or "",
+            "descricao": node.get("descricao") or "",
+            "sentido": None,
+            "planos": [],
+            "meses_a": _empty_meses(),
+            "meses_b": _empty_meses(),
+            "meses_var": _empty_meses(),
+            "total_a": 0.0,
+            "total_b": 0.0,
+            "var_rs": 0.0,
+            "var_perc": None,
+        }
+        for plano in node.get("planos") or []:
+            pid = plano.get("id")
+            if pid is None:
+                continue
+            mapped_ids.add(pid)
+            is_entrada = pid in rec_a_map or pid in rec_b_map
+            is_saida = pid in desp_a_map or pid in desp_b_map
+            if is_entrada and not is_saida:
+                sentido = SENTIDO_ENTRADA
+            elif is_saida and not is_entrada:
+                sentido = SENTIDO_SAIDA
+            elif is_entrada and is_saida:
+                sentido = SENTIDO_SAIDA
+            else:
+                sentido = SENTIDO_ENTRADA
+
+            meses_a = _empty_meses()
+            meses_b = _empty_meses()
+            if pid in rec_a_map:
+                meses_a = _add_meses(meses_a, _signed(rec_a_map[pid], SENTIDO_ENTRADA))
+            if pid in desp_a_map:
+                meses_a = _add_meses(meses_a, _signed(desp_a_map[pid], SENTIDO_SAIDA))
+            if pid in rec_b_map:
+                meses_b = _add_meses(meses_b, _signed(rec_b_map[pid], SENTIDO_ENTRADA))
+            if pid in desp_b_map:
+                meses_b = _add_meses(meses_b, _signed(desp_b_map[pid], SENTIDO_SAIDA))
+
+            meses_var = {m: meses_b[m] - meses_a[m] for m in MESES_STR}
+            total_a = _soma(meses_a, meses)
+            total_b = _soma(meses_b, meses)
+            var_rs = total_b - total_a
+            plano_row = {
+                "kind": "plano",
+                "id": pid,
+                "codigo": plano.get("db_id") or "",
+                "descricao": plano.get("name") or "",
+                "sentido": sentido,
+                "meses_a": meses_a,
+                "meses_b": meses_b,
+                "meses_var": meses_var,
+                "total_a": total_a,
+                "total_b": total_b,
+                "var_rs": var_rs,
+                "var_perc": ratio_ah(total_b, total_a),
+            }
+            row["planos"].append(plano_row)
+            row["meses_a"] = _add_meses(row["meses_a"], meses_a)
+            row["meses_b"] = _add_meses(row["meses_b"], meses_b)
+
+        row["planos"].sort(key=lambda p: ((p.get("descricao") or ""), p.get("id") or 0))
+        linhas.append(row)
+
+    linhas.sort(key=lambda r: r["codigo"] or "")
+
+    ordered = sorted(linhas, key=lambda r: r["codigo"].count("."), reverse=True)
+    for child in ordered:
+        parent = None
+        best = -1
+        for cand in linhas:
+            if cand["id"] == child["id"]:
+                continue
+            codigo = cand["codigo"]
+            if codigo and child["codigo"].startswith(codigo + ".") and len(codigo) > best:
+                parent = cand
+                best = len(codigo)
+        if not parent:
+            continue
+        parent["meses_a"] = _add_meses(parent["meses_a"], child["meses_a"])
+        parent["meses_b"] = _add_meses(parent["meses_b"], child["meses_b"])
+
+    for row in linhas:
+        row["meses_var"] = {m: row["meses_b"][m] - row["meses_a"][m] for m in MESES_STR}
+        row["total_a"] = _soma(row["meses_a"], meses)
+        row["total_b"] = _soma(row["meses_b"], meses)
+        row["var_rs"] = row["total_b"] - row["total_a"]
+        row["var_perc"] = ratio_ah(row["total_b"], row["total_a"])
+        for plano in row["planos"]:
+            plano["var_perc"] = ratio_ah(plano["total_b"], plano["total_a"])
+
+    total_entradas_a = 0.0
+    for pid, data in rec_a_map.items():
+        if pid not in mapped_ids:
+            continue
+        total_entradas_a += _soma(_signed(data, SENTIDO_ENTRADA), meses)
+
+    liquido_a = sum(r["total_a"] for r in linhas if r["codigo"].count(".") == 0)
+    liquido_b = sum(r["total_b"] for r in linhas if r["codigo"].count(".") == 0)
+
+    return {
+        "linhas": linhas,
+        "total_entradas_a": total_entradas_a,
+        "liquido_a": liquido_a,
+        "liquido_b": liquido_b,
+        "var_liquido": liquido_b - liquido_a,
+        "var_liquido_perc": ratio_ah(liquido_b, liquido_a),
+    }

@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from app.services.orcamento_dfc import (
     MESES_STR,
     montar_dfc,
+    montar_dfc_comparativo,
     par_ids_forecast_dfc,
     ratio_ah,
     ratio_av,
@@ -197,3 +198,32 @@ class TestParIdsForecastDfc:
             _fc(124, "RECEITAS", dept=18),
         ]
         assert par_ids_forecast_dfc(43, _fc(43, "VENDAS", dept=18), pares, 18) == (123, 124)
+
+
+def _viz_item(plano_id: int, **meses):
+    row = {m: 0.0 for m in MESES_STR}
+    row.update(meses)
+    row["produto_id"] = 1
+    row["plano_financeiro_id"] = plano_id
+    row["total"] = sum(row[m] for m in MESES_STR)
+    return row
+
+
+class TestMontarDfcComparativo:
+    def test_var_entre_versoes_com_sinal_de_saida(self):
+        payload = montar_dfc_comparativo(
+            nodes=_nodes(),
+            rec_a=[_viz_item(10, jan=100.0)],
+            desp_a=[_viz_item(20, jan=40.0)],
+            rec_b=[_viz_item(10, jan=120.0)],
+            desp_b=[_viz_item(20, jan=30.0)],
+        )
+        by_codigo = {n["codigo"]: n for n in payload["linhas"]}
+        assert by_codigo["01.01"]["total_a"] == 100.0
+        assert by_codigo["01.01"]["total_b"] == 120.0
+        assert by_codigo["02.01"]["total_a"] == -40.0
+        assert by_codigo["02.01"]["total_b"] == -30.0
+        assert payload["liquido_a"] == 60.0
+        assert payload["liquido_b"] == 90.0
+        assert payload["var_liquido"] == 30.0
+        assert abs(payload["var_liquido_perc"] - 0.5) < 1e-12

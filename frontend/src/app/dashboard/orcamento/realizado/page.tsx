@@ -3140,6 +3140,22 @@ function TabComparativo({
               {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <GitCompare className="w-4 h-4" />}
               Comparar
             </button>
+            {tipo !== "VENDAS" && (
+              <button
+                type="button"
+                disabled={!idA || !idB}
+                title="Abre as mesmas duas versões na árvore da Visão DFC (entradas e saídas)"
+                onClick={() =>
+                  router.push(
+                    `/dashboard/orcamento/dfc?modo=comparar&ano=${ano}&versao_a=${encodeURIComponent(idA)}&versao_b=${encodeURIComponent(idB)}`,
+                  )
+                }
+                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-slate-700 border border-slate-200 rounded-lg font-semibold text-sm hover:bg-slate-50 disabled:opacity-50 transition-all shrink-0"
+              >
+                <Layers className="w-4 h-4" />
+                Visão DFC
+              </button>
+            )}
           </div>
         </div>
       </div>
