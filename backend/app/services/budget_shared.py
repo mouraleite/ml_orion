@@ -682,6 +682,126 @@ def _vendas_forecast_dept_scope(dept_id: int, dept_sienge_id: int, dept_comercia
     )
 
 
+def _plano_redutora(plano) -> bool:
+    if not plano:
+        return False
+    return (
+        str(getattr(plano, "fl_redutora", "") or "").strip().upper() == "S"
+        or "reten" in str(getattr(plano, "name", "") or "").lower()
+    )
+
+
+def _plano_prefixo_tipo(plano, tipo: str) -> bool:
+    tipo = (tipo or "").upper()
+    if tipo == "DESPESAS":
+        prefix = "2"
+    elif tipo == "RECEITAS":
+        prefix = "1"
+    else:
+        return True
+    if not plano:
+        return False
+    return str(getattr(plano, "db_id", "") or "").startswith(prefix)
+
+
+def assinar_itens_mensais_dfc(linhas, planos_por_id: dict, tipo: str) -> list[dict]:
+    """Filtro de conta, sinal de redutora e primeira linha por produto+plano.
+
+    Mesma regra de extract_visualizacao_itens para despesas/receitas, sem
+    carregar nome de produto nem consultar o banco por linha.
+    """
+    tipo = (tipo or "").upper()
+    itens: list[dict] = []
+    seen: set[tuple] = set()
+    for item in linhas or []:
+        plano_id = getattr(item, "plano_financeiro_id", None)
+        produto_id = getattr(item, "produto_id", None)
+        plano = planos_por_id.get(plano_id)
+        if not _plano_prefixo_tipo(plano, tipo):
+            continue
+        key = (produto_id, plano_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        redutora = _plano_redutora(plano)
+        dados: dict[str, float] = {}
+        total = 0.0
+        for m in MESES_STR:
+            val = float(getattr(item, m, 0) or 0)
+            if redutora:
+                val = -abs(val)
+            dados[m] = val
+            total += val
+        itens.append(
+            {
+                "produto_id": produto_id,
+                "plano_financeiro_id": plano_id,
+                **dados,
+                "total": total,
+            }
+        )
+    return itens
+
+
+def _linhas_mensais_da_versao(db: Session, ano: int, tipo: str, dept_id: int, versao_id: str):
+    """Itens de despesa/receita da versão, mesmo recorte de extract_visualizacao_itens."""
+    tipo = tipo.upper()
+    prefix = (versao_id or "").split("_")[0]
+    identifier = "_".join((versao_id or "").split("_")[1:])
+    is_orc = prefix in ("O", "OC")
+    from app.services.departamento_leitura import criterio_departamento_id
+
+    dept_filter_orc = criterio_departamento_id(Orcamento.departamento_id, db, dept_id)
+    dept_filter_fc = criterio_departamento_id(Forecast.departamento_id, db, dept_id)
+    linhas_db = []
+    if is_orc:
+        orcs = db.query(Orcamento).filter(
+            Orcamento.ano == ano,
+            Orcamento.tipo == tipo,
+            Orcamento.descricao == identifier,
+            Orcamento.status != "Substituído",
+            dept_filter_orc,
+        ).all()
+        for o in orcs:
+            linhas_db.extend(
+                db.query(OrcamentoItem).filter(OrcamentoItem.orcamento_id == o.id).all()
+            )
+    else:
+        fix_forecasts_sharepoint_sem_departamento(db)
+        fcs = db.query(Forecast).filter(
+            Forecast.ano == ano,
+            Forecast.tipo == tipo,
+            Forecast.descricao == identifier,
+            dept_filter_fc,
+        ).all()
+        for f in fcs:
+            linhas_db.extend(
+                db.query(ForecastItem).filter(ForecastItem.forecast_id == f.id).all()
+            )
+    return linhas_db
+
+
+def carregar_meses_dfc_comparativo(
+    db: Session,
+    ano: int,
+    tipo: str,
+    dept_id: int,
+    versao_id: str,
+) -> list[dict]:
+    """Meses assinados do comparativo DFC: uma leitura dos itens e uma dos planos."""
+    tipo = tipo.upper()
+    if tipo not in ("DESPESAS", "RECEITAS"):
+        return []
+    linhas = _linhas_mensais_da_versao(db, ano, tipo, dept_id, versao_id)
+    ids = {getattr(i, "plano_financeiro_id", None) for i in linhas}
+    ids.discard(None)
+    planos: dict = {}
+    if ids:
+        for plano in db.query(FinancialPlan).filter(FinancialPlan.id.in_(ids)).all():
+            planos[plano.id] = plano
+    return assinar_itens_mensais_dfc(linhas, planos, tipo)
+
+
 def _enrich_monthly_visualizacao_row(db: Session, row: dict) -> dict:
     plano = db.query(FinancialPlan).filter(FinancialPlan.id == row["plano_financeiro_id"]).first()
     produto = db.query(CostCenter).filter(CostCenter.id == row["produto_id"]).first()

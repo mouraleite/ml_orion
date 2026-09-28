@@ -156,6 +156,76 @@ def test_canonical_versao_vendas_planilha():
     assert canonical_versao_vendas_planilha("Forecast - 7+5") == ("Forecast - 7+5", "forecast")
 
 
+def _mes(produto, plano, **meses):
+    from app.services.periodos import MESES_STR
+
+    data = {m: 0.0 for m in MESES_STR}
+    data.update(meses)
+    return SimpleNamespace(produto_id=produto, plano_financeiro_id=plano, **data)
+
+
+def _soma_por_plano(linhas):
+    from app.services.periodos import MESES_STR
+
+    out = {}
+    for row in linhas:
+        bucket = out.setdefault(row["plano_financeiro_id"], {m: 0.0 for m in MESES_STR})
+        for m in MESES_STR:
+            bucket[m] += row[m]
+    return out
+
+
+def test_assinar_itens_dfc_bate_com_a_regra_linha_a_linha():
+    """Leitura em lote do comparativo DFC: mesmos totais da regra antiga (filtro, redutora, primeira linha)."""
+    from app.services.budget_shared import assinar_itens_mensais_dfc
+    from app.services.periodos import MESES_STR
+
+    planos = {
+        10: SimpleNamespace(id=10, db_id="101", name="Vendas", fl_redutora="N"),
+        20: SimpleNamespace(id=20, db_id="201", name="Retenção IR", fl_redutora="N"),
+        30: SimpleNamespace(id=30, db_id="301", name="Fora", fl_redutora="N"),
+    }
+    linhas = [
+        _mes(1, 10, jan=100.0, fev=-5.0),
+        _mes(1, 10, jan=999.0),
+        _mes(2, 10, jan=40.0),
+        _mes(1, 20, jan=12.0, fev=-3.0),
+        _mes(1, 30, jan=80.0),
+    ]
+
+    def referencia(itens, planos_por_id, tipo):
+        prefix = "2" if tipo == "DESPESAS" else "1"
+        seen = set()
+        out = []
+        for item in itens:
+            plano = planos_por_id.get(item.plano_financeiro_id)
+            if not plano or not str(plano.db_id or "").startswith(prefix):
+                continue
+            key = (item.produto_id, item.plano_financeiro_id)
+            if key in seen:
+                continue
+            seen.add(key)
+            redutora = str(plano.fl_redutora or "").upper() == "S" or "reten" in str(plano.name or "").lower()
+            row = {"produto_id": item.produto_id, "plano_financeiro_id": item.plano_financeiro_id}
+            for m in MESES_STR:
+                val = float(getattr(item, m) or 0)
+                row[m] = -abs(val) if redutora else val
+            out.append(row)
+        return out
+
+    got = assinar_itens_mensais_dfc(linhas, planos, "DESPESAS")
+    ref = referencia(linhas, planos, "DESPESAS")
+    assert _soma_por_plano(got) == _soma_por_plano(ref)
+    assert got[0]["produto_id"] == 1 and got[0]["jan"] == -12.0
+    assert len(got) == 1
+
+    got_rec = assinar_itens_mensais_dfc(linhas, planos, "RECEITAS")
+    ref_rec = referencia(linhas, planos, "RECEITAS")
+    assert _soma_por_plano(got_rec) == _soma_por_plano(ref_rec)
+    por_produto = {r["produto_id"]: r["jan"] for r in got_rec}
+    assert por_produto == {1: 100.0, 2: 40.0}
+
+
 def test_ordenar_versoes_orçamento_depois_forecasts():
     versoes = [
         {"id": "FC_Forecast - 8+4", "descricao": "Forecast - 8+4"},

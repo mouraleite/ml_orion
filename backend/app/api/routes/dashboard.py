@@ -25,7 +25,7 @@ from app.services.budget_shared import (
     list_forecast_versoes_disponiveis,
     list_visualizacao_versoes_disponiveis,
     ordenar_e_dedupar_labels_versao,
-    extract_visualizacao_itens,
+    carregar_meses_dfc_comparativo,
     build_empresas_map,
     build_opcoes_produtos,
 )
@@ -637,10 +637,10 @@ def get_orcamento_dfc_comparativo(
     meses_validos = [m.strip() for m in meses.split(",")] if meses else list(MESES_STR)
     meses_validos = [m for m in meses_validos if m in MESES_STR] or list(MESES_STR)
 
-    rec_a = extract_visualizacao_itens(db, ano, "RECEITAS", dept.id, versao_a)
-    desp_a = extract_visualizacao_itens(db, ano, "DESPESAS", dept.id, versao_a)
-    rec_b = extract_visualizacao_itens(db, ano, "RECEITAS", dept.id, versao_b)
-    desp_b = extract_visualizacao_itens(db, ano, "DESPESAS", dept.id, versao_b)
+    rec_a = carregar_meses_dfc_comparativo(db, ano, "RECEITAS", dept.id, versao_a)
+    desp_a = carregar_meses_dfc_comparativo(db, ano, "DESPESAS", dept.id, versao_a)
+    rec_b = carregar_meses_dfc_comparativo(db, ano, "RECEITAS", dept.id, versao_b)
+    desp_b = carregar_meses_dfc_comparativo(db, ano, "DESPESAS", dept.id, versao_b)
 
     ids_empresa = [e.strip() for e in empresa_ids.split(",")] if empresa_ids else []
     ids_empresa = expand_empresa_filter_ids(db, ids_empresa)
