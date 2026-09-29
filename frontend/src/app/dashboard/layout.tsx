@@ -31,7 +31,8 @@ function DashboardLayoutInner({
 }) {
  const { user, logout } = useAuth();
  const pathname = usePathname();
- const sheetScroll = pathname === "/dashboard/orcamento/analitico-gastos-2";
+ const sheetScroll = pathname === "/dashboard/orcamento/analitico-gastos-2"
+   || pathname === "/dashboard/orcamento/dfc";
  const searchParams = useSearchParams();
  const [expandedModules, setExpandedModules] = useState<string[]>([]);
  const [expandedSubModules, setExpandedSubModules] = useState<string[]>([]);

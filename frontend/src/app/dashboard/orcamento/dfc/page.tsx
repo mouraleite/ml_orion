@@ -138,7 +138,7 @@ function DfcLine({
   const hasKids = isCat && (row.planos?.length || 0) > 0;
   return (
     <tr className={isCat ? "bg-white hover:bg-slate-50" : "bg-slate-50/70"}>
-      <td className="sticky left-0 z-10 bg-inherit px-3 py-2 border-b border-slate-100 min-w-[280px]">
+      <td className={`sticky left-6 md:left-8 z-10 px-3 py-2 border-b border-slate-100 min-w-[280px] ${isCat ? "bg-white" : "bg-slate-50"}`}>
         <div className="flex items-center gap-1" style={{ paddingLeft: indent * 16 }}>
           {hasKids ? (
             <button type="button" onClick={onToggle} className="p-0.5 rounded hover:bg-slate-200">
@@ -287,7 +287,8 @@ export default function OrcamentoDfcPage() {
   const colSpanMes = active.length + (onAhAvMensal ? 2 : 0);
 
   return (
-    <div className="space-y-6 pb-10">
+    <div className="w-max min-w-full">
+      <div className="sticky left-0 z-30 w-[100cqw] max-w-[100cqw] space-y-4 bg-slate-50 px-6 md:px-8 pt-6 md:pt-8 pb-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">DFC</h1>
@@ -340,8 +341,10 @@ export default function OrcamentoDfcPage() {
       />
 
       {holdingMldu && <HoldingMlduBanner avisos={data?.holding_avisos} />}
+      </div>
 
       {modoComparar ? (
+        <div className="px-6 md:px-8 pb-8">
         <DfcComparativoPanel
           ano={ano}
           deptId={deptId}
@@ -351,9 +354,11 @@ export default function OrcamentoDfcPage() {
           initialVersaoA={searchParams.get("versao_a") || undefined}
           initialVersaoB={searchParams.get("versao_b") || undefined}
         />
+        </div>
       ) : (
         <>
       {!loading && (
+        <div className="sticky left-0 z-30 w-[100cqw] max-w-[100cqw] px-6 md:px-8 pb-4 bg-slate-50">
         <OrcamentoHeroStrip
           refLabel={`Realizado ${ano - 1}`}
           refVal={liquidoN1}
@@ -365,10 +370,11 @@ export default function OrcamentoDfcPage() {
           refCaption="Caixa líquido"
           caption={`Entradas ${formatMoedaCompact(data?.total_entradas || 0)} · Saídas ${formatMoedaCompact(saidas)} · AV sobre total de entradas`}
         />
+        </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-100">
+      <div className="mx-6 md:mx-8 mb-4 bg-white rounded-2xl border border-slate-200 shadow-sm">
+        <div className="sticky left-6 md:left-8 z-20 w-[calc(100cqw-3rem)] md:w-[calc(100cqw-4rem)] flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-100 bg-white">
           <h2 className="font-bold text-slate-700">
             {visaoNome}
             {data?.visao?.is_padrao ? <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">padrão</span> : null}
@@ -433,11 +439,10 @@ export default function OrcamentoDfcPage() {
         {loading ? (
           <div className="p-6"><AppLoadingState /></div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[1800px]">
-              <thead>
+          <table className="w-full text-sm min-w-[1800px]">
+              <thead className="sticky top-0 z-20 bg-white">
                 <tr className="text-[10px] uppercase tracking-wider text-slate-400">
-                  <th rowSpan={2} className="sticky left-0 z-20 bg-white text-left px-3 py-2 font-semibold border-b border-slate-200 align-bottom">Categoria</th>
+                  <th rowSpan={2} className="sticky left-6 md:left-8 z-40 bg-white text-left px-3 py-2 font-semibold border-b border-slate-200 align-bottom">Categoria</th>
                   {MESES_LABEL.map((m) => (
                     <th key={m} colSpan={colSpanMes} className="px-1.5 py-1 text-center font-semibold whitespace-nowrap border-b border-l border-slate-200">
                       {m}
@@ -500,11 +505,10 @@ export default function OrcamentoDfcPage() {
                 })}
               </tbody>
             </table>
-          </div>
         )}
       </div>
 
-      <p className="text-xs text-slate-400">
+      <p className="sticky left-0 z-10 w-[100cqw] max-w-[100cqw] px-6 md:px-8 pb-8 text-xs text-slate-400 bg-slate-50">
         Fonte: mesmos números de Orçado × Realizado, agrupados pela visão do Apoio (lida a cada carga). Planos fora da visão não entram.
         Cada mês mostra as séries ligadas (Real {ano}, Real {ano - 1}, Orçado; Forecast opcional). AH e AV no total do ano; mensal é opcional (AV sobre as entradas daquele mês).
         {" "}Não substitui <Link href="/dashboard/orcamento/geracao-caixa" className="text-ml-green font-semibold hover:underline">Geração de Caixa</Link>.
