@@ -450,21 +450,23 @@ export default function AnaliticoGastos2Page() {
 
                     {isOpen && (
                       <tr className="bg-slate-50/90 border-b-2 border-slate-300">
-                        <td colSpan={colSpanCount + 2} className="px-4 py-3">
-                          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                            <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-2">
-                              <Receipt className="w-4 h-4 text-slate-500" />
-                              Parcelas pagas — {row.plano_nome}
+                        <td colSpan={colSpanCount + 2} className="p-0">
+                          <div className="sticky left-6 md:left-8 z-10 w-[calc(100cqw-3rem)] md:w-[calc(100cqw-4rem)] px-4 py-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                              <div className="text-xs font-semibold text-slate-600 uppercase tracking-wide flex items-center gap-2">
+                                <Receipt className="w-4 h-4 text-slate-500" />
+                                Parcelas pagas — {row.plano_nome}
+                              </div>
                             </div>
-                          </div>
-                          <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-                            <RealizadoDespesasDrillTable
-                              transacoes={drillFiltered(drillRows)}
-                              loading={drillLoading.has(row.plano_id)}
-                              compact
-                              showProdutoPlano
-                              mesesVisiveis={visibleMesesStr.length ? visibleMesesStr : MESES_STR}
-                            />
+                            <div className="rounded-xl border border-slate-200 bg-white overflow-x-auto">
+                              <RealizadoDespesasDrillTable
+                                transacoes={drillFiltered(drillRows)}
+                                loading={drillLoading.has(row.plano_id)}
+                                compact
+                                showProdutoPlano
+                                mesesVisiveis={visibleMesesStr.length ? visibleMesesStr : MESES_STR}
+                              />
+                            </div>
                           </div>
                         </td>
                       </tr>
