@@ -31,6 +31,7 @@ function DashboardLayoutInner({
 }) {
  const { user, logout } = useAuth();
  const pathname = usePathname();
+ const sheetScroll = pathname === "/dashboard/orcamento/analitico-gastos-2";
  const searchParams = useSearchParams();
  const [expandedModules, setExpandedModules] = useState<string[]>([]);
  const [expandedSubModules, setExpandedSubModules] = useState<string[]>([]);
@@ -326,11 +327,14 @@ function DashboardLayoutInner({
 
  {/* Main Content Area com scroll */}
  <main className="flex-1 flex flex-col overflow-hidden bg-slate-50 print:overflow-visible print:bg-white">
- <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden p-6 md:p-8 w-full flex flex-col print:p-0">
+ <div className={sheetScroll
+   ? "flex-1 min-h-0 min-w-0 w-full overflow-auto [container-type:size] print:overflow-visible"
+   : "flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden p-6 md:p-8 w-full flex flex-col print:p-0"
+ }>
  {canOpenCurrentScreen ? (
    <>
      {!currentWrite ? (
-       <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900 print:hidden">
+       <div className={`mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm text-amber-900 print:hidden ${sheetScroll ? "sticky left-0 z-20 w-[100cqw] max-w-[100cqw] mx-6 md:mx-8 mt-6" : ""}`}>
          Somente visualização neste módulo. Você não pode criar nem alterar.
        </div>
      ) : null}

@@ -224,7 +224,8 @@ export default function AnaliticoGastos2Page() {
     1 + visibleMesesStr.length * 3 + (showTotalCol ? 3 : 0);
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 gap-4 overflow-hidden">
+    <div className="w-max min-w-full">
+      <div className="sticky left-0 z-20 w-[100cqw] max-w-[100cqw] space-y-4 bg-slate-50 px-6 md:px-8 pt-6 md:pt-8 pb-4">
       <div className="shrink-0">
         <h1 className="text-2xl font-bold text-slate-800">Analítico de Gastos II</h1>
         <p className="text-slate-500 text-sm mt-1">
@@ -289,6 +290,7 @@ export default function AnaliticoGastos2Page() {
           <DesvioLegend className="shrink-0" />
         </>
       )}
+      </div>
 
       {loading ? (
         <div className="flex-1 min-h-0 flex items-center justify-center bg-white rounded-2xl border border-slate-200 shadow-sm">
@@ -300,14 +302,14 @@ export default function AnaliticoGastos2Page() {
           <p>Nenhuma despesa encontrada.</p>
         </div>
       ) : (
-        <div className="flex-1 min-h-0 overflow-auto bg-white rounded-2xl border border-slate-200 shadow-sm">
+        <div className="mx-6 md:mx-8 mb-6 bg-white rounded-2xl border border-slate-200 shadow-sm">
           <table className="w-full text-left border-collapse min-w-max text-xs">
             <thead className="bg-slate-100 text-slate-600 uppercase font-semibold sticky top-0 z-30 shadow-sm">
               <tr>
-                <th rowSpan={2} className="px-2 py-2 w-8 sticky left-0 bg-slate-100 z-40" />
+                <th rowSpan={2} className="px-2 py-2 w-8 sticky left-6 md:left-8 bg-slate-100 z-40" />
                 <th
                   rowSpan={2}
-                  className="px-3 py-3 min-w-[260px] sticky left-8 bg-slate-100 shadow-[1px_0_0_0_#e2e8f0] z-40 align-bottom"
+                  className="px-3 py-3 min-w-[260px] sticky left-14 md:left-16 bg-slate-100 shadow-[1px_0_0_0_#e2e8f0] z-40 align-bottom"
                 >
                   Plano financeiro
                 </th>
@@ -372,7 +374,7 @@ export default function AnaliticoGastos2Page() {
                 return (
                   <Fragment key={row.plano_id}>
                     <tr className={`border-b border-slate-200 hover:bg-slate-50/80 transition-colors ${highlight}`}>
-                      <td className="px-1 py-2 sticky left-0 bg-white shadow-[1px_0_0_0_#e2e8f0] z-20">
+                      <td className="px-1 py-2 sticky left-6 md:left-8 bg-white shadow-[1px_0_0_0_#e2e8f0] z-20">
                         <button
                           type="button"
                           onClick={() => toggleExpand(row.plano_id)}
@@ -387,7 +389,7 @@ export default function AnaliticoGastos2Page() {
                         </button>
                       </td>
                       <td
-                        className="px-3 py-2 font-medium text-slate-700 sticky left-8 bg-white shadow-[1px_0_0_0_#e2e8f0] z-20 max-w-[320px]"
+                        className="px-3 py-2 font-medium text-slate-700 sticky left-14 md:left-16 bg-white shadow-[1px_0_0_0_#e2e8f0] z-20 max-w-[320px]"
                         title={row.plano_nome}
                       >
                         <span className="line-clamp-2">{row.plano_nome}</span>
