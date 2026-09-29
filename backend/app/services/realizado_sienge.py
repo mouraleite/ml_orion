@@ -69,7 +69,7 @@ def valor_despesa_sienge(
     return val or 0.0
 
 
-def query_parcelas_contas_pagar(
+def _consulta_contas_pagar(
     db: Session,
     ano: int,
     produtos_permitidos: List[int],
@@ -77,10 +77,13 @@ def query_parcelas_contas_pagar(
     mes: Optional[str] = None,
     busca: Optional[str] = None,
     dept=None,
-) -> List[ActualTransaction]:
-    """Parcelas pagas Sienge nas premissas do dashboard (OP1/OP8/OP10/RET + SP)."""
+):
+    """(query, filtra_dept_por_parcela) das parcelas pagas; None se o recorte é vazio.
+
+    Única fonte dos filtros: a lista de parcelas e o total agrupado não podem divergir.
+    """
     if not produtos_permitidos:
-        return []
+        return None
 
     cc_ids = [produto_id] if produto_id is not None else produtos_permitidos
     q = db.query(ActualTransaction).filter(
@@ -110,28 +113,45 @@ def query_parcelas_contas_pagar(
             eh_residual_leitura,
             eh_todos,
             nomes_autorizacao_do_departamento,
-            parcela_pertence_ao_dept,
         )
 
         if eh_diretoria(dept):
             nomes = nomes_autorizacao_do_departamento(db, dept)
             if not nomes:
-                return []
-            q = q.filter(ActualTransaction.authorization_name.in_(nomes))
-            rows = q.order_by(ActualTransaction.transaction_date.desc()).all()
-            return [r for r in rows if parcela_pertence_ao_dept(db, r.authorization_name, dept)]
+                return None
+            return q.filter(ActualTransaction.authorization_name.in_(nomes)), True
 
         if not eh_todos(dept) and not eh_residual_leitura(dept):
             nomes = nomes_autorizacao_do_departamento(db, dept)
             if not nomes:
-                return []
-            q = q.filter(ActualTransaction.authorization_name.in_(nomes))
-            return q.order_by(ActualTransaction.transaction_date.desc()).all()
+                return None
+            return q.filter(ActualTransaction.authorization_name.in_(nomes)), False
 
-        rows = q.order_by(ActualTransaction.transaction_date.desc()).all()
+        return q, True
+
+    return q, False
+
+
+def query_parcelas_contas_pagar(
+    db: Session,
+    ano: int,
+    produtos_permitidos: List[int],
+    produto_id: Optional[int] = None,
+    mes: Optional[str] = None,
+    busca: Optional[str] = None,
+    dept=None,
+) -> List[ActualTransaction]:
+    """Parcelas pagas Sienge nas premissas do dashboard (OP1/OP8/OP10/RET + SP)."""
+    consulta = _consulta_contas_pagar(db, ano, produtos_permitidos, produto_id, mes, busca, dept)
+    if consulta is None:
+        return []
+    q, filtra_dept = consulta
+    rows = q.order_by(ActualTransaction.transaction_date.desc()).all()
+    if filtra_dept:
+        from app.services.departamento_leitura import parcela_pertence_ao_dept
+
         return [r for r in rows if parcela_pertence_ao_dept(db, r.authorization_name, dept)]
-
-    return q.order_by(ActualTransaction.transaction_date.desc()).all()
+    return rows
 
 
 def build_planos_maps(db: Session) -> Tuple[Dict[str, int], Dict[int, Any]]:
@@ -151,23 +171,56 @@ def agregar_realizado_despesas_sienge(
     planos_permitidos: List[int],
     dept=None,
 ) -> None:
-    """Soma parcelas OUT-* na matriz (produto_id, plano_id) × mês."""
-    from app.services.departamento_leitura import eh_residual_leitura, eh_todos
+    """Soma parcelas OUT-* na matriz (produto_id, plano_id) × mês.
+
+    A soma é parcela a parcela, na ordem da lista. Somar o grupo no banco
+    muda o centavo quando o total cai em meio centavo (ex.: 2278,575).
+    """
+    from app.services.departamento_leitura import (
+        eh_residual_leitura,
+        eh_todos,
+        parcela_pertence_ao_dept,
+    )
 
     planos_id_by_name, planos_redutora = build_planos_maps(db)
     planos_permitidos_set = set(planos_permitidos)
     relax_planos = dept is not None and (eh_todos(dept) or eh_residual_leitura(dept))
 
-    for real in query_parcelas_contas_pagar(db, ano, produtos_permitidos, dept=dept):
-        plano_id = planos_id_by_name.get(real.category)
+    consulta = _consulta_contas_pagar(db, ano, produtos_permitidos, dept=dept)
+    if consulta is None:
+        return
+    q, filtra_dept = consulta
+    pertence: Dict[Optional[str], bool] = {}
+
+    for cc_id, category, auth, dt, value in _linhas_leves(q, ActualTransaction.authorization_name):
+        plano_id = planos_id_by_name.get(category)
         if not plano_id:
             continue
         if plano_id not in planos_permitidos_set and not relax_planos:
             continue
-        init_key(real.cost_center_id, plano_id)
-        mes_str = MESES_STR[real.transaction_date.month - 1]
-        val = valor_despesa_sienge(real.value, plano_id, real.category, planos_redutora)
-        matriz[(real.cost_center_id, plano_id)]["realizado"][mes_str] += val
+        if filtra_dept:
+            if auth not in pertence:
+                pertence[auth] = parcela_pertence_ao_dept(db, auth, dept)
+            if not pertence[auth]:
+                continue
+        init_key(cc_id, plano_id)
+        mes_str = MESES_STR[dt.month - 1]
+        val = valor_despesa_sienge(value, plano_id, category, planos_redutora)
+        matriz[(cc_id, plano_id)]["realizado"][mes_str] += val
+
+
+def _linhas_leves(q, *extra_cols):
+    return (
+        q.with_entities(
+            ActualTransaction.cost_center_id,
+            ActualTransaction.category,
+            *extra_cols,
+            ActualTransaction.transaction_date,
+            ActualTransaction.value,
+        )
+        .order_by(ActualTransaction.transaction_date.desc())
+        .all()
+    )
 
 
 def query_recebimentos_contas_receber(
@@ -179,8 +232,23 @@ def query_recebimentos_contas_receber(
     busca: Optional[str] = None,
 ) -> List[ActualTransaction]:
     """Recebimentos Sienge: INC-* + BM-* (Contas a Receber + Caixa e Bancos)."""
-    if not produtos_permitidos:
+    q = _consulta_recebimentos(db, ano, produtos_permitidos, produto_id, mes, busca)
+    if q is None:
         return []
+    rows = q.order_by(ActualTransaction.transaction_date.desc()).all()
+    return [r for r in rows if not categoria_excluida_receita_realizado(r.category)]
+
+
+def _consulta_recebimentos(
+    db: Session,
+    ano: int,
+    produtos_permitidos: List[int],
+    produto_id: Optional[int] = None,
+    mes: Optional[str] = None,
+    busca: Optional[str] = None,
+):
+    if not produtos_permitidos:
+        return None
 
     cc_ids = [produto_id] if produto_id is not None else produtos_permitidos
     q = db.query(ActualTransaction).filter(
@@ -207,8 +275,7 @@ def query_recebimentos_contas_receber(
                 ActualTransaction.bill_id.ilike(term),
             )
         )
-    rows = q.order_by(ActualTransaction.transaction_date.desc()).all()
-    return [r for r in rows if not categoria_excluida_receita_realizado(r.category)]
+    return q
 
 
 def valor_receita_sienge(
@@ -233,11 +300,16 @@ def agregar_realizado_receitas_sienge(
     planos_id_by_name, planos_redutora = build_planos_maps(db)
     planos_permitidos_set = set(planos_permitidos)
 
-    for real in query_recebimentos_contas_receber(db, ano, produtos_permitidos):
-        plano_id = planos_id_by_name.get(real.category)
+    q = _consulta_recebimentos(db, ano, produtos_permitidos)
+    if q is None:
+        return
+    for cc_id, category, dt, value in _linhas_leves(q):
+        if categoria_excluida_receita_realizado(category):
+            continue
+        plano_id = planos_id_by_name.get(category)
         if not plano_id or plano_id not in planos_permitidos_set:
             continue
-        init_key(real.cost_center_id, plano_id)
-        mes_str = MESES_STR[real.transaction_date.month - 1]
-        val = valor_receita_sienge(real.value, plano_id, real.category, planos_redutora)
-        matriz[(real.cost_center_id, plano_id)]["realizado"][mes_str] += val
+        init_key(cc_id, plano_id)
+        mes_str = MESES_STR[dt.month - 1]
+        val = valor_receita_sienge(value, plano_id, category, planos_redutora)
+        matriz[(cc_id, plano_id)]["realizado"][mes_str] += val

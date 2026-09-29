@@ -167,6 +167,100 @@ def test_query_parcelas_ignora_formato_antigo_nao_pagamento(db_session):
     assert rows[0].value == 200.0
 
 
+def _matriz_vazia():
+    matriz = {}
+
+    def init_key(cc, pl):
+        matriz.setdefault((cc, pl), {"realizado": {m: 0.0 for m in MESES}})
+
+    return matriz, init_key
+
+
+MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+
+
+def test_agregado_despesas_bate_linha_a_linha_com_retencao(db_session):
+    from app.services.realizado_sienge import (
+        agregar_realizado_despesas_sienge,
+        build_planos_maps,
+        query_parcelas_contas_pagar,
+        valor_despesa_sienge,
+    )
+
+    ano = 2054
+    comum = db_session.query(FinancialPlan).filter(FinancialPlan.id == 1).first()
+    retencao = FinancialPlan(db_id="9990101", name="Retenção de Teste", tp_conta="R", fl_redutora="N")
+    db_session.add(retencao)
+    db_session.commit()
+
+    linhas = [
+        (comum.name, date(ano, 1, 5), 100.0),
+        (comum.name, date(ano, 1, 20), -30.0),
+        (comum.name, date(ano, 2, 3), 55.55),
+        (retencao.name, date(ano, 1, 7), 10.0),
+        (retencao.name, date(ano, 1, 8), -4.0),
+        (retencao.name, date(ano, 3, 9), 2.5),
+    ]
+    for i, (cat, dt, val) in enumerate(linhas):
+        db_session.add(ActualTransaction(
+            cost_center_id=1,
+            source_id=f"OUT-{7000 + i}-OP1-PMT-1-DT-{dt:%Y%m%d}-FC-1",
+            transaction_type="OUTCOME",
+            category=cat,
+            transaction_date=dt,
+            value=val,
+            is_forecast=False,
+        ))
+    db_session.commit()
+
+    planos = [comum.id, retencao.id]
+    matriz, init_key = _matriz_vazia()
+    agregar_realizado_despesas_sienge(matriz, init_key, db_session, ano, [1], planos)
+
+    esperado, init_esp = _matriz_vazia()
+    ids, redutora = build_planos_maps(db_session)
+    for r in query_parcelas_contas_pagar(db_session, ano, [1]):
+        pl = ids[r.category]
+        init_esp(r.cost_center_id, pl)
+        esperado[(r.cost_center_id, pl)]["realizado"][MESES[r.transaction_date.month - 1]] += (
+            valor_despesa_sienge(r.value, pl, r.category, redutora)
+        )
+
+    assert matriz.keys() == esperado.keys()
+    for k in esperado:
+        for m in MESES:
+            assert round(matriz[k]["realizado"][m], 2) == round(esperado[k]["realizado"][m], 2)
+    assert round(matriz[(1, retencao.id)]["realizado"]["jan"], 2) == -14.0
+    assert round(matriz[(1, comum.id)]["realizado"]["jan"], 2) == 70.0
+
+
+def test_agregado_receitas_exclui_afac_e_soma_por_mes(db_session):
+    from app.services.realizado_sienge import agregar_realizado_receitas_sienge
+
+    ano = 2055
+    plan = db_session.query(FinancialPlan).filter(FinancialPlan.id == 1).first()
+    for i, (cat, dt, val) in enumerate([
+        (plan.name, date(ano, 5, 1), 40.0),
+        (plan.name, date(ano, 5, 30), 60.0),
+        ("AFAC", date(ano, 5, 2), 999.0),
+    ]):
+        db_session.add(ActualTransaction(
+            cost_center_id=1,
+            source_id=f"INC-{8000 + i}-BM-1-FC-1",
+            transaction_type="INCOME",
+            category=cat,
+            transaction_date=dt,
+            value=val,
+            is_forecast=False,
+        ))
+    db_session.commit()
+
+    matriz, init_key = _matriz_vazia()
+    agregar_realizado_receitas_sienge(matriz, init_key, db_session, ano, [1], [plan.id])
+    assert list(matriz.keys()) == [(1, plan.id)]
+    assert matriz[(1, plan.id)]["realizado"]["mai"] == 100.0
+
+
 def _criar_orcamento_receitas(client, ano):
     r = client.post("/api/v1/orcamentos/criar", json={
         "ano": ano,
