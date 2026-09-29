@@ -4,6 +4,7 @@
  * prefixados para não colidir com o cadastro de mesmo nome).
  */
 import {
+  Activity,
   Database,
   DollarSign,
   FileBarChart,
@@ -162,6 +163,7 @@ const RAW_MENU: MenuModuleDef[] = [
       { name: "Índices Projetados", icon: FileText, href: "/dashboard/apoio/indicadores" },
       { name: "Índices de Mercado", icon: FileText, href: "/dashboard/apoio/indices-mercado" },
       { name: "Integração Sienge", icon: RefreshCw, href: "/dashboard/apoio/integracao" },
+      { name: "Consumo APIs Sienge", icon: Activity, href: "/dashboard/apoio/consumo-sienge" },
       { name: "Carga SharePoint", icon: Database, href: "/dashboard/apoio/migracao" },
       { name: "Planos de Pagamento", icon: FileText, href: "/dashboard/apoio/planos-de-pagamento" },
       { name: "Planos Financeiros", icon: FileText, href: "/dashboard/apoio/planos-financeiros" },

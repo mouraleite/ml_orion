@@ -959,3 +959,24 @@ def create_or_update_system_setting(setting_in: SystemSettingsCreate, current_us
     db.commit()
     db.refresh(setting)
     return setting
+
+
+@router.get("/consumo-sienge")
+def get_consumo_sienge(
+    ano: Optional[int] = None,
+    mes: Optional[int] = None,
+    current_user: UserResponse = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Agregado mensal das chamadas deste ERP às APIs Sienge (REST e BULK)."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from app.services.sienge_usage import build_month_report
+
+    now = datetime.now(ZoneInfo("America/Sao_Paulo"))
+    year = ano if ano is not None else now.year
+    month = mes if mes is not None else now.month
+    if month < 1 or month > 12 or year < 2000 or year > 2100:
+        raise HTTPException(status_code=400, detail="Mês inválido.")
+    return build_month_report(db, year, month)

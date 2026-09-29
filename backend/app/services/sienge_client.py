@@ -49,6 +49,21 @@ def get_default_client() -> "SiengeClient":
     )
 
 
+def _safe_record_sienge_call(url: str, method: str, status_code: int | None, started: float) -> None:
+    """Registra a chamada. Nunca propaga erro nem altera o retorno do HTTP."""
+    try:
+        from app.services.sienge_usage import record_sienge_http_call
+
+        record_sienge_http_call(
+            url=url,
+            method=method,
+            status_code=status_code,
+            duration_ms=int((time.perf_counter() - started) * 1000),
+        )
+    except Exception:
+        logger.warning("Falha ao gravar log de consumo da API Sienge")
+
+
 class SiengeClient:
     def __init__(self, subdomain: str, user: str, password: str):
         self.subdomain = subdomain
@@ -80,13 +95,19 @@ class SiengeClient:
     ) -> Optional[dict[str, Any]]:
         req = urllib.request.Request(url, headers=self._headers)
         for attempt in range(max(1, retries)):
+            started = time.perf_counter()
+            recorded = False
             try:
                 with urllib.request.urlopen(req, timeout=timeout) as response:
+                    _safe_record_sienge_call(url, "GET", response.status, started)
+                    recorded = True
                     if response.status != 200:
                         logger.warning("Sienge HTTP %s em %s", response.status, url)
                         return None
                     return json.loads(response.read().decode("utf-8"))
             except urllib.error.HTTPError as e:
+                if not recorded:
+                    _safe_record_sienge_call(url, "GET", e.code, started)
                 if not_found_ok and e.code == 404:
                     return None
                 logger.warning(
@@ -100,6 +121,8 @@ class SiengeClient:
                     return None
                 time.sleep(2**attempt)
             except Exception as e:
+                if not recorded:
+                    _safe_record_sienge_call(url, "GET", None, started)
                 logger.warning(
                     "Sienge erro em %s (tentativa %s/%s): %s",
                     url,
