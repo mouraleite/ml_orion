@@ -177,6 +177,12 @@ def get_acompanhamento_despesas(
     versoes = list_forecast_versoes_disponiveis(db, ano, "DESPESAS", dept.id)
     produtos_list = db.query(CostCenter).filter(CostCenter.id.in_(produtos_permitidos)).all()
     empresas_map = build_empresas_map(db)
+    # Todos inclui realizado de planos fora do catálogo de despesa (ex.: retenção 1%).
+    # O rótulo precisa desses ids; os valores da matriz não mudam.
+    ids_rotulo = {pid for pid in planos_permitidos if pid is not None}
+    ids_rotulo.update(
+        v["plano_financeiro_id"] for v in resultado if v.get("plano_financeiro_id") is not None
+    )
 
     return maybe_apply_holding_mldu(
         db,
@@ -186,7 +192,7 @@ def get_acompanhamento_despesas(
         "is_consolidado": is_consolidado,
         "itens": resultado,
         "opcoes_produtos": build_opcoes_produtos(produtos_list, empresas_map),
-        "opcoes_planos": [{"id": p.id, "nome": p.name} for p in db.query(FinancialPlan).filter(FinancialPlan.id.in_(planos_permitidos)).all()],
+        "opcoes_planos": [{"id": p.id, "nome": p.name} for p in db.query(FinancialPlan).filter(FinancialPlan.id.in_(ids_rotulo)).all()],
         "versoes_disponiveis": versoes,
         "active_forecast_id": active_forecast_id,
         "realizado_fonte": FONTE_REALIZADO_DESPESAS,

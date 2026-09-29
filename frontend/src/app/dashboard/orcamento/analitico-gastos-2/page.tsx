@@ -224,7 +224,7 @@ export default function AnaliticoGastos2Page() {
     1 + visibleMesesStr.length * 3 + (showTotalCol ? 3 : 0);
 
   return (
-    <div className="space-y-6 pb-10 flex flex-col h-[calc(100vh-120px)]">
+    <div className="flex flex-col flex-1 min-h-0 gap-4 overflow-hidden">
       <div className="shrink-0">
         <h1 className="text-2xl font-bold text-slate-800">Analítico de Gastos II</h1>
         <p className="text-slate-500 text-sm mt-1">
@@ -256,7 +256,11 @@ export default function AnaliticoGastos2Page() {
         </Link>
       </OrcamentoFlyoutFilterBar>
 
-      {holdingMldu && <HoldingMlduBanner avisos={data?.holding_avisos} />}
+      {holdingMldu && (
+        <div className="shrink-0">
+          <HoldingMlduBanner avisos={data?.holding_avisos} />
+        </div>
+      )}
 
       <div className="flex items-start gap-2 text-xs text-slate-500 bg-blue-50 border border-blue-100 rounded-xl px-4 py-2.5 shrink-0">
         <Receipt className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
@@ -287,16 +291,16 @@ export default function AnaliticoGastos2Page() {
       )}
 
       {loading ? (
-        <div className="flex-1 flex items-center justify-center bg-white rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex-1 min-h-0 flex items-center justify-center bg-white rounded-2xl border border-slate-200 shadow-sm">
           <AppLoadingState />
         </div>
       ) : planoRows.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center text-slate-400 bg-white rounded-2xl border border-slate-200 shadow-sm gap-3">
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-slate-400 bg-white rounded-2xl border border-slate-200 shadow-sm gap-3">
           <Layers className="w-12 h-12 opacity-20" />
           <p>Nenhuma despesa encontrada.</p>
         </div>
       ) : (
-        <div className="flex-1 overflow-auto bg-white rounded-2xl border border-slate-200 shadow-sm">
+        <div className="flex-1 min-h-0 overflow-auto bg-white rounded-2xl border border-slate-200 shadow-sm">
           <table className="w-full text-left border-collapse min-w-max text-xs">
             <thead className="bg-slate-100 text-slate-600 uppercase font-semibold sticky top-0 z-30 shadow-sm">
               <tr>
