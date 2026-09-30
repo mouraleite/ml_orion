@@ -15,7 +15,7 @@ mais o realizado das telas de acompanhamento.
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
-from sqlalchemy import extract, or_
+from sqlalchemy import extract, func, or_
 
 from app.models.actual_transaction import ActualTransaction
 from app.models.financial_plan import FinancialPlan
@@ -57,14 +57,18 @@ def categoria_excluida_receita_realizado(category: Optional[str]) -> bool:
     return str(category or "").strip().lower() in _CATEGORIAS_EXCLUIDAS_RECEITA_REALIZADO
 
 
+def _eh_redutora(plano_id: int, category: str, planos_redutora: Dict[int, Any]) -> bool:
+    cat_name = str(category or "").lower()
+    return str(planos_redutora.get(plano_id)).strip().upper() == "S" or "reten" in cat_name
+
+
 def valor_despesa_sienge(
     val: float,
     plano_id: int,
     category: str,
     planos_redutora: Dict[int, Any],
 ) -> float:
-    cat_name = str(category or "").lower()
-    if str(planos_redutora.get(plano_id)).strip().upper() == "S" or "reten" in cat_name:
+    if _eh_redutora(plano_id, category, planos_redutora):
         return -abs(val or 0.0)
     return val or 0.0
 
@@ -170,11 +174,13 @@ def agregar_realizado_despesas_sienge(
     produtos_permitidos: List[int],
     planos_permitidos: List[int],
     dept=None,
+    agrupado: bool = False,
 ) -> None:
     """Soma parcelas OUT-* na matriz (produto_id, plano_id) × mês.
 
-    A soma é parcela a parcela, na ordem da lista. Somar o grupo no banco
-    muda o centavo quando o total cai em meio centavo (ex.: 2278,575).
+    Padrão: parcela a parcela, na ordem da lista. ``agrupado`` soma no banco
+    (mais rápido) e pode mudar o centavo quando o total cai em meio centavo
+    (ex.: 2278,575) — aceito só no DFC.
     """
     from app.services.departamento_leitura import (
         eh_residual_leitura,
@@ -192,7 +198,8 @@ def agregar_realizado_despesas_sienge(
     q, filtra_dept = consulta
     pertence: Dict[Optional[str], bool] = {}
 
-    for cc_id, category, auth, dt, value in _linhas_leves(q, ActualTransaction.authorization_name):
+    linhas = _linhas_realizado(q, agrupado, ActualTransaction.authorization_name)
+    for cc_id, category, auth, mes_num, soma, soma_abs in linhas:
         plano_id = planos_id_by_name.get(category)
         if not plano_id:
             continue
@@ -204,9 +211,36 @@ def agregar_realizado_despesas_sienge(
             if not pertence[auth]:
                 continue
         init_key(cc_id, plano_id)
-        mes_str = MESES_STR[dt.month - 1]
-        val = valor_despesa_sienge(value, plano_id, category, planos_redutora)
+        mes_str = MESES_STR[mes_num - 1]
+        val = -soma_abs if _eh_redutora(plano_id, category, planos_redutora) else soma
         matriz[(cc_id, plano_id)]["realizado"][mes_str] += val
+
+
+def _linhas_realizado(q, agrupado: bool, *extra_cols):
+    """(cc, categoria, *extra, mês, soma, soma_abs) — por parcela ou agrupado no banco.
+
+    soma_abs existe porque redutora vale −|valor| por parcela; −|soma| divergiria
+    num grupo com sinais mistos.
+    """
+    if agrupado:
+        mes = extract("month", ActualTransaction.transaction_date)
+        chaves = (ActualTransaction.cost_center_id, ActualTransaction.category, *extra_cols, mes)
+        rows = (
+            q.with_entities(
+                *chaves,
+                func.coalesce(func.sum(ActualTransaction.value), 0.0),
+                func.coalesce(func.sum(func.abs(ActualTransaction.value)), 0.0),
+            )
+            .group_by(*chaves)
+            .all()
+        )
+        for *cabeca, mes_num, soma, soma_abs in rows:
+            yield (*cabeca, int(mes_num), float(soma), float(soma_abs))
+        return
+
+    for *cabeca, dt, value in _linhas_leves(q, *extra_cols):
+        v = value or 0.0
+        yield (*cabeca, dt.month, v, abs(v))
 
 
 def _linhas_leves(q, *extra_cols):
@@ -295,6 +329,7 @@ def agregar_realizado_receitas_sienge(
     ano: int,
     produtos_permitidos: List[int],
     planos_permitidos: List[int],
+    agrupado: bool = False,
 ) -> None:
     """Soma recebimentos INC-* + BM-* na matriz (produto_id, plano_id) × mês."""
     planos_id_by_name, planos_redutora = build_planos_maps(db)
@@ -303,13 +338,13 @@ def agregar_realizado_receitas_sienge(
     q = _consulta_recebimentos(db, ano, produtos_permitidos)
     if q is None:
         return
-    for cc_id, category, dt, value in _linhas_leves(q):
+    for cc_id, category, mes_num, soma, soma_abs in _linhas_realizado(q, agrupado):
         if categoria_excluida_receita_realizado(category):
             continue
         plano_id = planos_id_by_name.get(category)
         if not plano_id or plano_id not in planos_permitidos_set:
             continue
         init_key(cc_id, plano_id)
-        mes_str = MESES_STR[dt.month - 1]
-        val = valor_receita_sienge(value, plano_id, category, planos_redutora)
+        mes_str = MESES_STR[mes_num - 1]
+        val = -soma_abs if _eh_redutora(plano_id, category, planos_redutora) else soma
         matriz[(cc_id, plano_id)]["realizado"][mes_str] += val

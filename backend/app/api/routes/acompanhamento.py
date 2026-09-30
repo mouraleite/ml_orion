@@ -45,7 +45,8 @@ def get_acompanhamento_despesas(
     db: Session = Depends(get_db),
     dept: Departamento = Depends(get_active_department),
     current_user = Depends(get_current_user),
-    forecast_id: Optional[int] = None
+    forecast_id: Optional[int] = None,
+    realizado_agrupado: bool = False,
 ):
     consolidado = False  # Onda A: legado (todos dept.) desativado
     is_consolidado = False
@@ -157,7 +158,8 @@ def get_acompanhamento_despesas(
                     matriz[(item.produto_id, item.plano_financeiro_id)]["forecast"][mes] += val
 
     agregar_realizado_despesas_sienge(
-        matriz, init_key, db, ano, produtos_permitidos, planos_permitidos, dept=dept
+        matriz, init_key, db, ano, produtos_permitidos, planos_permitidos, dept=dept,
+        agrupado=realizado_agrupado,
     )
 
     resultado = []
@@ -208,7 +210,8 @@ def get_acompanhamento_receitas(
     db: Session = Depends(get_db),
     dept: Departamento = Depends(get_active_department),
     current_user = Depends(get_current_user),
-    forecast_id: Optional[int] = None
+    forecast_id: Optional[int] = None,
+    realizado_agrupado: bool = False,
 ):
     consolidado = False  # Onda A: legado (todos dept.) desativado
     is_consolidado = False
@@ -319,7 +322,8 @@ def get_acompanhamento_receitas(
                     matriz[(item.produto_id, item.plano_financeiro_id)]["forecast"][mes] += val
 
     agregar_realizado_receitas_sienge(
-        matriz, init_key, db, ano, produtos_permitidos, planos_permitidos
+        matriz, init_key, db, ano, produtos_permitidos, planos_permitidos,
+        agrupado=realizado_agrupado,
     )
 
     resultado = []

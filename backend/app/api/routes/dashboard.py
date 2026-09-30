@@ -530,10 +530,18 @@ def get_orcamento_dfc(
     vision, nodes_spec = _visao_padrao_spec(db)
     desp_id, rec_id = _ids_forecast_dfc(db, forecast_id, ano, dept.id)
 
-    desp_n = get_acompanhamento_despesas(ano, consolidado, holding_mldu, db, dept, current_user, forecast_id=desp_id)
-    rec_n = get_acompanhamento_receitas(ano, consolidado, holding_mldu, db, dept, current_user, forecast_id=rec_id)
-    desp_n1 = get_acompanhamento_despesas(ano - 1, consolidado, holding_mldu, db, dept, current_user)
-    rec_n1 = get_acompanhamento_receitas(ano - 1, consolidado, holding_mldu, db, dept, current_user)
+    desp_n = get_acompanhamento_despesas(
+        ano, consolidado, holding_mldu, db, dept, current_user, forecast_id=desp_id, realizado_agrupado=True
+    )
+    rec_n = get_acompanhamento_receitas(
+        ano, consolidado, holding_mldu, db, dept, current_user, forecast_id=rec_id, realizado_agrupado=True
+    )
+    desp_n1 = get_acompanhamento_despesas(
+        ano - 1, consolidado, holding_mldu, db, dept, current_user, realizado_agrupado=True
+    )
+    rec_n1 = get_acompanhamento_receitas(
+        ano - 1, consolidado, holding_mldu, db, dept, current_user, realizado_agrupado=True
+    )
 
     desp_itens = desp_n.get("itens", [])
     rec_itens = rec_n.get("itens", [])
