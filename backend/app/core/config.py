@@ -26,10 +26,10 @@ class Settings(BaseSettings):
     # Segredo para disparo externo do sync (cron). Vazio = rota /sync/cron desligada.
     CRON_SECRET: str = ""
 
-    # Sienge API (credenciais em .env; defaults mantêm compatibilidade local)
+    # Sienge API — senha só via ambiente (.env local, painel do Render em produção).
     SIENGE_SUBDOMAIN: str = "mouraleite"
     SIENGE_USER: str = "mouraleite-contas-a-pagar"
-    SIENGE_PASS: str = "U2riBlrXuOPIpbb7TyRapoxSzaXWUisj"
+    SIENGE_PASS: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 
