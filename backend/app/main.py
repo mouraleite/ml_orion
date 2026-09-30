@@ -20,6 +20,12 @@ setup_audit_listener()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
+    import os
+    print(
+        "[config] SIENGE_PASS via ambiente: "
+        + ("sim" if (os.environ.get("SIENGE_PASS") or "").strip() else "nao"),
+        flush=True,
+    )
     start_scheduler()
     yield
     # Shutdown
