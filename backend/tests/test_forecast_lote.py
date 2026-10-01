@@ -37,8 +37,9 @@ def test_lote_cria_quem_ainda_nao_tem(client, db_session):
     assert corpo["criados"][0]["produto_id"] == 1
     assert corpo["criados"][0]["produto_nome"] == "Produto A"
     assert corpo["ignorados_ja_existentes"] == []
-    fc = db_session.query(Forecast).filter_by(ano=2050, produto_id=1).first()
+    fc = db_session.query(Forecast).filter_by(ano=2050, tipo="DESPESAS", departamento_id=1).first()
     assert fc is not None
+    assert fc.produto_id is None
     assert fc.status == "Rascunho"
     assert db_session.query(ForecastItem).filter_by(forecast_id=fc.id).count() == 1
 
@@ -67,8 +68,9 @@ def test_lote_cria_orcamento_sem_itens_pelo_produto_id(client, db_session):
     resposta = client.post("/api/v1/forecasts/gerar-lote", json={"ano": 2052, "tipo": "DESPESAS"})
     assert resposta.status_code == 200, resposta.text
     assert len(resposta.json()["criados"]) == 1
-    fc = db_session.query(Forecast).filter_by(ano=2052, produto_id=1).first()
+    fc = db_session.query(Forecast).filter_by(ano=2052, tipo="DESPESAS", departamento_id=1).first()
     assert fc is not None
+    assert fc.produto_id is None
     assert db_session.query(ForecastItem).filter_by(forecast_id=fc.id).count() == 0
 
 
@@ -107,8 +109,9 @@ def test_lote_vendas_cria_quem_ainda_nao_tem(client, db_session):
     assert corpo["criados"][0]["produto_id"] == 1
     assert corpo["criados"][0]["produto_nome"] == "Produto A"
     assert corpo["ignorados_ja_existentes"] == []
-    fc = db_session.query(Forecast).filter_by(ano=2060, tipo="VENDAS", produto_id=1).first()
+    fc = db_session.query(Forecast).filter_by(ano=2060, tipo="VENDAS", departamento_id=1).first()
     assert fc is not None
+    assert fc.produto_id is None
     assert fc.status == "Rascunho"
     itens = db_session.query(ForecastVendaItem).filter_by(forecast_id=fc.id).all()
     assert len(itens) == 1
@@ -141,6 +144,7 @@ def test_lote_vendas_cria_orcamento_sem_itens_pelo_produto_id(client, db_session
     resposta = client.post("/api/v1/forecasts/gerar-lote", json={"ano": 2062, "tipo": "VENDAS"})
     assert resposta.status_code == 200, resposta.text
     assert len(resposta.json()["criados"]) == 1
-    fc = db_session.query(Forecast).filter_by(ano=2062, tipo="VENDAS", produto_id=1).first()
+    fc = db_session.query(Forecast).filter_by(ano=2062, tipo="VENDAS", departamento_id=1).first()
     assert fc is not None
+    assert fc.produto_id is None
     assert db_session.query(ForecastVendaItem).filter_by(forecast_id=fc.id).count() == 0

@@ -99,14 +99,36 @@ export const forecastService = {
     return response.data;
   },
   
-  criarDeBase: async (ano: number, tipo: string, departamento_id: number, orcamento_id?: number, forecast_id?: number, produto_id?: number) => {
+  criarDeBase: async (
+    ano: number,
+    tipo: string,
+    departamento_id: number,
+    orcamento_id?: number,
+    forecast_id?: number,
+    produto_id?: number,
+    extra?: { plano_financeiro_id?: number; plano_venda_id?: number },
+  ) => {
     const response = await api.post(`/forecasts/criar_de_base`, {
       ano,
       tipo,
       versao_base_orcamento_id: orcamento_id,
-      versao_base_forecast_id: forecast_id
+      versao_base_forecast_id: forecast_id,
+      produto_id,
+      ...(extra || {}),
     }, deptHeader(departamento_id));
     return response.data;
+  },
+
+  getCatalogo: async (tipo: string, ano: number, departamento_id: number) => {
+    const response = await api.get(
+      `/forecasts/catalogo?tipo=${tipo}&ano=${ano}`,
+      deptHeader(departamento_id),
+    );
+    return response.data as {
+      opcoes_produtos: OpcaoProduto[];
+      opcoes_planos: OpcaoPlano[];
+      opcoes_base: ForecastBaseOption[];
+    };
   },
 
   travarForecast: async (id: number, departamento_id: number) => {

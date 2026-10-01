@@ -43,7 +43,9 @@ class ForecastCreateRequest(BaseModel):
     tipo: str = "DESPESAS"
     versao_base_orcamento_id: Optional[int] = None
     versao_base_forecast_id: Optional[int] = None
-    produto_id: Optional[int] = None  # Fase 2: limita o forecast a 1 produto (Centro de Custo)
+    produto_id: Optional[int] = None
+    plano_financeiro_id: Optional[int] = None
+    plano_venda_id: Optional[int] = None
 
 class ForecastStatusRequest(BaseModel):
     novo_status: str

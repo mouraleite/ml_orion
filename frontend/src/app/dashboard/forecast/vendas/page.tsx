@@ -2,13 +2,11 @@
 
 import React, { useEffect, useState, useMemo, useCallback } from "react";
 import { Card } from "@/components/ui/Card";
-import { Modal }
-from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { confirmDialog } from "@/components/ui/confirmDialog";
 import { forecastService, ForecastVendasResponse } from "@/services/forecast";
 import { OrcamentoVendaLinha, MesVenda } from "@/services/orcamento";
-import { Save, Copy, Plus, Trash2, ChevronDown, ChevronRight, FileSpreadsheet, Lock } from "lucide-react";
+import { Save, Copy, Plus, Trash2, ChevronDown, ChevronRight, Lock } from "lucide-react";
 import { ForecastVersionHeader } from "@/components/forecast/ForecastVersionHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { isAdminOrDiretorUser } from "@/lib/roles";
@@ -28,8 +26,7 @@ import { buildEmpresaLinkedOptions } from "@/lib/gridFilters";
 import { HoldingMlduBanner } from "@/components/shared/HoldingMlduBanner";
 import { useHoldingMldu } from "@/hooks/useHoldingMldu";
 import { useActiveDepartmentId } from "@/lib/useActiveDepartmentId";
-import { SearchableSelect } from "@/components/ui/SearchableSelect";
-import { ExcelImportModal } from "@/components/forecast/ExcelImportModal";
+import { CriarForecastModal } from "@/components/forecast/CriarForecastModal";
 import { MonthSelector } from "@/components/orcamento/MonthSelector";
 import { TableHead } from "@/components/ui/Table";
 import { useTableSort, SortConfig } from "@/hooks/useTableSort";
@@ -56,11 +53,8 @@ export default function ForecastVendasPage() {
   const [linhas, setLinhas] = useState<OrcamentoVendaLinha[]>([]);
   const [novoProdutoId, setNovoProdutoId] = useState<number | "">("");
   const [novoPlanoId, setNovoPlanoId] = useState<number | "">("");
-  const [showCriarBaseModal, setShowCriarBaseModal] = useState(false);
-  const [baseSelecionada, setBaseSelecionada] = useState<{id: number, tipo: string} | null>(null);
-  const [produtoCriacaoId, setProdutoCriacaoId] = useState<number | 0>(0);
+  const [showCriarModal, setShowCriarModal] = useState(false);
   const [produtoModalAdicionarLinha, setProdutoModalAdicionarLinha] = useState<number | 0>(0);
-  const [showExcel, setShowExcel] = useState(false);
   const [gerandoLote, setGerandoLote] = useState(false);
   const isAdminOrDiretor = isAdminOrDiretorUser(user);
   const [expandedProducts, setExpandedProducts] = useState<number[]>([]);
@@ -150,31 +144,13 @@ export default function ForecastVendasPage() {
     }
   }, [versaoId, holdingMldu]);
 
-  const handleCriarDeBase = (baseId: number, baseTipo: string) => {
-    setBaseSelecionada({id: baseId, tipo: baseTipo});
-    setProdutoCriacaoId(0);
-    setShowCriarBaseModal(true);
-  };
-
-  const handleCriarDeBaseFinal = async (produtoId: number) => {
-    if(!baseSelecionada) return;
-    const { id: baseId, tipo: baseTipo } = baseSelecionada;
-    try {
-      const isOrcamento = baseTipo === "Orcamento";
-      await forecastService.criarDeBase(
-        ano, 
-        "VENDAS", 
-        deptId,
-        isOrcamento && baseId ? baseId : undefined, 
-        (!isOrcamento && baseId) ? baseId : undefined,
-        produtoId
-      );
-      toast.success(`Criado!`);
-      setShowCriarBaseModal(false);
-      carregarDados(ano);
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || "Erro ao criar.");
+  const handleCreated = async (anoCriado: number, produtoId: number) => {
+    setShowCriarModal(false);
+    const anos = await carregarAnos();
+    if (anos.includes(anoCriado)) {
+      setAno(anoCriado);
     }
+    setExpandedProducts((prev) => prev.includes(produtoId) ? prev : [...prev, produtoId]);
   };
 
   const handleGerarLote = async () => {
@@ -198,16 +174,9 @@ export default function ForecastVendasPage() {
   };
   
   const handleDeleteEmpreendimento = async (produtoId: number) => {
-    if(!(await confirmDialog('Tem certeza que deseja excluir os dados deste Empreendimento?', { variant: "danger" }))) return;
-    try {
-        const map_id = data?.mapa_ids?.[produtoId];
-        if(!map_id) { toast.error("ID não encontrado"); return; }
-        await forecastService.delete(map_id);
-        toast.success("Excluído com sucesso.");
-        carregarDados(ano);
-    } catch(err: any) {
-        toast.error(err.response?.data?.detail || "Erro ao excluir.");
-    }
+    if(!(await confirmDialog('Tem certeza que deseja excluir os dados deste empreendimento da matriz? A exclusão vale ao clicar em Salvar.', { variant: "danger" }))) return;
+    setLinhas(linhas.filter((l) => l.produto_id !== produtoId));
+    toast.success("Empreendimento removido da matriz. Clique em Salvar para gravar.");
   };
 
   const isDistratoFn = (l: OrcamentoVendaLinha) => l.observacao?.includes('Distrato') || l.meses.some(m => (m.numero_vendas || 0) < 0) || (data?.opcoes_planos.find((p: any) => p.id === l.plano_venda_id)?.nome || '').includes('Distrato');
@@ -579,18 +548,11 @@ export default function ForecastVendasPage() {
                 </button>
               ) : null}
               <button
-                onClick={() => handleCriarDeBase(0, "Vazio")}
+                onClick={() => setShowCriarModal(true)}
                 className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition shadow-sm"
               >
                 <Plus className="w-4 h-4 text-brand-600" />
                 Criar Forecast
-              </button>
-              <button
-                onClick={() => setShowExcel(true)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition shadow-sm"
-              >
-                <FileSpreadsheet className="w-4 h-4 text-brand-green" />
-                Excel
               </button>
               {!isBlocked ? (
                 <Button variant="primary" onClick={salvar} disabled={saving || loading}>
@@ -654,33 +616,12 @@ export default function ForecastVendasPage() {
         <Card className="flex-1 min-h-0 p-6 flex flex-col items-center justify-center space-y-4 overflow-auto">
           <div className="text-slate-500 text-center">
             <h2 className="text-xl font-bold mb-2">Nenhum Forecast Aberto para {ano}</h2>
-            <p>Você pode iniciar um novo forecast a partir de uma base existente.</p>
+            <p>Crie o forecast do departamento a partir de um orçamento, de um forecast anterior ou do zero.</p>
           </div>
-          
-          <div className="w-full max-w-md bg-slate-50 p-4 border rounded-md">
-            <h3 className="font-semibold text-sm text-slate-700 mb-3">Versões Base Disponíveis:</h3>
-            {data.opcoes_base?.length === 0 ? (
-              <div className="flex flex-col items-center justify-center space-y-4 py-4">
-                <p className="text-sm text-slate-500 text-center">Nenhum orçamento ou forecast aprovado/fechado encontrado para basear.</p>
-                <Button size="sm" onClick={() => handleCriarDeBase(0, 'Vazio')}>
-                  <Plus className="w-4 h-4 mr-2" />
-                  Criar Forecast do Zero
-                </Button>
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {data.opcoes_base?.map((opcao: any) => (
-                  <div key={`${opcao.tipo}-${opcao.id}`} className="flex justify-between items-center bg-white p-3 border rounded shadow-sm">
-                    <div>
-                      <span className="font-bold text-slate-700">{opcao.descricao}</span>
-                      <span className="ml-2 text-xs text-slate-400">({opcao.tipo})</span>
-                    </div>
-                    <Button size="sm" onClick={() => handleCriarDeBase(opcao.id, opcao.tipo)}>Usar Base</Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <Button size="sm" onClick={() => setShowCriarModal(true)}>
+            <Plus className="w-4 h-4 mr-2" />
+            Criar Forecast
+          </Button>
         </Card>
       ) : data && (
         <div className="flex-1 flex flex-col min-h-0 overflow-hidden bg-white rounded-2xl border border-slate-200">
@@ -928,40 +869,14 @@ export default function ForecastVendasPage() {
       </div>
       )}
 
-      {showExcel && (
-        <ExcelImportModal
+      {showCriarModal && (
+        <CriarForecastModal
           tipo="VENDAS"
-          ano={ano}
           deptId={deptId}
-          orcamentoId={data?.forecast_id}
-          onClose={() => setShowExcel(false)}
-          onSuccess={() => { setShowExcel(false); carregarDados(ano); }}
+          anoInicial={ano}
+          onClose={() => setShowCriarModal(false)}
+          onCreated={handleCreated}
         />
-      )}
-
-    
-      {showCriarBaseModal && (
-        <Modal isOpen={showCriarBaseModal} onClose={() => setShowCriarBaseModal(false)} title="Selecione o Empreendimento">
-          <div className="space-y-4">
-            <p className="text-sm text-slate-500">Selecione o Centro de Custo para criar.</p>
-            <SearchableSelect
-              options={data?.opcoes_produtos?.map((p: any) => ({
-                id: p.id,
-                label: p.id_sienge ? `${p.id_sienge} - ${p.nome}` : p.nome
-              })) || []}
-              value={produtoCriacaoId}
-              onChange={(val) => setProdutoCriacaoId(Number(val))}
-              placeholder="Pesquise ou selecione..."
-            />
-            <div className="flex justify-end gap-2 pt-4">
-              <Button variant="outline" onClick={() => setShowCriarBaseModal(false)}>Cancelar</Button>
-              <Button onClick={() => {
-                if(!produtoCriacaoId) { toast.error("Selecione um empreendimento"); return; }
-                handleCriarDeBaseFinal(produtoCriacaoId);
-              }}>Criar</Button>
-            </div>
-          </div>
-        </Modal>
       )}
     </BudgetMatrixShell>
   );

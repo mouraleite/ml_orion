@@ -19,6 +19,7 @@ from app.core.roles import is_admin_user
 from app.services.auth_matrix import validate_budget_allocation
 from app.services.periodos import MESES_STR, skip_linha_total_zero
 from app.services.budget_shared import (
+    STATUS_ORCAMENTO_BLOQUEADO,
     build_empresas_map,
     build_opcoes_planos,
     build_opcoes_produtos,
@@ -29,6 +30,7 @@ from app.services.budget_shared import (
     group_venda_items,
     list_forecast_versoes_disponiveis,
     merge_catalog_with_used_items,
+    pode_editar_orcamento_vendas,
     resolve_forecast_despesas_catalog,
     serialize_base_monthly_item,
     serialize_monthly_item_row,
@@ -46,6 +48,153 @@ from app.services.budget_status import (
 
 router = APIRouter()
 
+
+def _descricao_forecast_rolling(ano: int) -> str:
+    hoje = datetime.now()
+    if ano == hoje.year:
+        meses_realizados = hoje.month - 1
+        meses_projetados = 13 - hoje.month
+    elif ano < hoje.year:
+        meses_realizados, meses_projetados = 12, 0
+    else:
+        meses_realizados, meses_projetados = 0, 12
+    return f"Forecast - {meses_realizados}+{meses_projetados}"
+
+
+def _exigir_vendas(current_user, dept: Departamento) -> None:
+    if not pode_editar_orcamento_vendas(current_user, dept):
+        raise HTTPException(status_code=403, detail="Restrito ao departamento Vendas.")
+
+
+def _nome_empreendimento(db: Session, produto_id: int) -> str:
+    p = db.query(CostCenter).filter(CostCenter.id == produto_id).first()
+    if not p:
+        return str(produto_id)
+    if p.id_sienge:
+        return f"{p.id_sienge} - {p.nome}"
+    return p.nome or str(produto_id)
+
+
+def _docs_forecast_versao(db: Session, ano: int, tipo: str, dept_id: int, descricao: str) -> list[Forecast]:
+    return (
+        db.query(Forecast)
+        .filter(
+            Forecast.ano == ano,
+            Forecast.tipo == tipo,
+            Forecast.departamento_id == dept_id,
+            Forecast.descricao == descricao,
+            Forecast.status != "Substituído",
+        )
+        .order_by(Forecast.versao_numero.desc(), Forecast.id.desc())
+        .all()
+    )
+
+
+def _produtos_nos_forecasts(db: Session, docs: list[Forecast], tipo: str) -> set[int]:
+    ids: set[int] = set()
+    for fc in docs:
+        if fc.produto_id:
+            ids.add(fc.produto_id)
+        if tipo == "VENDAS":
+            rows = (
+                db.query(ForecastVendaItem.produto_id)
+                .filter(ForecastVendaItem.forecast_id == fc.id)
+                .distinct()
+                .all()
+            )
+        else:
+            rows = (
+                db.query(ForecastItem.produto_id)
+                .filter(ForecastItem.forecast_id == fc.id)
+                .distinct()
+                .all()
+            )
+        for (pid,) in rows:
+            if pid is not None:
+                ids.add(pid)
+    return ids
+
+
+def _assert_forecasts_editaveis(docs: list[Forecast]) -> None:
+    for fc in docs:
+        if fc.status in STATUS_ORCAMENTO_BLOQUEADO:
+            raise HTTPException(
+                status_code=403,
+                detail="O forecast deste departamento está em aprovação ou fechado. Não é possível alterar.",
+            )
+
+
+def _umbrella_ou_novo(
+    db: Session,
+    docs: list[Forecast],
+    *,
+    descricao: str,
+    ano: int,
+    tipo: str,
+    current_user,
+    dept: Departamento,
+    versao_base_orcamento_id: Optional[int],
+    versao_base_forecast_id: Optional[int],
+) -> Forecast:
+    for fc in docs:
+        if fc.produto_id is None:
+            return fc
+    fc = Forecast(
+        descricao=descricao,
+        ano=ano,
+        tipo=tipo,
+        versao_numero=(docs[0].versao_numero if docs else 1),
+        status="Rascunho",
+        usuario_criador_id=current_user.id,
+        departamento_id=dept.id,
+        produto_id=None,
+        versao_base_orcamento_id=versao_base_orcamento_id,
+        versao_base_forecast_id=versao_base_forecast_id,
+    )
+    db.add(fc)
+    db.flush()
+    return fc
+
+
+def _forecast_destino(forecasts_do_grupo: list[Forecast], produto_id: int) -> Optional[Forecast]:
+    por_produto = {fc.produto_id: fc for fc in forecasts_do_grupo if fc.produto_id is not None}
+    if produto_id in por_produto:
+        return por_produto[produto_id]
+    for fc in forecasts_do_grupo:
+        if fc.produto_id is None:
+            return fc
+    return None
+
+
+def _opcoes_base_forecast(db: Session, ano: int, tipo: str, dept: Departamento) -> list[dict]:
+    orcs = (
+        db.query(Orcamento)
+        .filter(
+            Orcamento.ano == ano,
+            Orcamento.tipo == tipo,
+            criterio_departamento(Orcamento.departamento_id, db, dept),
+            Orcamento.status != "Substituído",
+        )
+        .order_by(Orcamento.versao_numero.desc())
+        .all()
+    )
+    fcs = (
+        db.query(Forecast)
+        .filter(
+            Forecast.ano == ano,
+            Forecast.tipo == tipo,
+            criterio_departamento(Forecast.departamento_id, db, dept),
+            Forecast.status != "Substituído",
+        )
+        .order_by(Forecast.versao_numero.desc())
+        .all()
+    )
+    return (
+        [{"id": o.id, "tipo": "Orcamento", "descricao": o.descricao} for o in orcs]
+        + [{"id": o.id, "tipo": "Forecast", "descricao": o.descricao} for o in fcs]
+    )
+
+
 @router.post("/criar_de_base")
 def criar_forecast_de_base(
     data: ForecastCreateRequest,
@@ -53,112 +202,164 @@ def criar_forecast_de_base(
     dept: Departamento = Depends(get_active_department),
     current_user = Depends(get_current_user)
 ):
-    """
-    Cria um novo Forecast a partir de um Orçamento aprovado/fechado ou de um Forecast anterior.
-    """
+    """Inclui um empreendimento no documento do departamento para a versão rolling (ex.: Forecast - 9+3)."""
+    tipo = (data.tipo or "DESPESAS").upper()
+    if tipo not in ("DESPESAS", "VENDAS"):
+        raise HTTPException(status_code=400, detail="Tipo inválido.")
+    if tipo == "VENDAS":
+        _exigir_vendas(current_user, dept)
     if not data.produto_id:
         raise HTTPException(status_code=400, detail="Centro de Custo (Empreendimento) é obrigatório para criação de Forecast.")
 
-    from datetime import datetime
-    hoje = datetime.now()
-    if data.ano == hoje.year:
-        meses_realizados = hoje.month - 1
-        meses_projetados = 13 - hoje.month
-    elif data.ano < hoje.year:
-        meses_realizados = 12
-        meses_projetados = 0
-    else:
-        meses_realizados = 0
-        meses_projetados = 12
-        
-    descricao = f"Forecast - {meses_realizados}+{meses_projetados}"
+    descricao = _descricao_forecast_rolling(data.ano)
+    docs = _docs_forecast_versao(db, data.ano, tipo, dept.id, descricao)
+    nome = _nome_empreendimento(db, data.produto_id)
+    if data.produto_id in _produtos_nos_forecasts(db, docs, tipo):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Já existe forecast criado para o empreendimento {nome} em {data.ano}. "
+                "Não é possível criar outro."
+            ),
+        )
+    if docs:
+        _assert_forecasts_editaveis(docs)
 
-    # Trava 1: Se já existe um forecast com o MESMO nome para este produto (Regra estrita)
-    existente_nome = db.query(Forecast).filter(
-        Forecast.produto_id == data.produto_id, 
-        Forecast.descricao == descricao
-    ).first()
-    
-    if existente_nome:
-        raise HTTPException(status_code=400, detail=f"Já existe um {descricao} para este Empreendimento. Acesse-o na lista de versões para realizar alterações.")
-
-    # Trava 2: Se tem algum forecast em aberto (Rascunho/Reaberto)
-    query_existente = db.query(Forecast).filter(
-        Forecast.ano == data.ano, 
-        Forecast.tipo == data.tipo,
-        Forecast.status.in_(["Rascunho", "Reaberto"]),
-        Forecast.produto_id == data.produto_id
-    )
-    existente = query_existente.first()
-    if existente:
-        raise HTTPException(status_code=400, detail="Já existe um Forecast aberto para este Empreendimento. Salve ou aprove-o primeiro.")
-        
-    # Calcula nova versão (só numérico interno)
-    query_versao = db.query(Forecast).filter(
-        Forecast.ano == data.ano,
-        Forecast.tipo == data.tipo,
-        Forecast.produto_id == data.produto_id
-    )
-    
-    ultima_versao = query_versao.order_by(Forecast.versao_numero.desc()).first()
-    nova_versao_num = (ultima_versao.versao_numero + 1) if ultima_versao else 1
-    
-    # Auto-close months
-    if meses_realizados > 0:
-        from app.models.fechamento import ClosedMonth
-        meses_fechados_existentes = db.query(ClosedMonth.mes).filter(ClosedMonth.ano == data.ano).all()
-        meses_fechados_existentes = [m[0] for m in meses_fechados_existentes]
-        
-        for m in range(1, meses_realizados + 1):
-            if m not in meses_fechados_existentes:
-                novo_fechamento = ClosedMonth(
-                    ano=data.ano,
-                    mes=m,
-                    fechado_por_id=current_user.id
+    itens_base = []
+    if data.versao_base_orcamento_id:
+        base = (
+            db.query(Orcamento)
+            .filter(
+                Orcamento.id == data.versao_base_orcamento_id,
+                Orcamento.departamento_id == dept.id,
+                Orcamento.ano == data.ano,
+                Orcamento.tipo == tipo,
+            )
+            .first()
+        )
+        if not base:
+            raise HTTPException(status_code=400, detail="Base de orçamento inválida para este departamento.")
+        if tipo == "VENDAS":
+            itens_base = (
+                db.query(OrcamentoVendaItem)
+                .filter(
+                    OrcamentoVendaItem.orcamento_id == base.id,
+                    OrcamentoVendaItem.produto_id == data.produto_id,
                 )
-                db.add(novo_fechamento)
-    
-    novo_forecast = Forecast(
+                .all()
+            )
+        else:
+            itens_base = (
+                db.query(OrcamentoItem)
+                .filter(
+                    OrcamentoItem.orcamento_id == base.id,
+                    OrcamentoItem.produto_id == data.produto_id,
+                )
+                .all()
+            )
+    elif data.versao_base_forecast_id:
+        base_fc = (
+            db.query(Forecast)
+            .filter(
+                Forecast.id == data.versao_base_forecast_id,
+                Forecast.departamento_id == dept.id,
+                Forecast.ano == data.ano,
+                Forecast.tipo == tipo,
+            )
+            .first()
+        )
+        if not base_fc:
+            raise HTTPException(status_code=400, detail="Base de forecast inválida para este departamento.")
+        if tipo == "VENDAS":
+            itens_base = (
+                db.query(ForecastVendaItem)
+                .filter(
+                    ForecastVendaItem.forecast_id == base_fc.id,
+                    ForecastVendaItem.produto_id == data.produto_id,
+                )
+                .all()
+            )
+        else:
+            itens_base = (
+                db.query(ForecastItem)
+                .filter(
+                    ForecastItem.forecast_id == base_fc.id,
+                    ForecastItem.produto_id == data.produto_id,
+                )
+                .all()
+            )
+
+    dest = _umbrella_ou_novo(
+        db,
+        docs,
         descricao=descricao,
         ano=data.ano,
-        tipo=data.tipo,
-        versao_numero=nova_versao_num,
-        status="Rascunho",
-        usuario_criador_id=current_user.id,
-        departamento_id=dept.id,
-        produto_id=data.produto_id,  # Fase 2
+        tipo=tipo,
+        current_user=current_user,
+        dept=dept,
         versao_base_orcamento_id=data.versao_base_orcamento_id,
-        versao_base_forecast_id=data.versao_base_forecast_id
+        versao_base_forecast_id=data.versao_base_forecast_id,
     )
-    db.add(novo_forecast)
-    db.commit()
-    db.refresh(novo_forecast)
-    
-    # Copia itens da base
-    if data.tipo == "DESPESAS":
-        if data.versao_base_orcamento_id:
-            itens_base = db.query(OrcamentoItem).filter(OrcamentoItem.orcamento_id == data.versao_base_orcamento_id).all()
-        elif data.versao_base_forecast_id:
-            itens_base = db.query(ForecastItem).filter(ForecastItem.forecast_id == data.versao_base_forecast_id).all()
-        else:
-            itens_base = []
-            
-        novos_itens = copy_monthly_items_to_forecast(itens_base, novo_forecast.id, ForecastItem)
-        db.bulk_save_objects(novos_itens)
 
-    elif data.tipo == "VENDAS":
-        if data.versao_base_orcamento_id:
-            itens_base = db.query(OrcamentoVendaItem).filter(OrcamentoVendaItem.orcamento_id == data.versao_base_orcamento_id).all()
-        elif data.versao_base_forecast_id:
-            itens_base = db.query(ForecastVendaItem).filter(ForecastVendaItem.forecast_id == data.versao_base_forecast_id).all()
+    if tipo == "VENDAS":
+        if itens_base:
+            novos = copy_venda_items_to_forecast(itens_base, dest.id, ForecastVendaItem)
+            for item in novos:
+                if not getattr(item, "ano", None):
+                    item.ano = data.ano
+                db.add(item)
         else:
-            itens_base = []
+            if not data.plano_venda_id:
+                if not docs:
+                    db.commit()
+                    return {"message": "Forecast criado com sucesso", "forecast_id": dest.id}
+                raise HTTPException(status_code=400, detail="Plano de venda é obrigatório para incluir o empreendimento.")
+            db.add(
+                ForecastVendaItem(
+                    forecast_id=dest.id,
+                    produto_id=data.produto_id,
+                    plano_venda_id=data.plano_venda_id,
+                    mes=1,
+                    ano=data.ano,
+                    ticket_medio=0.0,
+                    numero_vendas=0,
+                    vgv=0.0,
+                )
+            )
+    else:
+        if itens_base:
+            db.bulk_save_objects(copy_monthly_items_to_forecast(itens_base, dest.id, ForecastItem))
+        else:
+            if not data.plano_financeiro_id:
+                if not docs:
+                    db.commit()
+                    return {"message": "Forecast criado com sucesso", "forecast_id": dest.id}
+                raise HTTPException(
+                    status_code=400, detail="Plano financeiro é obrigatório para incluir o empreendimento."
+                )
+            if not validate_budget_allocation(
+                db=db,
+                departamento_id=dept.id,
+                produto_id=data.produto_id,
+                plano_financeiro_id=data.plano_financeiro_id,
+            ):
+                db.rollback()
+                raise HTTPException(
+                    403,
+                    "Este empreendimento/plano não está liberado para o seu departamento.",
+                )
+            db.add(
+                ForecastItem(
+                    forecast_id=dest.id,
+                    produto_id=data.produto_id,
+                    plano_financeiro_id=data.plano_financeiro_id,
+                    **{m: 0.0 for m in MESES_STR},
+                    total_anual=0.0,
+                )
+            )
 
-        novos_itens = copy_venda_items_to_forecast(itens_base, novo_forecast.id, ForecastVendaItem)
-        db.bulk_save_objects(novos_itens)
-        
     db.commit()
-    return {"message": "Forecast criado com sucesso", "forecast_id": novo_forecast.id}
+    return {"message": "Forecast criado com sucesso", "forecast_id": dest.id}
 
 
 @router.get("/despesas/{ano}")
@@ -303,8 +504,8 @@ def salvar_forecast_despesas(
         Forecast.descricao == forecast_ref.descricao
     ).all()
     
-    fc_por_produto = {fc.produto_id: fc for fc in forecasts_do_grupo}
-    
+    fc_por_produto = {fc.produto_id: fc for fc in forecasts_do_grupo if fc.produto_id is not None}
+
     # Verificar meses fechados (FC-DESP-002)
     meses_fechados_db = db.query(ClosedMonth).filter(ClosedMonth.ano == ano).all()
     meses_fechados_idx = [mf.mes for mf in meses_fechados_db]
@@ -329,7 +530,7 @@ def salvar_forecast_despesas(
         if skip_linha_total_zero(item_data):
             continue
             
-        fc_destino = fc_por_produto.get(item_data.produto_id)
+        fc_destino = _forecast_destino(forecasts_do_grupo, item_data.produto_id)
         if not fc_destino:
             raise HTTPException(400, f"O Empreendimento {item_data.produto_id} não possui o Forecast {forecast_ref.descricao} criado. Crie-o primeiro na listagem.")
 
@@ -381,8 +582,8 @@ def get_forecast_vendas(
 
     _ = consolidado  # Onda A: legado ignorado
     is_consolidado = False
-    if not is_admin_user(current_user) and dept.nome.upper() != "COMERCIAL":
-        raise HTTPException(status_code=403, detail="Restrito ao Comercial.")
+    if not pode_editar_orcamento_vendas(current_user, dept):
+        raise HTTPException(status_code=403, detail="Restrito ao departamento Vendas.")
 
     forecast = None
     if versao_id:
@@ -421,7 +622,7 @@ def get_forecast_vendas(
             ],
             "opcoes_produtos": opcoes_produtos,
             "opcoes_planos": opcoes_planos,
-        "mapa_ids": mapa_ids
+            "mapa_ids": {},
         }
 
     # AGRUPAMENTO POR DESCRICAO
@@ -662,8 +863,8 @@ def salvar_forecast_vendas(
     dept: Departamento = Depends(get_active_department),
     current_user = Depends(get_current_user)
 ):
-    if not is_admin_user(current_user) and dept.nome.upper() != "COMERCIAL":
-        raise HTTPException(status_code=403, detail="Restrito ao Comercial.")
+    if not pode_editar_orcamento_vendas(current_user, dept):
+        raise HTTPException(status_code=403, detail="Restrito ao departamento Vendas.")
 
     forecast_ref = db.query(Forecast).filter(
         Forecast.ano == ano,
@@ -706,7 +907,7 @@ def salvar_forecast_vendas(
             if mes_data.numero_vendas == 0 and mes_data.ticket_medio == 0 and not linha.observacao:
                 continue
 
-            fc_destino = fc_por_produto.get(linha.produto_id)
+            fc_destino = _forecast_destino(forecasts_do_grupo, linha.produto_id)
             if not fc_destino:
                 raise HTTPException(400, f"Empreendimento {linha.produto_id} não possui Forecast.")
 
@@ -735,7 +936,7 @@ def salvar_forecast_vendas(
     db.commit()
     
     # Injetar receitas automaticamente (Realizado + Projetado pelo Plano de Pagamento)
-    injetar_vendas_em_receitas(forecast, db)
+    injetar_vendas_em_receitas(forecast_ref, db)
     
     return {"message": "Salvo com sucesso!", "linhas": len(novos_itens)}
 
@@ -829,15 +1030,47 @@ def get_anos_disponiveis(
     )
 
     anos = query.distinct().all()
-    # Adicionar o ano atual e próximo se não existirem (como fallback para o frontend)
-    from datetime import datetime
     year_now = datetime.now().year
     anos_list = sorted([a[0] for a in anos])
     if year_now not in anos_list:
         anos_list.append(year_now)
-    
-        
+
     return {"anos": sorted(list(set(anos_list)))}
+
+
+@router.get("/catalogo")
+def get_catalogo_forecast(
+    tipo: str,
+    ano: int,
+    db: Session = Depends(get_db),
+    dept: Departamento = Depends(get_active_department),
+    current_user=Depends(get_current_user),
+):
+    tipo = tipo.upper()
+    if tipo not in ("DESPESAS", "VENDAS"):
+        raise HTTPException(400, "Tipo inválido.")
+    if tipo == "VENDAS":
+        _exigir_vendas(current_user, dept)
+        produtos = db.query(CostCenter).filter(CostCenter.status == "Ativo").all()
+        if not produtos:
+            produtos = db.query(CostCenter).all()
+        planos = db.query(PaymentPlan).all()
+        empresas_map = build_empresas_map(db)
+        return {
+            "opcoes_produtos": build_opcoes_produtos(produtos, empresas_map),
+            "opcoes_planos": build_opcoes_planos(planos, nome_attr="nome"),
+            "opcoes_base": _opcoes_base_forecast(db, ano, tipo, dept),
+        }
+    planos_permitidos, produtos_permitidos, _ = resolve_forecast_despesas_catalog(
+        db, dept, False, current_user
+    )
+    empresas_map = build_empresas_map(db)
+    return {
+        "opcoes_produtos": build_opcoes_produtos(produtos_permitidos, empresas_map),
+        "opcoes_planos": build_opcoes_planos(planos_permitidos),
+        "opcoes_base": _opcoes_base_forecast(db, ano, tipo, dept),
+    }
+
 
 from app.services.excel_builder import gerar_modelo_despesas_receitas, gerar_modelo_vendas, exportar_forecast
 from fastapi.responses import Response
@@ -923,30 +1156,19 @@ def gerar_forecasts_em_lote(
     dept: Departamento = Depends(get_active_department),
     current_user = Depends(get_current_user),
 ):
-    """
-    Automacao Smart: Varre todos os Orcamentos 'Base' aprovados do departamento,
-    verifica quais produtos (Centros de Custo) ainda nao tem Forecast ativo
-    para o ano/tipo solicitado, e os cria automaticamente.
-    """
+    """Inclui no documento da versão rolling os empreendimentos do orçamento aprovado que ainda faltam."""
     tipo = data.tipo.upper()
     ano = data.ano
+    if tipo == "VENDAS":
+        _exigir_vendas(current_user, dept)
 
-    hoje = datetime.now()
-    if ano == hoje.year:
-        meses_realizados = hoje.month - 1
-        meses_projetados = 13 - hoje.month
-    elif ano < hoje.year:
-        meses_realizados, meses_projetados = 12, 0
-    else:
-        meses_realizados, meses_projetados = 0, 12
-    descricao_base = f"{meses_realizados}+{meses_projetados}"
+    descricao = _descricao_forecast_rolling(ano)
 
-    # 1. Busca todos os Orcamentos aprovados/fechados do departamento para o ano e tipo
     orcamentos_base = db.query(Orcamento).filter(
         Orcamento.ano == ano,
         Orcamento.tipo == tipo,
         Orcamento.departamento_id == dept.id,
-        Orcamento.status.in_(["Aprovado", "Fechado"])
+        Orcamento.status.in_(["Aprovado", "Fechado"]),
     ).all()
 
     if not orcamentos_base:
@@ -955,11 +1177,8 @@ def gerar_forecasts_em_lote(
             detail=f"Nenhum Orçamento Base aprovado encontrado para {tipo} {ano} neste departamento."
         )
 
-    ja_tem_forecast = ("Rascunho", "Reaberto", "Em aprovação", "Aprovado", "Fechado")
-
-    # 2. Produtos do orçamento (cabeçalho e linhas)
     produto_ids_base: set[int] = set()
-    orc_por_produto: dict[int, int] = {}  # produto_id -> orcamento_id
+    orc_por_produto: dict[int, int] = {}
     for orc in orcamentos_base:
         if orc.produto_id:
             produto_ids_base.add(orc.produto_id)
@@ -981,91 +1200,62 @@ def gerar_forecasts_em_lote(
     if not produto_ids_base:
         raise HTTPException(status_code=404, detail="Os orçamentos base não possuem itens de produto.")
 
-    # 3. Quem já tem forecast deste ano/tipo não entra de novo
-    forecasts_existentes = db.query(Forecast.produto_id).filter(
-        Forecast.ano == ano,
-        Forecast.tipo == tipo,
-        Forecast.departamento_id == dept.id,
-        Forecast.status.in_(ja_tem_forecast),
-        Forecast.produto_id.isnot(None),
-    ).all()
-    produtos_com_forecast = {pid for (pid,) in forecasts_existentes}
+    docs = _docs_forecast_versao(db, ano, tipo, dept.id, descricao)
+    produtos_com_forecast = _produtos_nos_forecasts(db, docs, tipo)
 
-    # 4. Para cada produto SEM forecast, cria um novo
     criados = []
     ignorados = []
+    remaining = sorted(pid for pid in produto_ids_base if pid not in produtos_com_forecast)
+    for pid in sorted(produto_ids_base):
+        if pid in produtos_com_forecast:
+            ignorados.append(pid)
 
-    for produto_id in sorted(produto_ids_base):
-        if produto_id in produtos_com_forecast:
-            ignorados.append(produto_id)
-            continue
-
-        orc_base_id = orc_por_produto[produto_id]
-        orc_base = db.query(Orcamento).filter(Orcamento.id == orc_base_id).first()
-
-        # Calcula numero de versao para esse produto
-        ultima_versao = db.query(Forecast).filter(
-            Forecast.ano == ano, Forecast.tipo == tipo, Forecast.produto_id == produto_id
-        ).order_by(Forecast.versao_numero.desc()).first()
-        nova_versao_num = (ultima_versao.versao_numero + 1) if ultima_versao else 1
-
-        descricao = f"Forecast - {descricao_base}"
-        if nova_versao_num > 1:
-            descricao += f" (v{nova_versao_num})"
-
-        novo_forecast = Forecast(
+    if remaining:
+        if docs:
+            _assert_forecasts_editaveis(docs)
+        dest = _umbrella_ou_novo(
+            db,
+            docs,
             descricao=descricao,
             ano=ano,
             tipo=tipo,
-            mes_corte=meses_realizados + 1,
-            versao_numero=nova_versao_num,
-            status="Rascunho",
-            usuario_criador_id=current_user.id,
-            departamento_id=dept.id,
-            produto_id=produto_id,
-            versao_base_orcamento_id=orc_base_id
+            current_user=current_user,
+            dept=dept,
+            versao_base_orcamento_id=orc_por_produto.get(remaining[0]),
+            versao_base_forecast_id=None,
         )
-        db.add(novo_forecast)
-        db.flush()  # precisa do id para copiar itens
+        for produto_id in remaining:
+            orc_base_id = orc_por_produto[produto_id]
+            if tipo == "VENDAS":
+                itens_base = db.query(OrcamentoVendaItem).filter(
+                    OrcamentoVendaItem.orcamento_id == orc_base_id,
+                    OrcamentoVendaItem.produto_id == produto_id,
+                ).all()
+                for item in copy_venda_items_to_forecast(itens_base, dest.id, ForecastVendaItem):
+                    if not getattr(item, "ano", None):
+                        item.ano = ano
+                    db.add(item)
+            else:
+                itens_base = db.query(OrcamentoItem).filter(
+                    OrcamentoItem.orcamento_id == orc_base_id,
+                    OrcamentoItem.produto_id == produto_id,
+                ).all()
+                db.bulk_save_objects(copy_monthly_items_to_forecast(itens_base, dest.id, ForecastItem))
 
-        if tipo == "VENDAS":
-            itens_base = db.query(OrcamentoVendaItem).filter(
-                OrcamentoVendaItem.orcamento_id == orc_base_id,
-                OrcamentoVendaItem.produto_id == produto_id,
-            ).all()
-            for item in copy_venda_items_to_forecast(itens_base, novo_forecast.id, ForecastVendaItem):
-                if not getattr(item, "ano", None):
-                    item.ano = ano
-                db.add(item)
-        else:
-            itens_base = db.query(OrcamentoItem).filter(
-                OrcamentoItem.orcamento_id == orc_base_id,
-                OrcamentoItem.produto_id == produto_id,
-            ).all()
-            for ib in itens_base:
-                db.add(ForecastItem(
-                    forecast_id=novo_forecast.id, produto_id=ib.produto_id,
-                    plano_financeiro_id=ib.plano_financeiro_id,
-                    jan=ib.jan, fev=ib.fev, mar=ib.mar, abr=ib.abr,
-                    mai=ib.mai, jun=ib.jun, jul=ib.jul, ago=ib.ago,
-                    set=ib.set, out=ib.out, nov=ib.nov, dez=ib.dez,
-                    total_anual=ib.total_anual,
-                ))
-
-        produto = db.query(CostCenter).filter(CostCenter.id == produto_id).first()
-        criados.append({
-            "forecast_id": novo_forecast.id,
-            "produto_id": produto_id,
-            "produto_nome": produto.nome if produto else f"Produto {produto_id}",
-            "descricao": descricao
-        })
+            produto = db.query(CostCenter).filter(CostCenter.id == produto_id).first()
+            criados.append({
+                "forecast_id": dest.id,
+                "produto_id": produto_id,
+                "produto_nome": produto.nome if produto else f"Produto {produto_id}",
+                "descricao": descricao,
+            })
 
     db.commit()
 
     return {
         "message": f"{len(criados)} Forecast(s) gerado(s) com sucesso.",
         "criados": criados,
-        "ignorados_ja_existentes": ignorados
+        "ignorados_ja_existentes": ignorados,
     }
 
 
