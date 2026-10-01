@@ -27,6 +27,7 @@ import { useHoldingMldu } from "@/hooks/useHoldingMldu";
 import { useActiveDepartmentId } from "@/lib/useActiveDepartmentId";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { ExcelImportModal } from "@/components/orcamento/ExcelImportModal";
+import { CriarOrcamentoModal } from "@/components/orcamento/CriarOrcamentoModal";
 import { MonthSelector } from "@/components/orcamento/MonthSelector";
 import { TableHead } from "@/components/ui/Table";
 import { useTableSort, SortConfig } from "@/hooks/useTableSort";
@@ -46,8 +47,6 @@ export default function OrcamentoDespesasPage() {
   const [ano, setAno] = useState<number>(currentYear);
   const [anosDisponiveis, setAnosDisponiveis] = useState<number[]>([]);
   const [showCriarModal, setShowCriarModal] = useState(false);
-  const [novoAno, setNovoAno] = useState<number>(currentYear);
-  const [produtoCriacaoId, setProdutoCriacaoId] = useState<number | 0>(0);
   const [data, setData] = useState<OrcamentoDespesasResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [saving, setSaving] = useState<boolean>(false);
@@ -121,23 +120,19 @@ export default function OrcamentoDespesasPage() {
     }
   }, [ano, deptId, holdingMldu, anosDisponiveis, user, authLoading]);
 
-  const handleCriarOrcamento = async () => {
-    if (!produtoCriacaoId) {
-      toast.error("Selecione um empreendimento");
-      return;
+  const handleCreated = async (anoCriado: number, produtoId: number) => {
+    setShowCriarModal(false);
+    const anos = await carregarAnos();
+    if (anos.includes(anoCriado)) {
+      setAno(anoCriado);
     }
-    try {
-      await orcamentoService.criar(novoAno, "RECEITAS", deptId, produtoCriacaoId);
-      toast.success(`Orçamento de ${novoAno} criado!`);
-      setShowCriarModal(false);
-      setProdutoCriacaoId(0);
-      const anos = await carregarAnos();
-      if (anos.includes(novoAno)) {
-        setAno(novoAno);
-      }
-    } catch (err: any) {
-      toast.error(err.response?.data?.detail || "Erro ao criar orçamento.");
-    }
+    setExpandedProducts((prev) => prev.includes(produtoId) ? prev : [...prev, produtoId]);
+  };
+
+  const handleDeleteEmpreendimento = async (produtoId: number) => {
+    if (!(await confirmDialog("Tem certeza que deseja excluir os dados deste empreendimento da matriz? A exclusão vale ao clicar em Salvar.", { variant: "danger" }))) return;
+    setLinhas(linhas.filter((l) => l.produto_id !== produtoId));
+    toast.success("Empreendimento removido da matriz. Clique em Salvar para gravar.");
   };
 
   const recalcularTotal = (linha: OrcamentoItemData): OrcamentoItemData => {
@@ -156,9 +151,32 @@ export default function OrcamentoDespesasPage() {
     setLinhas(novasLinhas);
   };
 
+  const adicionarLinhaProduto = (produtoId: number) => {
+    const usados = new Set(linhas.filter((l) => l.produto_id === produtoId).map((l) => l.plano_financeiro_id));
+    const livre = data?.opcoes_planos?.find((p) => !usados.has(p.id));
+    if (!livre) {
+      toast.error("Esta combinação empreendimento + plano já está no orçamento.");
+      return;
+    }
+    setLinhas([...linhas, {
+      produto_id: produtoId,
+      plano_financeiro_id: livre.id,
+      jan: 0, fev: 0, mar: 0, abr: 0, mai: 0, jun: 0, jul: 0, ago: 0, set: 0, out: 0, nov: 0, dez: 0,
+      total_anual: 0,
+      observacao: "",
+    }]);
+    if (!expandedProducts.includes(produtoId)) {
+      setExpandedProducts([...expandedProducts, produtoId]);
+    }
+  };
+
   const adicionarLinha = () => {
     if (!novoProdutoId || !novoPlanoId) {
       toast.error("Selecione um Produto (C.C.) e um Plano Financeiro para adicionar à matriz.");
+      return;
+    }
+    if (linhas.some((l) => l.produto_id === novoProdutoId && l.plano_financeiro_id === novoPlanoId)) {
+      toast.error("Esta combinação empreendimento + plano já está no orçamento.");
       return;
     }
     const novaLinha: OrcamentoItemData = {
@@ -419,6 +437,18 @@ export default function OrcamentoDespesasPage() {
                           <td className="px-3 py-3 font-bold text-slate-800 flex items-center whitespace-nowrap sticky left-0 z-10 bg-slate-50 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)] group-hover:bg-slate-100">
                             {isExpanded ? <ChevronDown size={16} className="mr-1 text-brand-600" /> : <ChevronRight size={16} className="mr-1 text-slate-400" />}
                             {produto ? `${produto.id_sienge ? produto.id_sienge + ' - ' : ''}${produto.nome}` : `Produto #${produtoId}`}
+                            <div className="ml-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              {!isBlocked && (
+                                <>
+                                  <button onClick={(e) => { e.stopPropagation(); adicionarLinhaProduto(produtoId); }} className="text-brand-600 hover:text-brand-700 p-1 bg-white rounded shadow-sm border border-brand-200" title="Adicionar Linha">
+                                    <Plus size={14} />
+                                  </button>
+                                  <button onClick={(e) => { e.stopPropagation(); handleDeleteEmpreendimento(produtoId); }} className="text-red-500 hover:text-red-600 p-1 bg-white rounded shadow-sm border border-red-200" title="Excluir Empreendimento">
+                                    <Trash2 size={14} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
                           </td>
                           {mesesVisiveis.map(mes => (
                             <td key={`prod-m-${mes}`} className="px-3 py-2 text-right border-l border-slate-200 bg-slate-50 font-semibold text-brand-700">
@@ -444,8 +474,14 @@ export default function OrcamentoDespesasPage() {
                                     value={linha.plano_financeiro_id}
                                     disabled={isBlocked}
                                     onChange={(e) => {
+                                      const novoPlano = Number(e.target.value);
+                                      const duplicada = linhas.some((l, i) => i !== globalIdx && l.produto_id === linha.produto_id && l.plano_financeiro_id === novoPlano);
+                                      if (duplicada) {
+                                        toast.error("Esta combinação empreendimento + plano já está no orçamento.");
+                                        return;
+                                      }
                                       const novas = [...linhas];
-                                      novas[globalIdx].plano_financeiro_id = Number(e.target.value);
+                                      novas[globalIdx].plano_financeiro_id = novoPlano;
                                       setLinhas(novas);
                                     }}
                                   >
@@ -581,36 +617,13 @@ export default function OrcamentoDespesasPage() {
       )}
 
       {showCriarModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-sm">
-            <h2 className="text-lg font-bold text-slate-800 mb-4">Criar Novo Orçamento</h2>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Ano do Orçamento</label>
-              <input
-                type="number"
-                className="w-full p-2 border border-slate-300 rounded-md shadow-sm focus:border-brand-500 focus:ring-brand-500"
-                value={novoAno}
-                onChange={(e) => setNovoAno(Number(e.target.value))}
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Empreendimento</label>
-              <SearchableSelect
-                options={data?.opcoes_produtos?.map((p: any) => ({
-                  id: p.id,
-                  label: p.id_sienge ? `${p.id_sienge} - ${p.nome}` : p.nome
-                })) || []}
-                value={produtoCriacaoId}
-                onChange={(val) => setProdutoCriacaoId(Number(val))}
-                placeholder="Pesquise ou selecione..."
-              />
-            </div>
-            <div className="flex justify-end space-x-3">
-              <Button variant="outline" onClick={() => setShowCriarModal(false)}>Cancelar</Button>
-              <Button variant="primary" onClick={handleCriarOrcamento}>Criar</Button>
-            </div>
-          </div>
-        </div>
+        <CriarOrcamentoModal
+          tipo="RECEITAS"
+          deptId={deptId}
+          anoInicial={ano}
+          onClose={() => setShowCriarModal(false)}
+          onCreated={handleCreated}
+        />
       )}
     </BudgetMatrixShell>
   );

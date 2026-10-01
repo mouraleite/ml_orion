@@ -16,16 +16,20 @@ from app.models.auditoria import Auditoria
 from app.models.forecast import Forecast, ForecastItem, ForecastVendaItem
 from app.services.periodos import (
     MESES_STR, mes_fechado_alterado, meses_fechados_do_ano,
-    soma_meses_obj, skip_linha_total_zero
+    soma_meses_obj,
 )
 from app.services.auth_matrix import validate_budget_allocation
 from app.services.budget_shared import (
+    DESCRICAO_DOCUMENTO_ORCAMENTO,
+    STATUS_ORCAMENTO_BLOQUEADO,
     build_empresas_map,
     build_opcoes_planos,
     build_opcoes_produtos,
     check_pessimistic_lock,
     group_venda_items,
     merge_catalog_with_used_items,
+    orcamentos_da_versao_visualizacao,
+    pode_editar_orcamento_vendas,
     resolve_orcamento_monthly_catalog,
     serialize_base_monthly_item,
     serialize_monthly_item_row,
@@ -52,6 +56,8 @@ from app.services.budget_status import (
     resolver_transicao,
 )
 from datetime import datetime
+from collections import Counter
+from types import SimpleNamespace
 import io
 
 router = APIRouter()
@@ -98,6 +104,75 @@ def _orcamentos_mensais_do_departamento(
         .all()
     )
     return orcamento_ref, orcamentos_do_grupo
+
+
+def _exigir_vendas(current_user, dept: Departamento) -> None:
+    if not pode_editar_orcamento_vendas(current_user, dept):
+        raise HTTPException(status_code=403, detail="Restrito ao departamento Vendas.")
+
+
+def _nome_empreendimento(db: Session, produto_id: int) -> str:
+    p = db.query(CostCenter).filter(CostCenter.id == produto_id).first()
+    if not p:
+        return str(produto_id)
+    if p.id_sienge:
+        return f"{p.id_sienge} - {p.nome}"
+    return p.nome or str(produto_id)
+
+
+def _docs_ativos_dept(db: Session, ano: int, tipo: str, dept_id: int) -> list[Orcamento]:
+    return (
+        db.query(Orcamento)
+        .filter(
+            Orcamento.ano == ano,
+            Orcamento.tipo == tipo,
+            Orcamento.departamento_id == dept_id,
+            Orcamento.status != "Substituído",
+        )
+        .order_by(Orcamento.versao_numero.desc(), Orcamento.id.desc())
+        .all()
+    )
+
+
+def _produtos_nos_docs(db: Session, docs: list[Orcamento], tipo: str) -> set[int]:
+    ids: set[int] = set()
+    for orc in docs:
+        if orc.produto_id:
+            ids.add(orc.produto_id)
+        if tipo == "VENDAS":
+            rows = (
+                db.query(OrcamentoVendaItem.produto_id)
+                .filter(OrcamentoVendaItem.orcamento_id == orc.id)
+                .distinct()
+                .all()
+            )
+        else:
+            rows = (
+                db.query(OrcamentoItem.produto_id)
+                .filter(OrcamentoItem.orcamento_id == orc.id)
+                .distinct()
+                .all()
+            )
+        for (pid,) in rows:
+            if pid is not None:
+                ids.add(pid)
+    return ids
+
+
+def _assert_docs_editaveis(docs: list[Orcamento]) -> None:
+    for orc in docs:
+        if orc.status in STATUS_ORCAMENTO_BLOQUEADO:
+            raise HTTPException(
+                status_code=403,
+                detail="O orçamento deste departamento está em aprovação ou fechado. Não é possível alterar.",
+            )
+
+
+def _linha_mensal_sem_valor(item_data) -> bool:
+    if getattr(item_data, "observacao", None):
+        return False
+    return soma_meses_obj(item_data) == 0
+
 
 # Schemas Comuns
 class OrcamentoItemCreate(BaseModel):
@@ -146,6 +221,8 @@ class OrcamentoCreateRequest(BaseModel):
     ano: int
     tipo: str
     produto_id: Optional[int] = None
+    plano_financeiro_id: Optional[int] = None
+    plano_venda_id: Optional[int] = None
 
 # ==================== GERENCIAMENTO ====================
 
@@ -164,46 +241,132 @@ def get_anos_disponiveis(
     anos = query.distinct().all()
     return {"anos": sorted([a[0] for a in anos])}
 
+
+@router.get("/catalogo")
+def get_catalogo_orcamento(
+    tipo: str,
+    db: Session = Depends(get_db),
+    dept: Departamento = Depends(get_active_department),
+    current_user=Depends(get_current_user),
+):
+    """Empreendimentos e planos do departamento, mesmo sem orçamento no ano."""
+    tipo = tipo.upper()
+    if tipo not in ("DESPESAS", "RECEITAS", "VENDAS"):
+        raise HTTPException(400, "Tipo inválido.")
+    if tipo == "VENDAS":
+        _exigir_vendas(current_user, dept)
+        produtos = db.query(CostCenter).filter(CostCenter.status == "Ativo").all()
+        planos = db.query(PaymentPlan).all()
+        empresas_map = build_empresas_map(db)
+        return {
+            "opcoes_produtos": build_opcoes_produtos(produtos, empresas_map),
+            "opcoes_planos": build_opcoes_planos(planos, nome_attr="nome"),
+        }
+    prefix = "2" if tipo == "DESPESAS" else "1"
+    planos_permitidos, produtos_permitidos, _ = resolve_orcamento_monthly_catalog(
+        db, dept, False, current_user, prefix
+    )
+    empresas_map = build_empresas_map(db)
+    return {
+        "opcoes_produtos": build_opcoes_produtos(produtos_permitidos, empresas_map),
+        "opcoes_planos": build_opcoes_planos(planos_permitidos),
+    }
+
+
 @router.post("/criar")
 def criar_orcamento(
     data: OrcamentoCreateRequest,
     db: Session = Depends(get_db),
     dept: Departamento = Depends(get_active_department),
-    current_user = Depends(get_current_user)
+    current_user=Depends(get_current_user),
 ):
     tipo = data.tipo.upper()
     if tipo not in ["DESPESAS", "RECEITAS", "VENDAS"]:
         raise HTTPException(400, "Tipo inválido.")
-        
-    if tipo == "VENDAS" and not is_admin_user(current_user) and dept.nome.upper() != "COMERCIAL":
-        raise HTTPException(status_code=403, detail="Restrito ao Comercial.")
-        
+
+    if tipo == "VENDAS":
+        _exigir_vendas(current_user, dept)
+
     if not data.produto_id:
-        raise HTTPException(status_code=400, detail="Centro de Custo (Empreendimento) é obrigatório para criação.")
+        raise HTTPException(
+            status_code=400,
+            detail="Centro de Custo (Empreendimento) é obrigatório para criação.",
+        )
 
-    descricao = f"Orçamento Base"
+    docs = _docs_ativos_dept(db, data.ano, tipo, dept.id)
+    nome = _nome_empreendimento(db, data.produto_id)
+    if data.produto_id in _produtos_nos_docs(db, docs, tipo):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Já existe orçamento criado para o empreendimento {nome} em {data.ano}. "
+                "Não é possível criar outro."
+            ),
+        )
 
-    existente = db.query(Orcamento).filter(
-        Orcamento.ano == data.ano,
-        Orcamento.tipo == tipo,
-        Orcamento.departamento_id == dept.id,
-        Orcamento.produto_id == data.produto_id,
-        Orcamento.status != 'Substituído'
-    ).first()
-    
-    if existente:
-        raise HTTPException(400, f"Já existe um {descricao} para este Empreendimento. Acesse-o na lista para alterar.")
-        
-    orcamento = Orcamento(
-        descricao=descricao,
-        ano=data.ano,
-        tipo=tipo,
-        versao_numero=1,
-        usuario_criador_id=current_user.id,
-        departamento_id=dept.id,
-        produto_id=data.produto_id
-    )
-    db.add(orcamento)
+    if docs:
+        _assert_docs_editaveis(docs)
+        orcamento = docs[0]
+    else:
+        orcamento = Orcamento(
+            descricao=DESCRICAO_DOCUMENTO_ORCAMENTO,
+            ano=data.ano,
+            tipo=tipo,
+            versao_numero=1,
+            usuario_criador_id=current_user.id,
+            departamento_id=dept.id,
+            produto_id=None,
+        )
+        db.add(orcamento)
+        db.flush()
+
+    if tipo == "VENDAS":
+        if not data.plano_venda_id:
+            if not docs:
+                db.commit()
+                return {"message": "Criado com sucesso!", "orcamento_id": orcamento.id}
+            raise HTTPException(400, "Plano de venda é obrigatório para incluir o empreendimento.")
+        db.add(
+            OrcamentoVendaItem(
+                orcamento_id=orcamento.id,
+                produto_id=data.produto_id,
+                plano_venda_id=data.plano_venda_id,
+                mes=1,
+                ano=data.ano,
+                ticket_medio=0.0,
+                numero_vendas=0,
+                vgv=0.0,
+            )
+        )
+    else:
+        if not data.plano_financeiro_id:
+            if not docs:
+                db.commit()
+                return {"message": "Criado com sucesso!", "orcamento_id": orcamento.id}
+            raise HTTPException(
+                400, "Plano financeiro é obrigatório para incluir o empreendimento."
+            )
+        if not validate_budget_allocation(
+            db=db,
+            departamento_id=dept.id,
+            produto_id=data.produto_id,
+            plano_financeiro_id=data.plano_financeiro_id,
+        ):
+            db.rollback()
+            raise HTTPException(
+                403,
+                "Este empreendimento/plano não está liberado para o seu departamento.",
+            )
+        db.add(
+            OrcamentoItem(
+                orcamento_id=orcamento.id,
+                produto_id=data.produto_id,
+                plano_financeiro_id=data.plano_financeiro_id,
+                **{m: 0.0 for m in MESES_STR},
+                total_anual=0.0,
+            )
+        )
+
     db.commit()
     return {"message": "Criado com sucesso!", "orcamento_id": orcamento.id}
 
@@ -291,7 +454,7 @@ def salvar_orcamento_despesas(
     dept: Departamento = Depends(get_active_department),
     current_user = Depends(get_current_user)
 ):
-    orcamento_ref = db.query(Orcamento).filter(Orcamento.ano == ano, Orcamento.tipo == 'DESPESAS', Orcamento.departamento_id == dept.id, Orcamento.status != 'Substituído').order_by(Orcamento.versao_numero.desc()).first()
+    orcamento_ref = db.query(Orcamento).filter(Orcamento.ano == ano, Orcamento.tipo == 'DESPESAS', Orcamento.departamento_id == dept.id, Orcamento.status != 'Substituído').order_by(Orcamento.versao_numero.desc(), Orcamento.id.desc()).first()
     if not orcamento_ref:
         raise HTTPException(status_code=404, detail="Orçamento não encontrado.")
         
@@ -303,43 +466,48 @@ def salvar_orcamento_despesas(
         Orcamento.descricao == orcamento_ref.descricao
     ).all()
 
-    orc_por_produto = {orc.produto_id: orc for orc in orcamentos_do_grupo}
     meses_fechados = meses_fechados_do_ano(db, ano)
 
     atuais = {}
     for orc in orcamentos_do_grupo:
-        if orc.status in ["Aprovado", "Fechado", "Em aprovação"]:
-            raise HTTPException(status_code=403, detail=f"O Orçamento do Empreendimento {orc.produto_id} está bloqueado para edição.")
+        if orc.status in STATUS_ORCAMENTO_BLOQUEADO:
+            raise HTTPException(status_code=403, detail="O orçamento deste departamento está bloqueado para edição.")
 
         for item in db.query(OrcamentoItem).filter(OrcamentoItem.orcamento_id == orc.id).all():
             atuais[(item.produto_id, item.plano_financeiro_id)] = item
+
+    seen_keys: set[tuple] = set()
+    for item_data in data.itens:
+        key = (item_data.produto_id, item_data.plano_financeiro_id)
+        if key in seen_keys:
+            raise HTTPException(
+                400,
+                "Esta combinação empreendimento + plano já está no orçamento.",
+            )
+        seen_keys.add(key)
+        mes_travado = mes_fechado_alterado(
+            item_data, atuais.get(key), meses_fechados
+        )
+        if mes_travado:
+            raise HTTPException(403, f"O mês {mes_travado} está fechado e não pode ser alterado.")
+
+    por_produto = Counter(item_data.produto_id for item_data in data.itens)
 
     for orc in orcamentos_do_grupo:
         db.query(OrcamentoItem).filter(OrcamentoItem.orcamento_id == orc.id).delete()
     
     novos_itens = []
     for item_data in data.itens:
-        if skip_linha_total_zero(item_data):
+        if _linha_mensal_sem_valor(item_data) and por_produto[item_data.produto_id] > 1:
             continue
-            
-        orc_destino = orc_por_produto.get(item_data.produto_id)
-        if not orc_destino:
-            raise HTTPException(400, f"O Empreendimento {item_data.produto_id} não possui Orçamento Base criado. Crie-o primeiro.")
             
         tem_permissao = validate_budget_allocation(db=db, departamento_id=dept.id, produto_id=item_data.produto_id, plano_financeiro_id=item_data.plano_financeiro_id)
         if not tem_permissao:
             db.rollback()
             raise HTTPException(403, f"Permissão negada (Produto {item_data.produto_id} x Plano {item_data.plano_financeiro_id}).")
 
-        mes_travado = mes_fechado_alterado(
-            item_data, atuais.get((item_data.produto_id, item_data.plano_financeiro_id)), meses_fechados
-        )
-        if mes_travado:
-            db.rollback()
-            raise HTTPException(403, f"O mês {mes_travado} está fechado e não pode ser alterado.")
-            
         novos_itens.append(OrcamentoItem(
-            orcamento_id=orc_destino.id, produto_id=item_data.produto_id, plano_financeiro_id=item_data.plano_financeiro_id,
+            orcamento_id=orcamento_ref.id, produto_id=item_data.produto_id, plano_financeiro_id=item_data.plano_financeiro_id,
             jan=item_data.jan, fev=item_data.fev, mar=item_data.mar, abr=item_data.abr, 
             mai=item_data.mai, jun=item_data.jun, jul=item_data.jul, ago=item_data.ago, 
             set=item_data.set, out=item_data.out, nov=item_data.nov, dez=item_data.dez,
@@ -434,36 +602,57 @@ def salvar_orcamento_receitas(
     dept: Departamento = Depends(get_active_department),
     current_user = Depends(get_current_user)
 ):
-    orcamento = db.query(Orcamento).filter(Orcamento.ano == ano, Orcamento.tipo == 'RECEITAS').order_by(Orcamento.versao_numero.desc()).first()
+    orcamento = db.query(Orcamento).filter(
+        Orcamento.ano == ano,
+        Orcamento.tipo == 'RECEITAS',
+        Orcamento.departamento_id == dept.id,
+        Orcamento.status != 'Substituído',
+    ).order_by(Orcamento.versao_numero.desc(), Orcamento.id.desc()).first()
     if not orcamento:
         raise HTTPException(status_code=404, detail="Orçamento não encontrado.")
         
-    if orcamento.status in ["Aprovado", "Fechado", "Em aprovação"]:
+    if orcamento.status in STATUS_ORCAMENTO_BLOQUEADO:
         raise HTTPException(status_code=403, detail="Orçamento bloqueado para edição. Solicite reabertura.")
 
-    meses_fechados = meses_fechados_do_ano(db, ano)
-    atuais = {
-        (item.produto_id, item.plano_financeiro_id): item
-        for item in db.query(OrcamentoItem).filter(OrcamentoItem.orcamento_id == orcamento.id).all()
-    }
+    orcamentos_do_grupo = db.query(Orcamento).filter(
+        Orcamento.ano == ano,
+        Orcamento.tipo == 'RECEITAS',
+        Orcamento.departamento_id == dept.id,
+        Orcamento.status != 'Substituído',
+        Orcamento.descricao == orcamento.descricao,
+    ).all()
 
-    db.query(OrcamentoItem).filter(OrcamentoItem.orcamento_id == orcamento.id).delete()
+    meses_fechados = meses_fechados_do_ano(db, ano)
+    atuais = {}
+    for orc in orcamentos_do_grupo:
+        if orc.status in STATUS_ORCAMENTO_BLOQUEADO:
+            raise HTTPException(status_code=403, detail="Orçamento bloqueado para edição. Solicite reabertura.")
+        for item in db.query(OrcamentoItem).filter(OrcamentoItem.orcamento_id == orc.id).all():
+            atuais[(item.produto_id, item.plano_financeiro_id)] = item
+
+    seen_keys: set[tuple] = set()
+    for item_data in data.itens:
+        key = (item_data.produto_id, item_data.plano_financeiro_id)
+        if key in seen_keys:
+            raise HTTPException(400, "Esta combinação empreendimento + plano já está no orçamento.")
+        seen_keys.add(key)
+        mes_travado = mes_fechado_alterado(item_data, atuais.get(key), meses_fechados)
+        if mes_travado:
+            raise HTTPException(403, f"O mês {mes_travado} está fechado e não pode ser alterado.")
+
+    por_produto = Counter(item_data.produto_id for item_data in data.itens)
+
+    for orc in orcamentos_do_grupo:
+        db.query(OrcamentoItem).filter(OrcamentoItem.orcamento_id == orc.id).delete()
     
     novos_itens = []
     for item_data in data.itens:
-        if skip_linha_total_zero(item_data):
+        if _linha_mensal_sem_valor(item_data) and por_produto[item_data.produto_id] > 1:
             continue
         tem_permissao = validate_budget_allocation(db=db, departamento_id=dept.id, produto_id=item_data.produto_id, plano_financeiro_id=item_data.plano_financeiro_id)
         if not tem_permissao:
             db.rollback()
             raise HTTPException(403, f"Permissão negada (Prod {item_data.produto_id} x Plano {item_data.plano_financeiro_id}).")
-
-        mes_travado = mes_fechado_alterado(
-            item_data, atuais.get((item_data.produto_id, item_data.plano_financeiro_id)), meses_fechados
-        )
-        if mes_travado:
-            db.rollback()
-            raise HTTPException(403, f"O mês {mes_travado} está fechado e não pode ser alterado.")
             
         _total = soma_meses_obj(item_data)
         novos_itens.append(OrcamentoItem(
@@ -489,8 +678,7 @@ def get_orcamento_vendas(
 ):
     _ = consolidado  # Onda A: legado ignorado
     is_consolidado = False
-    if not is_admin_user(current_user) and dept.nome.upper() != "COMERCIAL":
-        raise HTTPException(status_code=403, detail="Restrito ao Comercial.")
+    _exigir_vendas(current_user, dept)
 
     orcamento_ref, orcamentos_do_grupo = _orcamentos_mensais_do_departamento(
         db, ano, "VENDAS", dept
@@ -558,8 +746,7 @@ def salvar_orcamento_vendas(
     dept: Departamento = Depends(get_active_department),
     current_user = Depends(get_current_user)
 ):
-    if not is_admin_user(current_user) and dept.nome.upper() != "COMERCIAL":
-        raise HTTPException(status_code=403, detail="Restrito ao Comercial.")
+    _exigir_vendas(current_user, dept)
 
     orcamento_ref, orcamentos_do_grupo = _orcamentos_mensais_do_departamento(
         db, ano, "VENDAS", dept, leitura=False
@@ -567,50 +754,66 @@ def salvar_orcamento_vendas(
     if not orcamento_ref:
         raise HTTPException(status_code=404, detail="Orçamento não encontrado.")
 
-    orc_por_produto = {orc.produto_id: orc for orc in orcamentos_do_grupo}
     meses_fechados_idx = meses_fechados_do_ano(db, ano)
 
-    # Valor gravado hoje: em mês fechado ele é o que vale (o orçamento é a própria base)
     atuais = {}
     for orc in orcamentos_do_grupo:
-        if orc.status in ["Aprovado", "Fechado", "Em aprovação"]:
+        if orc.status in STATUS_ORCAMENTO_BLOQUEADO:
             raise HTTPException(
                 status_code=403,
-                detail=f"O Orçamento do Empreendimento {orc.produto_id} está bloqueado para edição.",
+                detail="O orçamento deste departamento está bloqueado para edição.",
             )
         for item in db.query(OrcamentoVendaItem).filter(OrcamentoVendaItem.orcamento_id == orc.id).all():
             atuais[(item.produto_id, item.plano_venda_id, item.mes)] = item
+
+    seen_linhas: set[tuple] = set()
+    for linha in data.itens:
+        dist = "Distrato" in str(linha.observacao or "") or any(
+            (m.numero_vendas or 0) < 0 for m in linha.meses
+        )
+        key = (linha.produto_id, linha.plano_venda_id, dist)
+        if key in seen_linhas:
+            raise HTTPException(400, "Esta combinação empreendimento + plano já está no orçamento.")
+        seen_linhas.add(key)
+
+    por_produto = Counter(linha.produto_id for linha in data.itens)
+
+    for linha in data.itens:
+        for mes_data in linha.meses:
+            if mes_data.mes in meses_fechados_idx:
+                atual = atuais.get((linha.produto_id, linha.plano_venda_id, mes_data.mes))
+                ticket_val = atual.ticket_medio if atual else 0.0
+                vendas_val = atual.numero_vendas if atual else 0
+                if mes_data.ticket_medio != ticket_val or mes_data.numero_vendas != vendas_val:
+                    raise HTTPException(403, f"O mês {mes_data.mes} está fechado e não pode ser alterado.")
 
     for orc in orcamentos_do_grupo:
         db.query(OrcamentoVendaItem).filter(OrcamentoVendaItem.orcamento_id == orc.id).delete()
 
     novos_itens = []
     for linha in data.itens:
+        meses_uteis = []
         for mes_data in linha.meses:
-            if mes_data.numero_vendas == 0 and mes_data.ticket_medio == 0 and not linha.observacao:
+            vazio = mes_data.numero_vendas == 0 and mes_data.ticket_medio == 0 and not linha.observacao
+            if vazio and por_produto[linha.produto_id] > 1:
                 continue
+            meses_uteis.append(mes_data)
+        if not meses_uteis and por_produto[linha.produto_id] == 1:
+            meses_uteis = [SimpleNamespace(mes=1, ticket_medio=0.0, numero_vendas=0, vgv=0.0)]
 
-            orc_destino = orc_por_produto.get(linha.produto_id)
-            if not orc_destino:
-                raise HTTPException(
-                    400,
-                    f"O Empreendimento {linha.produto_id} não possui Orçamento Base criado. Crie-o primeiro.",
-                )
-
+        for mes_data in meses_uteis:
             if mes_data.mes in meses_fechados_idx:
                 atual = atuais.get((linha.produto_id, linha.plano_venda_id, mes_data.mes))
                 ticket_val = atual.ticket_medio if atual else 0.0
                 vendas_val = atual.numero_vendas if atual else 0
                 vgv_val = atual.vgv if atual else 0.0
-                if mes_data.ticket_medio != ticket_val or mes_data.numero_vendas != vendas_val:
-                    raise HTTPException(403, f"O mês {mes_data.mes} está fechado e não pode ser alterado.")
             else:
                 ticket_val = mes_data.ticket_medio
                 vendas_val = mes_data.numero_vendas
                 vgv_val = mes_data.vgv
 
             novos_itens.append(OrcamentoVendaItem(
-                orcamento_id=orc_destino.id, produto_id=linha.produto_id,
+                orcamento_id=orcamento_ref.id, produto_id=linha.produto_id,
                 plano_venda_id=linha.plano_venda_id, mes=mes_data.mes,
                 numero_vendas=vendas_val, ticket_medio=ticket_val, vgv=vgv_val,
                 observacao=linha.observacao,
@@ -673,9 +876,8 @@ def get_comparativo_versoes(
         linhas = []
         if is_consolidado:
             if is_orc:
-                orcs = db.query(Orcamento).filter(Orcamento.ano == ano, Orcamento.descricao == identifier).all()
-                for o in orcs:
-                    if o.tipo == "DESPESAS" or o.tipo == "RECEITAS":
+                for t in ("DESPESAS", "RECEITAS"):
+                    for o in orcamentos_da_versao_visualizacao(db, ano, t, 0, identifier):
                         linhas.extend(getattr(o, "itens_despesa", []))
             else:
                 q = db.query(Forecast).filter(Forecast.ano == ano, Forecast.descricao == identifier)
@@ -685,12 +887,7 @@ def get_comparativo_versoes(
                         linhas.extend(getattr(f, "itens_despesa", []))
         else:
             if is_orc:
-                q = db.query(Orcamento).filter(Orcamento.ano == ano, Orcamento.descricao == identifier, Orcamento.tipo == tipo)
-                if not is_consolidado:
-                    orcs = q.filter(criterio_departamento(Orcamento.departamento_id, db, dept)).all()
-                else:
-                    orcs = q.all()
-                    
+                orcs = orcamentos_da_versao_visualizacao(db, ano, tipo, dept.id, identifier)
                 for o in orcs:
                     if tipo == "VENDAS": linhas.extend(getattr(o, "itens_venda", []))
                     else: linhas.extend(getattr(o, "itens_despesa", []))
@@ -971,6 +1168,20 @@ async def importar_excel(
     tipo = tipo.upper()
     if tipo not in ("DESPESAS", "RECEITAS", "VENDAS"):
         raise HTTPException(status_code=400, detail="Tipo inválido.")
+    if tipo == "VENDAS":
+        _exigir_vendas(current_user, dept)
+
+    orc_existente = db.query(Orcamento).filter(
+        Orcamento.ano == ano,
+        Orcamento.tipo == tipo,
+        Orcamento.departamento_id == dept.id,
+        Orcamento.status != "Substituído",
+    ).order_by(Orcamento.versao_numero.desc(), Orcamento.id.desc()).first()
+    if orc_existente and orc_existente.status in STATUS_ORCAMENTO_BLOQUEADO:
+        raise HTTPException(
+            status_code=403,
+            detail="O orçamento deste departamento está em aprovação ou fechado. A importação foi recusada.",
+        )
 
     conteudo = await file.read()
     try:
@@ -997,17 +1208,22 @@ async def importar_excel(
             "erros": erros,
         }
 
-    # ── Busca ou cria o orçamento ativo ───────────────────────────────────
     orc = db.query(Orcamento).filter(
         Orcamento.ano == ano,
         Orcamento.tipo == tipo,
         Orcamento.departamento_id == dept.id,
-        Orcamento.status.in_(["Rascunho", "Reaberto"]),
-    ).order_by(Orcamento.id.desc()).first()
+        Orcamento.status != "Substituído",
+    ).order_by(Orcamento.versao_numero.desc(), Orcamento.id.desc()).first()
+
+    if orc and orc.status in STATUS_ORCAMENTO_BLOQUEADO:
+        raise HTTPException(
+            status_code=403,
+            detail="O orçamento deste departamento está em aprovação ou fechado. A importação foi recusada.",
+        )
 
     if not orc:
         orc = Orcamento(
-            descricao=f"Importado via Excel — {tipo} {ano}",
+            descricao=DESCRICAO_DOCUMENTO_ORCAMENTO,
             ano=ano,
             tipo=tipo,
             status="Rascunho",
@@ -1016,11 +1232,20 @@ async def importar_excel(
             versao_numero=1,
         )
         db.add(orc)
-        db.flush()  # Gera o ID
+        db.flush()
+
+    grupo = db.query(Orcamento).filter(
+        Orcamento.ano == ano,
+        Orcamento.tipo == tipo,
+        Orcamento.departamento_id == dept.id,
+        Orcamento.status != "Substituído",
+        Orcamento.descricao == orc.descricao,
+    ).all()
 
     # ── Substitui todos os itens (tudo-ou-nada) ───────────────────────────
     if tipo == "VENDAS":
-        db.query(OrcamentoVendaItem).filter(OrcamentoVendaItem.orcamento_id == orc.id).delete()
+        for doc in grupo:
+            db.query(OrcamentoVendaItem).filter(OrcamentoVendaItem.orcamento_id == doc.id).delete()
         for linha in linhas_validas:
             db.add(OrcamentoVendaItem(
                 orcamento_id=orc.id,
@@ -1034,7 +1259,8 @@ async def importar_excel(
                 origem_venda=linha.get("origem_venda"),
             ))
     else:
-        db.query(OrcamentoItem).filter(OrcamentoItem.orcamento_id == orc.id).delete()
+        for doc in grupo:
+            db.query(OrcamentoItem).filter(OrcamentoItem.orcamento_id == doc.id).delete()
         for linha in linhas_validas:
             db.add(OrcamentoItem(
                 orcamento_id=orc.id,

@@ -41,9 +41,23 @@ export interface OrcamentoItemData {
 }
 
 export const orcamentoService = {
-  criar: async (ano: number, tipo: string, departamento_id: number, produto_id?: number) => {
-    const response = await api.post(`/orcamentos/criar`, { ano, tipo, produto_id }, { headers: { 'X-Department-Id': departamento_id } });
+  criar: async (
+    ano: number,
+    tipo: string,
+    departamento_id: number,
+    produto_id?: number,
+    extra?: { plano_financeiro_id?: number; plano_venda_id?: number },
+  ) => {
+    const response = await api.post(
+      `/orcamentos/criar`,
+      { ano, tipo, produto_id, ...extra },
+      { headers: { 'X-Department-Id': departamento_id } },
+    );
     return response.data;
+  },
+  getCatalogo: async (tipo: string, deptId: number): Promise<{ opcoes_produtos: OpcaoProduto[]; opcoes_planos: OpcaoPlano[] }> => {
+    const { data } = await api.get(`/orcamentos/catalogo?tipo=${tipo}`, deptHeader(deptId));
+    return data;
   },
   delete: async (id: number) => {
     const response = await api.delete(`/orcamentos/${id}`);

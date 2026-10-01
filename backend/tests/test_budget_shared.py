@@ -176,11 +176,16 @@ def _soma_por_plano(linhas):
 
 
 def test_assinar_itens_dfc_bate_com_a_regra_linha_a_linha():
-    """Leitura em lote do comparativo DFC: mesmos totais da regra antiga (filtro, redutora, primeira linha)."""
+    """Leitura em lote do comparativo DFC: filtro, redutora e soma por produto+plano."""
     from app.services.budget_shared import assinar_itens_mensais_dfc
     from app.services.periodos import MESES_STR
 
-    planos = {
+    planos_desp = {
+        10: SimpleNamespace(id=10, db_id="201", name="Vendas", fl_redutora="N"),
+        20: SimpleNamespace(id=20, db_id="202", name="Retenção IR", fl_redutora="N"),
+        30: SimpleNamespace(id=30, db_id="301", name="Fora", fl_redutora="N"),
+    }
+    planos_rec = {
         10: SimpleNamespace(id=10, db_id="101", name="Vendas", fl_redutora="N"),
         20: SimpleNamespace(id=20, db_id="201", name="Retenção IR", fl_redutora="N"),
         30: SimpleNamespace(id=30, db_id="301", name="Fora", fl_redutora="N"),
@@ -195,35 +200,33 @@ def test_assinar_itens_dfc_bate_com_a_regra_linha_a_linha():
 
     def referencia(itens, planos_por_id, tipo):
         prefix = "2" if tipo == "DESPESAS" else "1"
-        seen = set()
-        out = []
+        buckets = {}
         for item in itens:
             plano = planos_por_id.get(item.plano_financeiro_id)
             if not plano or not str(plano.db_id or "").startswith(prefix):
                 continue
             key = (item.produto_id, item.plano_financeiro_id)
-            if key in seen:
-                continue
-            seen.add(key)
             redutora = str(plano.fl_redutora or "").upper() == "S" or "reten" in str(plano.name or "").lower()
-            row = {"produto_id": item.produto_id, "plano_financeiro_id": item.plano_financeiro_id}
+            row = buckets.setdefault(key, {"produto_id": item.produto_id, "plano_financeiro_id": item.plano_financeiro_id, **{m: 0.0 for m in MESES_STR}})
             for m in MESES_STR:
                 val = float(getattr(item, m) or 0)
-                row[m] = -abs(val) if redutora else val
-            out.append(row)
-        return out
+                row[m] += -abs(val) if redutora else val
+        return list(buckets.values())
 
-    got = assinar_itens_mensais_dfc(linhas, planos, "DESPESAS")
-    ref = referencia(linhas, planos, "DESPESAS")
+    got = assinar_itens_mensais_dfc(linhas, planos_desp, "DESPESAS")
+    ref = referencia(linhas, planos_desp, "DESPESAS")
     assert _soma_por_plano(got) == _soma_por_plano(ref)
-    assert got[0]["produto_id"] == 1 and got[0]["jan"] == -12.0
-    assert len(got) == 1
+    par_10 = next(r for r in got if r["produto_id"] == 1 and r["plano_financeiro_id"] == 10)
+    assert par_10["jan"] == 1099.0
+    reten = next(r for r in got if r["plano_financeiro_id"] == 20)
+    assert reten["jan"] == -12.0
+    assert len(got) == 3
 
-    got_rec = assinar_itens_mensais_dfc(linhas, planos, "RECEITAS")
-    ref_rec = referencia(linhas, planos, "RECEITAS")
+    got_rec = assinar_itens_mensais_dfc(linhas, planos_rec, "RECEITAS")
+    ref_rec = referencia(linhas, planos_rec, "RECEITAS")
     assert _soma_por_plano(got_rec) == _soma_por_plano(ref_rec)
-    por_produto = {r["produto_id"]: r["jan"] for r in got_rec}
-    assert por_produto == {1: 100.0, 2: 40.0}
+    por_par = {(r["produto_id"], r["plano_financeiro_id"]): r["jan"] for r in got_rec}
+    assert por_par == {(1, 10): 1099.0, (2, 10): 40.0}
 
 
 def test_ordenar_versoes_orçamento_depois_forecasts():

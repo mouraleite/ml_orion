@@ -89,7 +89,7 @@ class TestOrcamentoDespesasTotais:
         assert item.fev == 200.0
         assert item.total_anual == 999.0
 
-    def test_despesas_ignora_linha_com_total_zero_sem_obs(self, client, db_session):
+    def test_despesas_grava_meses_mesmo_se_total_anual_zero(self, client, db_session):
         ano = 2043
         _criar_orcamento_despesas(client, ano)
         r = client.post(f"/api/v1/orcamentos/despesas/{ano}/salvar", json={
@@ -101,9 +101,12 @@ class TestOrcamentoDespesasTotais:
             }]
         })
         assert r.status_code == 200, r.text
-        assert db_session.query(OrcamentoItem).join(Orcamento).filter(
-            Orcamento.ano == ano
-        ).count() == 0
+        db_session.expire_all()
+        item = db_session.query(OrcamentoItem).join(Orcamento).filter(
+            Orcamento.ano == ano, Orcamento.tipo == "DESPESAS"
+        ).first()
+        assert item is not None
+        assert item.jan == 50.0
 
 
 class TestForecastCopiaETotais:

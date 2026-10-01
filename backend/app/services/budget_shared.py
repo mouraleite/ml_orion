@@ -317,24 +317,38 @@ def _orcamentos_venda_com_itens(db: Session, orcamento_id: int) -> bool:
 
 
 def flatten_venda_db_rows_for_visualizacao(db: Session, linhas_venda: Sequence) -> list[dict]:
-    """Linhas mensais (mes, vgv) — espelha o conteúdo das telas de orçamento/forecast vendas."""
-    itens: list[dict] = []
+    """Linhas mensais (mes, vgv). Mesmo produto+plano+mês de vários departamentos soma."""
+    agregados: dict[tuple, dict] = {}
     for item in linhas_venda:
-        plano = db.query(PaymentPlan).filter(PaymentPlan.id == item.plano_venda_id).first()
-        produto = db.query(CostCenter).filter(CostCenter.id == item.produto_id).first()
-        itens.append(
-            {
+        key = (
+            item.produto_id,
+            item.plano_venda_id,
+            item.mes,
+            is_venda_distrato(item),
+        )
+        bucket = agregados.get(key)
+        if bucket is None:
+            plano = db.query(PaymentPlan).filter(PaymentPlan.id == item.plano_venda_id).first()
+            produto = db.query(CostCenter).filter(CostCenter.id == item.produto_id).first()
+            bucket = {
                 "produto_id": item.produto_id,
                 "produto_nome": produto.nome if produto else str(item.produto_id),
                 "plano_venda_id": item.plano_venda_id,
                 "plano_venda_nome": _payment_plan_display_name(plano) or str(item.plano_venda_id),
                 "mes": item.mes,
-                "vgv": getattr(item, "vgv", 0.0) or 0.0,
-                "numero_vendas": getattr(item, "numero_vendas", 0) or 0,
-                "ticket_medio": getattr(item, "ticket_medio", 0.0) or 0.0,
+                "vgv": 0.0,
+                "numero_vendas": 0,
                 "is_distrato": is_venda_distrato(item),
             }
-        )
+            agregados[key] = bucket
+        bucket["vgv"] += float(getattr(item, "vgv", 0.0) or 0.0)
+        bucket["numero_vendas"] += int(getattr(item, "numero_vendas", 0) or 0)
+    itens: list[dict] = []
+    for bucket in agregados.values():
+        qtd = bucket["numero_vendas"]
+        vgv = bucket["vgv"]
+        bucket["ticket_medio"] = (vgv / qtd) if qtd else 0.0
+        itens.append(bucket)
     return itens
 
 
@@ -387,6 +401,48 @@ def resolve_dept_sienge_id(db: Session) -> int:
 def resolve_dept_comercial_id(db: Session) -> int:
     dept_comercial = db.query(Departamento).filter(Departamento.nome.ilike("%COMERCIAL%")).first()
     return dept_comercial.id if dept_comercial else -1
+
+
+DESCRICAO_DOCUMENTO_ORCAMENTO = "Orçamento"
+STATUS_ORCAMENTO_BLOQUEADO = ("Aprovado", "Fechado", "Em aprovação")
+
+
+def pode_editar_orcamento_vendas(user, dept) -> bool:
+    """Orçamento e leitura de Vendas: departamento Vendas ou administrador."""
+    from app.core.roles import is_admin_user
+
+    if is_admin_user(user):
+        return True
+    return str(getattr(dept, "nome", "") or "").strip().upper() == "VENDAS"
+
+
+def orcamentos_da_versao_visualizacao(
+    db: Session,
+    ano: int,
+    tipo: str,
+    dept_id: int,
+    identifier: str,
+) -> list:
+    """Documentos de orçamento cujo rótulo visível coincide (ex.: Carga Inicial e Orçamento)."""
+    from app.services.departamento_leitura import criterio_departamento_id
+
+    alvo = format_visualizacao_versao_label(identifier, kind="orcamento")
+    dept_filter = criterio_departamento_id(Orcamento.departamento_id, db, dept_id)
+    orcs = (
+        db.query(Orcamento)
+        .filter(
+            Orcamento.ano == ano,
+            Orcamento.tipo == tipo.upper(),
+            Orcamento.status != "Substituído",
+            dept_filter,
+        )
+        .all()
+    )
+    return [
+        o
+        for o in orcs
+        if format_visualizacao_versao_label(o.descricao, kind="orcamento") == alvo
+    ]
 
 
 def _parse_forecast_rolling_left(descricao: str | None) -> int | None:
@@ -705,14 +761,13 @@ def _plano_prefixo_tipo(plano, tipo: str) -> bool:
 
 
 def assinar_itens_mensais_dfc(linhas, planos_por_id: dict, tipo: str) -> list[dict]:
-    """Filtro de conta, sinal de redutora e primeira linha por produto+plano.
+    """Filtro de conta, sinal de redutora e soma por produto+plano.
 
     Mesma regra de extract_visualizacao_itens para despesas/receitas, sem
     carregar nome de produto nem consultar o banco por linha.
     """
     tipo = (tipo or "").upper()
-    itens: list[dict] = []
-    seen: set[tuple] = set()
+    buckets: dict[tuple, dict] = {}
     for item in linhas or []:
         plano_id = getattr(item, "plano_financeiro_id", None)
         produto_id = getattr(item, "produto_id", None)
@@ -720,27 +775,23 @@ def assinar_itens_mensais_dfc(linhas, planos_por_id: dict, tipo: str) -> list[di
         if not _plano_prefixo_tipo(plano, tipo):
             continue
         key = (produto_id, plano_id)
-        if key in seen:
-            continue
-        seen.add(key)
         redutora = _plano_redutora(plano)
-        dados: dict[str, float] = {}
-        total = 0.0
+        row = buckets.get(key)
+        if row is None:
+            row = {
+                "produto_id": produto_id,
+                "plano_financeiro_id": plano_id,
+                **{m: 0.0 for m in MESES_STR},
+                "total": 0.0,
+            }
+            buckets[key] = row
         for m in MESES_STR:
             val = float(getattr(item, m, 0) or 0)
             if redutora:
                 val = -abs(val)
-            dados[m] = val
-            total += val
-        itens.append(
-            {
-                "produto_id": produto_id,
-                "plano_financeiro_id": plano_id,
-                **dados,
-                "total": total,
-            }
-        )
-    return itens
+            row[m] += val
+            row["total"] += val
+    return list(buckets.values())
 
 
 def _linhas_mensais_da_versao(db: Session, ano: int, tipo: str, dept_id: int, versao_id: str):
@@ -755,14 +806,7 @@ def _linhas_mensais_da_versao(db: Session, ano: int, tipo: str, dept_id: int, ve
     dept_filter_fc = criterio_departamento_id(Forecast.departamento_id, db, dept_id)
     linhas_db = []
     if is_orc:
-        orcs = db.query(Orcamento).filter(
-            Orcamento.ano == ano,
-            Orcamento.tipo == tipo,
-            Orcamento.descricao == identifier,
-            Orcamento.status != "Substituído",
-            dept_filter_orc,
-        ).all()
-        for o in orcs:
+        for o in orcamentos_da_versao_visualizacao(db, ano, tipo, dept_id, identifier):
             linhas_db.extend(
                 db.query(OrcamentoItem).filter(OrcamentoItem.orcamento_id == o.id).all()
             )
@@ -882,15 +926,7 @@ def extract_visualizacao_itens(
     if tipo in ("DESPESAS", "RECEITAS"):
         linhas_db = []
         if is_orc:
-            q = db.query(Orcamento).filter(
-                Orcamento.ano == ano,
-                Orcamento.tipo == tipo,
-                Orcamento.descricao == identifier,
-                Orcamento.status != "Substituído",
-                dept_filter_orc,
-            )
-            orcs = q.all()
-            for o in orcs:
+            for o in orcamentos_da_versao_visualizacao(db, ano, tipo, dept_id, identifier):
                 linhas_db.extend(
                     db.query(OrcamentoItem).filter(OrcamentoItem.orcamento_id == o.id).all()
                 )
@@ -909,33 +945,26 @@ def extract_visualizacao_itens(
                 )
 
         itens: list[dict] = []
-        seen: set[tuple] = set()
+        buckets: dict[tuple, dict] = {}
         for item in linhas_db:
             if not _filter_monthly_item_by_tipo(db, item, tipo):
                 continue
             row = serialize_monthly_item_row(item, include_id=False)
             enriched = _enrich_monthly_visualizacao_row(db, row)
             key = (enriched["produto_id"], enriched["plano_financeiro_id"])
-            if key in seen:
+            prev = buckets.get(key)
+            if prev is None:
+                buckets[key] = enriched
                 continue
-            seen.add(key)
-            itens.append(enriched)
+            for m in MESES_STR:
+                prev[m] += float(enriched.get(m, 0) or 0)
+            prev["total"] += float(enriched.get("total", 0) or 0)
+        itens = list(buckets.values())
         return itens
 
     linhas_venda = []
     if is_orc:
-        orcs = (
-            db.query(Orcamento)
-            .filter(
-                Orcamento.ano == ano,
-                Orcamento.tipo == "VENDAS",
-                Orcamento.descricao == identifier,
-                Orcamento.status != "Substituído",
-                dept_filter_orc,
-            )
-            .all()
-        )
-        for o in orcs:
+        for o in orcamentos_da_versao_visualizacao(db, ano, tipo, dept_id, identifier):
             linhas_venda.extend(
                 db.query(OrcamentoVendaItem)
                 .filter(OrcamentoVendaItem.orcamento_id == o.id)
