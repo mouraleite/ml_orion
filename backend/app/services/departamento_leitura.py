@@ -262,9 +262,20 @@ def escolher_documentos_leitura(query, model, dept) -> list:
 
     def pick(q):
         o = q.filter(model.status.in_(statuses)).order_by(model.id.desc()).first()
-        if o is None:
-            o = q.order_by(model.id.desc()).first()
-        return o
+        if o is not None:
+            return o
+        if hasattr(model, "versao_base_id"):
+            reaberto = q.filter(
+                model.status.in_(("Reaberto", "Solicitação Reabertura"))
+            ).order_by(model.id.desc()).first()
+            if reaberto is not None:
+                snap = q.filter(
+                    model.status == "Substituído",
+                    model.versao_base_id == reaberto.id,
+                ).order_by(model.id.desc()).first()
+                if snap is not None:
+                    return snap
+        return q.filter(model.status != "Substituído").order_by(model.id.desc()).first()
 
     if eh_diretoria(dept):
         db = query.session

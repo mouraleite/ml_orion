@@ -18,6 +18,8 @@ tests/test_require_admin.py
 tests/test_access.py
 tests/test_database_url.py
 tests/test_budget_shared.py
+tests/test_budget_status.py
+tests/test_orcamento_reabertura.py
 tests/test_sienge_client.py
 tests/test_user_department_scope.py
 tests/test_departamento_leitura.py

@@ -404,7 +404,7 @@ def resolve_dept_comercial_id(db: Session) -> int:
 
 
 DESCRICAO_DOCUMENTO_ORCAMENTO = "Orçamento"
-STATUS_ORCAMENTO_BLOQUEADO = ("Aprovado", "Fechado", "Em aprovação")
+STATUS_ORCAMENTO_BLOQUEADO = ("Aprovado", "Fechado", "Em aprovação", "Solicitação Reabertura")
 
 
 def pode_editar_orcamento_vendas(user, dept) -> bool:

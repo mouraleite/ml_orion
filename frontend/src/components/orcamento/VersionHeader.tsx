@@ -65,7 +65,7 @@ export function VersionHeader({ orcamento, deptId, onStatusChanged }: VersionHea
   };
 
   const handleAprovarReabertura = async () => {
-    if (!(await confirmDialog("Aprovar a reabertura irá criar uma NOVA VERSÃO do orçamento ligada a esta. Deseja continuar?", {
+    if (!(await confirmDialog("Aprovar a reabertura edita este mesmo orçamento. Uma cópia do estado fechado fica guardada. Deseja continuar?", {
       title: "Aprovar reabertura",
       confirmLabel: "Aprovar",
     }))) return;
@@ -73,7 +73,7 @@ export function VersionHeader({ orcamento, deptId, onStatusChanged }: VersionHea
     try {
       await orcamentoService.aprovarReabertura(orcamento.orcamento_id, deptId);
       onStatusChanged();
-      alert("Reabertura aprovada! Nova versão gerada.");
+      alert("Reabertura aprovada. Este mesmo orçamento ficou editável; o acompanhamento permanece com os valores fechados.");
     } catch (err: any) {
       alert(err.response?.data?.detail || "Erro ao aprovar reabertura");
     } finally {
@@ -154,7 +154,7 @@ export function VersionHeader({ orcamento, deptId, onStatusChanged }: VersionHea
             <div className="flex items-center gap-2 border-l pl-2 border-slate-200">
               <span className="text-xs font-semibold text-orange-600">Aprovar Reabertura?</span>
               <Button size="sm" variant="outline" onClick={() => handleStatusChange("Fechado")} disabled={loading}>Não</Button>
-              <Button size="sm" className="bg-orange-600 hover:bg-orange-700 text-white" onClick={handleAprovarReabertura} disabled={loading}>Sim, Criar v{orcamento.versao_numero + 1}</Button>
+              <Button size="sm" className="bg-orange-600 hover:bg-orange-700 text-white" onClick={handleAprovarReabertura} disabled={loading}>Sim, reabrir</Button>
             </div>
           ) : null}
         </div>

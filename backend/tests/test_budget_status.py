@@ -26,12 +26,34 @@ def test_rejeitar_volta_rascunho():
     assert resolver_transicao("Em aprovação", "Rascunho") == ("Rascunho", "rejeitar")
 
 
+def test_solicitar_reabertura_de_fechado():
+    assert resolver_transicao("Fechado", "Solicitação Reabertura") == (
+        "Solicitação Reabertura",
+        "solicitar_reabertura",
+    )
+
+
+def test_recusar_reabertura_volta_fechado():
+    assert resolver_transicao("Solicitação Reabertura", "Fechado") == (
+        "Fechado",
+        "recusar_reabertura",
+    )
+
+
+def test_aprovar_reabertura_de_solicitacao():
+    assert resolver_transicao("Solicitação Reabertura", "Reaberto") == (
+        "Reaberto",
+        "aprovar_reabertura",
+    )
+
+
 @pytest.mark.parametrize(
     "atual,pedido",
     [
         ("Rascunho", "Fechado"),
         ("Rascunho", "Aprovado"),
         ("Fechado", "Rascunho"),
+        ("Fechado", "Reaberto"),
         ("Aprovado", "Fechado"),
         ("Em aprovação", "Reaberto"),
     ],

@@ -7,14 +7,6 @@ from app.models.user import User
 from app.models.economic_indicator import EconomicIndicator
 from app.api.deps import get_current_user
 
-# Endpoints que o frontend chama e o backend não tem (conferido em 3 set 2026
-# contra as 157 rotas registradas). Enquanto não existirem, os testes que
-# dependem deles ficam como falha conhecida:
-#   POST /orcamentos/{id}/solicitar-reabertura   VersionHeader.tsx
-#   POST /orcamentos/{id}/aprovar-reabertura     VersionHeader.tsx
-#   POST /orcamentos/vendas/{ano}/salvar         orcamento.ts salvarVendas
-SEM_REABERTURA = "backend não expõe solicitar-reabertura (o frontend chama e recebe 404)"
-
 
 def criar_orcamento_base(client, ano: int, tipo: str = "despesas", produto_id: int = 1):
     """Cria o Orçamento Base do produto.
@@ -95,7 +87,6 @@ def test_03_totais_calculados_automaticamente(client, db_session):
     assert db_item.total_anual == 300.0
 
 
-@pytest.mark.xfail(reason=SEM_REABERTURA, strict=True)
 def test_04_replicacao_nunca_sobrescreve_silenciosamente(client, db_session):
     """4. Replicação nunca sobrescreve silenciosamente."""
     # Cria base
@@ -107,9 +98,12 @@ def test_04_replicacao_nunca_sobrescreve_silenciosamente(client, db_session):
     })
     orc = db_session.query(Orcamento).filter_by(ano=2028).first()
     
-    # Tenta solicitar reabertura (que gera fluxo ou bloqueia)
+    # Rascunho não reabre; o pedido é recusado sem alterar valores.
     response = client.post(f"/api/v1/orcamentos/{orc.id}/solicitar-reabertura", json={"novo_status": "Reaberto", "motivo": "Teste"})
-    assert response.status_code in (200, 400) # Depende do status atual
+    assert response.status_code == 400
+    db_session.expire_all()
+    item = db_session.query(OrcamentoItem).filter_by(orcamento_id=orc.id).first()
+    assert item.jan == 100.0
 
 
 def test_05_ipca_registra_indice_e_competencia(client, db_session):
@@ -315,20 +309,18 @@ def test_forecast_aprovar_fecha(client, db_session):
     assert resposta.json()["status"] == "Fechado"
 
 
-@pytest.mark.xfail(reason=SEM_REABERTURA, strict=True)
-def test_15_reabertura_exige_permissao_motivo(client, db_session, monkeypatch):
-    """15. Reabertura exige permissão e motivo.
-
-    Atenção ao implementar: as asserções abaixo esperam 200 e motivo vazio, o que
-    contradiz o próprio requisito. Reescrever o teste junto com o endpoint.
-    """
-    orc = Orcamento(ano=2034, tipo="DESPESAS", departamento_id=1, status="Aprovado", versao_numero=1)
+def test_15_reabertura_exige_permissao_motivo(client, db_session):
+    """15. Reabertura exige motivo; rascunho não reabre."""
+    orc = Orcamento(ano=2034, tipo="DESPESAS", departamento_id=1, status="Fechado", versao_numero=1, descricao="Orçamento")
     db_session.add(orc)
     db_session.commit()
 
-    response = client.post(f"/api/v1/orcamentos/{orc.id}/solicitar-reabertura", json={"novo_status": "Reaberto", "motivo": ""})
-    assert response.status_code == 200
-    
+    sem_motivo = client.post(f"/api/v1/orcamentos/{orc.id}/solicitar-reabertura", json={"novo_status": "Solicitação Reabertura", "motivo": ""})
+    assert sem_motivo.status_code == 400
+
+    ok = client.post(f"/api/v1/orcamentos/{orc.id}/solicitar-reabertura", json={"novo_status": "Solicitação Reabertura", "motivo": "Correção"})
+    assert ok.status_code == 200, ok.text
     db_session.expire_all()
-    orc_reaberto = db_session.query(Orcamento).filter_by(id=orc.id).first()
-    assert orc_reaberto.motivo_reabertura == ""
+    orc_pedido = db_session.query(Orcamento).filter_by(id=orc.id).first()
+    assert orc_pedido.status == "Solicitação Reabertura"
+    assert orc_pedido.motivo_reabertura == "Correção"

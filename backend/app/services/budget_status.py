@@ -9,11 +9,11 @@ from fastapi import HTTPException
 
 from app.core.roles import is_gestor_user
 
-ACOES_GESTOR = frozenset({"aprovar", "rejeitar"})
+ACOES_GESTOR = frozenset({"aprovar", "rejeitar", "recusar_reabertura", "aprovar_reabertura"})
 
 
 def resolver_transicao(status_atual: str, pedido: str) -> tuple[str, str]:
-    """Devolve (status a gravar, ação). Ação: enviar | aprovar | rejeitar."""
+    """Devolve (status a gravar, ação). Ação: enviar | aprovar | rejeitar | solicitar_reabertura | recusar_reabertura."""
     atual = (status_atual or "").strip()
     novo = (pedido or "").strip()
 
@@ -23,6 +23,12 @@ def resolver_transicao(status_atual: str, pedido: str) -> tuple[str, str]:
         return "Fechado", "aprovar"
     if atual == "Em aprovação" and novo == "Rascunho":
         return "Rascunho", "rejeitar"
+    if atual in ("Fechado", "Aprovado") and novo == "Solicitação Reabertura":
+        return "Solicitação Reabertura", "solicitar_reabertura"
+    if atual == "Solicitação Reabertura" and novo == "Fechado":
+        return "Fechado", "recusar_reabertura"
+    if atual == "Solicitação Reabertura" and novo == "Reaberto":
+        return "Reaberto", "aprovar_reabertura"
 
     raise HTTPException(
         status_code=400,

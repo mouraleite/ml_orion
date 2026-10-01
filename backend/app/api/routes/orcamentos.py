@@ -1304,12 +1304,24 @@ def change_status_orcamento(
         raise HTTPException(status_code=404, detail="Orçamento não encontrado.")
 
     destino, acao = resolver_transicao(orc.status, data.novo_status)
+    if acao == "solicitar_reabertura":
+        raise HTTPException(
+            status_code=400,
+            detail="Use a solicitação de reabertura com motivo.",
+        )
+    if acao == "aprovar_reabertura":
+        raise HTTPException(
+            status_code=400,
+            detail="A aprovação de reabertura precisa guardar a cópia fechada.",
+        )
     exigir_permissao_status(acao, current_user)
 
     alvos = irmaos_mesmo_grupo(db, Orcamento, orc) or [orc]
     for item in alvos:
         anterior = item.status
         item.status = destino
+        if acao == "recusar_reabertura":
+            item.motivo_reabertura = None
         db.add(OrcamentoHistorico(
             orcamento_id=item.id,
             usuario_id=current_user.id,
@@ -1325,6 +1337,134 @@ def change_status_orcamento(
             valor_anterior=anterior,
             novo_valor=destino,
             motivo=data.motivo,
+            usuario_id=current_user.id,
+        ))
+
+    db.commit()
+    return {"message": f"Status alterado para {destino}", "status": destino, "registros": len(alvos)}
+
+
+@router.post("/{orcamento_id}/solicitar-reabertura")
+def solicitar_reabertura_orcamento(
+    orcamento_id: int,
+    data: OrcamentoStatusRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    motivo = (data.motivo or "").strip()
+    if not motivo:
+        raise HTTPException(status_code=400, detail="Informe o motivo da solicitação de reabertura.")
+
+    orc = db.query(Orcamento).filter(Orcamento.id == orcamento_id).first()
+    if not orc:
+        raise HTTPException(status_code=404, detail="Orçamento não encontrado.")
+
+    destino, acao = resolver_transicao(orc.status, "Solicitação Reabertura")
+    exigir_permissao_status(acao, current_user)
+
+    alvos = irmaos_mesmo_grupo(db, Orcamento, orc) or [orc]
+    for item in alvos:
+        anterior = item.status
+        item.status = destino
+        item.motivo_reabertura = motivo
+        db.add(OrcamentoHistorico(
+            orcamento_id=item.id,
+            usuario_id=current_user.id,
+            status_anterior=anterior,
+            status_novo=destino,
+            motivo=motivo,
+        ))
+        db.add(Auditoria(
+            evento="Alteracao",
+            tabela_afetada="orcamentos",
+            registro_id=item.id,
+            campo="status",
+            valor_anterior=anterior,
+            novo_valor=destino,
+            motivo=motivo,
+            usuario_id=current_user.id,
+        ))
+
+    db.commit()
+    return {"message": f"Status alterado para {destino}", "status": destino, "registros": len(alvos)}
+
+
+def _arquivar_orcamento_fechado(db: Session, live: Orcamento) -> Orcamento:
+    snap = Orcamento(
+        descricao=live.descricao,
+        ano=live.ano,
+        tipo=live.tipo,
+        status="Substituído",
+        versao_numero=live.versao_numero,
+        versao_base_id=live.id,
+        usuario_criador_id=live.usuario_criador_id,
+        departamento_id=live.departamento_id,
+        produto_id=live.produto_id,
+    )
+    db.add(snap)
+    db.flush()
+    if live.tipo == "VENDAS":
+        for i in db.query(OrcamentoVendaItem).filter_by(orcamento_id=live.id).all():
+            db.add(OrcamentoVendaItem(
+                orcamento_id=snap.id,
+                produto_id=i.produto_id,
+                plano_venda_id=i.plano_venda_id,
+                mes=i.mes,
+                ano=i.ano,
+                juros_mensal=i.juros_mensal,
+                ticket_medio=i.ticket_medio,
+                numero_vendas=i.numero_vendas,
+                vgv=i.vgv,
+                origem_venda=i.origem_venda,
+                observacao=i.observacao,
+            ))
+    else:
+        for i in db.query(OrcamentoItem).filter_by(orcamento_id=live.id).all():
+            meses = {m: getattr(i, m) or 0.0 for m in MESES_STR}
+            db.add(OrcamentoItem(
+                orcamento_id=snap.id,
+                produto_id=i.produto_id,
+                plano_financeiro_id=i.plano_financeiro_id,
+                total_anual=i.total_anual,
+                observacao=i.observacao,
+                **meses,
+            ))
+    return snap
+
+
+@router.post("/{orcamento_id}/aprovar-reabertura")
+def aprovar_reabertura_orcamento(
+    orcamento_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    orc = db.query(Orcamento).filter(Orcamento.id == orcamento_id).first()
+    if not orc:
+        raise HTTPException(status_code=404, detail="Orçamento não encontrado.")
+
+    destino, acao = resolver_transicao(orc.status, "Reaberto")
+    exigir_permissao_status(acao, current_user)
+
+    alvos = irmaos_mesmo_grupo(db, Orcamento, orc) or [orc]
+    for item in alvos:
+        _arquivar_orcamento_fechado(db, item)
+        anterior = item.status
+        item.status = destino
+        db.add(OrcamentoHistorico(
+            orcamento_id=item.id,
+            usuario_id=current_user.id,
+            status_anterior=anterior,
+            status_novo=destino,
+            motivo=item.motivo_reabertura,
+        ))
+        db.add(Auditoria(
+            evento="Alteracao",
+            tabela_afetada="orcamentos",
+            registro_id=item.id,
+            campo="status",
+            valor_anterior=anterior,
+            novo_valor=destino,
+            motivo=item.motivo_reabertura,
             usuario_id=current_user.id,
         ))
 
