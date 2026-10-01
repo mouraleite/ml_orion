@@ -489,6 +489,7 @@ def list_forecast_versoes_disponiveis(
                 Forecast.ano == ano,
                 Forecast.tipo == tipo,
                 criterio_departamento_id(Forecast.departamento_id, db, dept_id),
+                Forecast.status != "Substituído",
                 Forecast.itens_despesa.any(),
             )
             .order_by(Forecast.versao_numero.desc(), Forecast.id.desc())
@@ -507,6 +508,7 @@ def list_forecast_versoes_disponiveis(
         .filter(
             Forecast.ano == ano,
             Forecast.tipo == "VENDAS",
+            Forecast.status != "Substituído",
             Forecast.itens_venda.any(),
             (Forecast.produto_id.isnot(None)) | (Forecast.departamento_id.isnot(None)),
             dept_scope,
@@ -537,6 +539,7 @@ def list_forecast_versoes_disponiveis(
         .filter(
             Forecast.ano == ano,
             Forecast.tipo == "VENDAS",
+            Forecast.status != "Substituído",
             Forecast.itens_venda.any(),
             dept_scope,
         )

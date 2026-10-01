@@ -146,6 +146,16 @@ export const forecastService = {
     return response.data;
   },
 
+  solicitarReabertura: async (id: number, departamento_id: number, motivo: string) => {
+    const { data } = await api.post(`/forecasts/${id}/solicitar-reabertura`, { novo_status: "Solicitação Reabertura", motivo }, deptHeader(departamento_id));
+    return data;
+  },
+
+  aprovarReabertura: async (id: number, departamento_id: number) => {
+    const { data } = await api.post(`/forecasts/${id}/aprovar-reabertura`, {}, deptHeader(departamento_id));
+    return data;
+  },
+
   gerarLote: async (ano: number, tipo: string, departamento_id: number) => {
     const response = await api.post(`/forecasts/gerar-lote`, { ano, tipo }, deptHeader(departamento_id));
     return response.data;

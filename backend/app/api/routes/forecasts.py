@@ -386,7 +386,10 @@ def get_forecast_despesas(
         if versao_id:
             forecast = db.query(Forecast).filter(Forecast.id == versao_id, criterio_departamento(Forecast.departamento_id, db, dept)).first()
         else:
-            forecast = db.query(Forecast).filter(Forecast.ano == ano, Forecast.tipo == 'DESPESAS', criterio_departamento(Forecast.departamento_id, db, dept)).order_by(Forecast.versao_numero.desc()).first()
+            forecast = db.query(Forecast).filter(
+                Forecast.ano == ano, Forecast.tipo == 'DESPESAS', Forecast.status != "Substituído",
+                criterio_departamento(Forecast.departamento_id, db, dept),
+            ).order_by(Forecast.versao_numero.desc()).first()
         
     if not forecast:
         opcoes_base_orc = db.query(Orcamento).filter(
@@ -418,6 +421,7 @@ def get_forecast_despesas(
         Forecast.ano == ano, 
         Forecast.tipo == 'DESPESAS',
         Forecast.descricao == forecast.descricao,
+        Forecast.status != "Substituído",
         criterio_departamento(Forecast.departamento_id, db, dept)
     ).all()
 
@@ -492,7 +496,10 @@ def salvar_forecast_despesas(
     current_user = Depends(get_current_user)
 ):
     # Achar a versao atual ativa pelo ano/dept
-    forecast_ref = db.query(Forecast).filter(Forecast.ano == ano, Forecast.tipo == 'DESPESAS', Forecast.departamento_id == dept.id).order_by(Forecast.versao_numero.desc()).first()
+    forecast_ref = db.query(Forecast).filter(
+        Forecast.ano == ano, Forecast.tipo == 'DESPESAS', Forecast.departamento_id == dept.id,
+        Forecast.status != "Substituído",
+    ).order_by(Forecast.versao_numero.desc()).first()
     if not forecast_ref:
         raise HTTPException(status_code=404, detail="Forecast não encontrado.")
         
@@ -501,7 +508,8 @@ def salvar_forecast_despesas(
         Forecast.ano == ano, 
         Forecast.tipo == 'DESPESAS', 
         Forecast.departamento_id == dept.id,
-        Forecast.descricao == forecast_ref.descricao
+        Forecast.descricao == forecast_ref.descricao,
+        Forecast.status != "Substituído",
     ).all()
     
     fc_por_produto = {fc.produto_id: fc for fc in forecasts_do_grupo if fc.produto_id is not None}
@@ -513,7 +521,7 @@ def salvar_forecast_despesas(
     # Buscar itens da base para todos os forecasts do grupo
     itens_base_dict = {}
     for fc in forecasts_do_grupo:
-        if fc.status in ["Aprovado", "Fechado", "Em aprovação"]:
+        if fc.status in STATUS_ORCAMENTO_BLOQUEADO:
             raise HTTPException(status_code=403, detail=f"O Forecast {fc.descricao} para o Empreendimento {fc.produto_id} está bloqueado para edição.")
         
         if fc.versao_base_orcamento_id:
@@ -595,6 +603,7 @@ def get_forecast_vendas(
         forecast = db.query(Forecast).filter(
             Forecast.ano == ano,
             Forecast.tipo == 'VENDAS',
+            Forecast.status != "Substituído",
             criterio_departamento(Forecast.departamento_id, db, dept)
         ).order_by(Forecast.versao_numero.desc()).first()
 
@@ -630,6 +639,7 @@ def get_forecast_vendas(
         Forecast.ano == ano, 
         Forecast.tipo == 'VENDAS',
         Forecast.descricao == forecast.descricao,
+        Forecast.status != "Substituído",
         criterio_departamento(Forecast.departamento_id, db, dept)
     ).all()
 
@@ -870,6 +880,7 @@ def salvar_forecast_vendas(
         Forecast.ano == ano,
         Forecast.tipo == 'VENDAS',
         Forecast.departamento_id == dept.id,
+        Forecast.status != "Substituído",
     ).order_by(Forecast.versao_numero.desc()).first()
     
     if not forecast_ref:
@@ -880,6 +891,7 @@ def salvar_forecast_vendas(
         Forecast.tipo == 'VENDAS', 
         Forecast.descricao == forecast_ref.descricao,
         Forecast.departamento_id == dept.id,
+        Forecast.status != "Substituído",
     ).all()
     
     fc_por_produto = {fc.produto_id: fc for fc in forecasts_do_grupo}
@@ -889,7 +901,7 @@ def salvar_forecast_vendas(
 
     itens_base_dict = {}
     for fc in forecasts_do_grupo:
-        if fc.status in ["Aprovado", "Fechado", "Em aprovação"]:
+        if fc.status in STATUS_ORCAMENTO_BLOQUEADO:
             raise HTTPException(status_code=403, detail=f"Forecast {fc.descricao} bloqueado para edição.")
 
         if fc.versao_base_orcamento_id:
@@ -994,12 +1006,24 @@ def change_status(
         raise HTTPException(404, "Forecast não encontrado.")
 
     destino, acao = resolver_transicao(fc.status, data.novo_status)
+    if acao == "solicitar_reabertura":
+        raise HTTPException(
+            status_code=400,
+            detail="Use a solicitação de reabertura com motivo.",
+        )
+    if acao == "aprovar_reabertura":
+        raise HTTPException(
+            status_code=400,
+            detail="A aprovação de reabertura precisa guardar a cópia fechada.",
+        )
     exigir_permissao_status(acao, current_user)
 
     alvos = irmaos_mesmo_grupo(db, Forecast, fc) or [fc]
     for item in alvos:
         anterior = item.status
         item.status = destino
+        if acao == "recusar_reabertura":
+            item.motivo_reabertura = None
         db.add(Auditoria(
             evento="Aprovacao" if acao == "aprovar" else "Alteracao",
             tabela_afetada="forecasts",
@@ -1013,6 +1037,124 @@ def change_status(
 
     db.commit()
     return {"message": f"Status alterado para {destino}", "status": destino, "registros": len(alvos)}
+
+
+@router.post("/{forecast_id}/solicitar-reabertura")
+def solicitar_reabertura_forecast(
+    forecast_id: int,
+    data: ForecastStatusRequest,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    motivo = (data.motivo or "").strip()
+    if not motivo:
+        raise HTTPException(status_code=400, detail="Informe o motivo da solicitação de reabertura.")
+
+    fc = db.query(Forecast).filter(Forecast.id == forecast_id).first()
+    if not fc:
+        raise HTTPException(status_code=404, detail="Forecast não encontrado.")
+
+    destino, acao = resolver_transicao(fc.status, "Solicitação Reabertura")
+    exigir_permissao_status(acao, current_user)
+
+    alvos = irmaos_mesmo_grupo(db, Forecast, fc) or [fc]
+    for item in alvos:
+        anterior = item.status
+        item.status = destino
+        item.motivo_reabertura = motivo
+        db.add(Auditoria(
+            evento="Alteracao",
+            tabela_afetada="forecasts",
+            registro_id=item.id,
+            campo="status",
+            valor_anterior=anterior,
+            novo_valor=destino,
+            motivo=motivo,
+            usuario_id=current_user.id,
+        ))
+
+    db.commit()
+    return {"message": f"Status alterado para {destino}", "status": destino, "registros": len(alvos)}
+
+
+def _arquivar_forecast_fechado(db: Session, live: Forecast) -> Forecast:
+    snap = Forecast(
+        descricao=live.descricao,
+        ano=live.ano,
+        tipo=live.tipo,
+        mes_corte=live.mes_corte,
+        status="Substituído",
+        versao_numero=live.versao_numero,
+        versao_base_forecast_id=live.id,
+        versao_base_orcamento_id=live.versao_base_orcamento_id,
+        usuario_criador_id=live.usuario_criador_id,
+        departamento_id=live.departamento_id,
+        produto_id=live.produto_id,
+    )
+    db.add(snap)
+    db.flush()
+    if live.tipo == "VENDAS":
+        for i in db.query(ForecastVendaItem).filter_by(forecast_id=live.id).all():
+            db.add(ForecastVendaItem(
+                forecast_id=snap.id,
+                produto_id=i.produto_id,
+                plano_venda_id=i.plano_venda_id,
+                mes=i.mes,
+                ano=i.ano,
+                juros_mensal=i.juros_mensal,
+                ticket_medio=i.ticket_medio,
+                numero_vendas=i.numero_vendas,
+                vgv=i.vgv,
+                origem_venda=i.origem_venda,
+                observacao=i.observacao,
+            ))
+    else:
+        for i in db.query(ForecastItem).filter_by(forecast_id=live.id).all():
+            meses = {m: getattr(i, m) or 0.0 for m in MESES_STR}
+            db.add(ForecastItem(
+                forecast_id=snap.id,
+                produto_id=i.produto_id,
+                plano_financeiro_id=i.plano_financeiro_id,
+                total_anual=i.total_anual,
+                observacao=i.observacao,
+                is_auto_generated=i.is_auto_generated,
+                **meses,
+            ))
+    return snap
+
+
+@router.post("/{forecast_id}/aprovar-reabertura")
+def aprovar_reabertura_forecast(
+    forecast_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    fc = db.query(Forecast).filter(Forecast.id == forecast_id).first()
+    if not fc:
+        raise HTTPException(status_code=404, detail="Forecast não encontrado.")
+
+    destino, acao = resolver_transicao(fc.status, "Reaberto")
+    exigir_permissao_status(acao, current_user)
+
+    alvos = irmaos_mesmo_grupo(db, Forecast, fc) or [fc]
+    for item in alvos:
+        _arquivar_forecast_fechado(db, item)
+        anterior = item.status
+        item.status = destino
+        db.add(Auditoria(
+            evento="Alteracao",
+            tabela_afetada="forecasts",
+            registro_id=item.id,
+            campo="status",
+            valor_anterior=anterior,
+            novo_valor=destino,
+            motivo=item.motivo_reabertura,
+            usuario_id=current_user.id,
+        ))
+
+    db.commit()
+    return {"message": f"Status alterado para {destino}", "status": destino, "registros": len(alvos)}
+
 
 @router.get("/anos-disponiveis")
 def get_anos_disponiveis(

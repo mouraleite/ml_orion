@@ -264,14 +264,19 @@ def escolher_documentos_leitura(query, model, dept) -> list:
         o = q.filter(model.status.in_(statuses)).order_by(model.id.desc()).first()
         if o is not None:
             return o
+        snap_col = None
         if hasattr(model, "versao_base_id"):
+            snap_col = model.versao_base_id
+        elif hasattr(model, "versao_base_forecast_id"):
+            snap_col = model.versao_base_forecast_id
+        if snap_col is not None:
             reaberto = q.filter(
                 model.status.in_(("Reaberto", "Solicitação Reabertura"))
             ).order_by(model.id.desc()).first()
             if reaberto is not None:
                 snap = q.filter(
                     model.status == "Substituído",
-                    model.versao_base_id == reaberto.id,
+                    snap_col == reaberto.id,
                 ).order_by(model.id.desc()).first()
                 if snap is not None:
                     return snap
