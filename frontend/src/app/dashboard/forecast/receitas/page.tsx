@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/Button";
 import { confirmDialog } from "@/components/ui/confirmDialog";
 import { forecastService, ForecastDespesasResponse } from "@/services/forecast";
 import { OrcamentoItemData } from "@/services/orcamento";
-import { Save, Copy, Plus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { Save, Copy, Plus, Trash2, ChevronDown, ChevronRight, FileSpreadsheet } from "lucide-react";
 import { ForecastVersionHeader } from "@/components/forecast/ForecastVersionHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { BudgetPageToolbar } from "@/components/shared/BudgetPageToolbar";
@@ -29,6 +29,7 @@ import { useActiveDepartmentId } from "@/lib/useActiveDepartmentId";
 import { isAdminOrDiretorUser } from "@/lib/roles";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { CriarForecastModal } from "@/components/forecast/CriarForecastModal";
+import { ExcelImportModal } from "@/components/forecast/ExcelImportModal";
 import { MonthSelector } from "@/components/orcamento/MonthSelector";
 
 import toast from 'react-hot-toast';
@@ -47,6 +48,7 @@ export default function ForecastReceitasPage() {
   const [versaoId, setVersaoId] = useState<number | undefined>(undefined);
   const [anosDisponiveis, setAnosDisponiveis] = useState<number[]>([]);
   const [showCriarModal, setShowCriarModal] = useState(false);
+  const [showExcel, setShowExcel] = useState(false);
   const [novoAno, setNovoAno] = useState<number>(currentYear);
   const [data, setData] = useState<ForecastDespesasResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -411,6 +413,13 @@ const handleGerarLote = async () => {
                 <Plus className="w-4 h-4 text-brand-600" />
                 Criar Forecast
               </button>
+              <button
+                onClick={() => setShowExcel(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition shadow-sm"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-brand-green" />
+                Excel
+              </button>
               {!isBlocked ? (
                 <Button variant="primary" onClick={salvar} disabled={saving || loading}>
                   <Save className="mr-2 h-4 w-4" /> {saving ? "Salvando..." : "Salvar Forecast"}
@@ -672,6 +681,17 @@ const handleGerarLote = async () => {
         )}
         
       </div>
+      )}
+
+      {showExcel && (
+        <ExcelImportModal
+          tipo="RECEITAS"
+          ano={ano}
+          deptId={deptId}
+          orcamentoId={data?.forecast_id}
+          onClose={() => setShowExcel(false)}
+          onSuccess={() => { setShowExcel(false); carregarDados(ano); }}
+        />
       )}
 
       {showCriarModal && (

@@ -40,12 +40,46 @@ def test_excel_invalido_nao_grava(client, db_session):
     assert db_session.query(Forecast).filter_by(ano=2088).count() == 0
 
 
-def test_excel_receitas_recusa(client):
+def test_excel_receitas_grava_e_preserva_linha_auto(client, db_session):
+    """Planilha grava receita manual. Linha injetada por Vendas não muda."""
+    db_session.add(ProdutoPlanoFinanceiro(produto_id=2, plano_financeiro_id=1, permitido=True))
+    db_session.commit()
+    criado = client.post("/api/v1/forecasts/criar_de_base", json={
+        "ano": 2092, "tipo": "RECEITAS", "produto_id": 1, "plano_financeiro_id": 1,
+    })
+    assert criado.status_code == 200, criado.text
+    fid = criado.json()["forecast_id"]
+    db_session.expire_all()
+    auto = db_session.query(ForecastItem).filter_by(forecast_id=fid).one()
+    auto.jan = 100.0
+    auto.total_anual = 100.0
+    auto.is_auto_generated = True
+    db_session.commit()
+
     resp = client.post(
-        "/api/v1/forecasts/excel/importar/RECEITAS/2088",
-        files=_files(_xlsx_despesas(("Produto A", "Plano Fin 1", 10))),
+        "/api/v1/forecasts/excel/importar/RECEITAS/2092",
+        files=_files(_xlsx_despesas(
+            ("Produto A", "Plano Fin 1", 1),
+            ("Produto B", "Plano Fin 1", 5),
+        )),
     )
-    assert resp.status_code == 400
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["gravado"] is True
+    db_session.expire_all()
+    itens = db_session.query(ForecastItem).filter_by(forecast_id=fid).all()
+    por_produto = {i.produto_id: i for i in itens}
+    assert por_produto[1].is_auto_generated is True
+    assert por_produto[1].jan == 100.0
+    assert por_produto[2].is_auto_generated is False
+    assert por_produto[2].jan == 5.0
+
+    validado = client.post(
+        "/api/v1/forecasts/excel/validar/RECEITAS/2092",
+        files=_files(_xlsx_despesas(("Produto B", "Plano Fin 1", 5))),
+    )
+    assert validado.status_code == 200, validado.text
+    assert validado.json()["pode_importar"] is True
 
 
 def test_excel_recusa_forecast_fechado(client, db_session):

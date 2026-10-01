@@ -1480,8 +1480,8 @@ async def validar_excel(
     current_user=Depends(get_current_user),
 ):
     tipo = tipo.upper()
-    if tipo not in ("DESPESAS", "VENDAS"):
-        raise HTTPException(status_code=400, detail="Forecast importa Despesas ou Vendas.")
+    if tipo not in ("DESPESAS", "RECEITAS", "VENDAS"):
+        raise HTTPException(status_code=400, detail="Forecast importa Despesas, Receitas ou Vendas.")
 
     conteudo = await file.read()
     try:
@@ -1519,8 +1519,8 @@ async def importar_excel(
 ):
     """Tudo-ou-nada na versão rolling atual. Não cria nem altera outra descrição (ex.: 7+5)."""
     tipo = tipo.upper()
-    if tipo not in ("DESPESAS", "VENDAS"):
-        raise HTTPException(status_code=400, detail="Forecast importa Despesas ou Vendas.")
+    if tipo not in ("DESPESAS", "RECEITAS", "VENDAS"):
+        raise HTTPException(status_code=400, detail="Forecast importa Despesas, Receitas ou Vendas.")
     if tipo == "VENDAS":
         _exigir_vendas(current_user, dept)
 
@@ -1622,6 +1622,7 @@ async def importar_excel(
             ))
         db.bulk_save_objects(novos_itens)
     else:
+        auto_keys = set()
         for fc in docs:
             if fc.versao_base_orcamento_id:
                 for i in db.query(OrcamentoItem).filter(OrcamentoItem.orcamento_id == fc.versao_base_orcamento_id).all():
@@ -1629,12 +1630,26 @@ async def importar_excel(
             elif fc.versao_base_forecast_id:
                 for i in db.query(ForecastItem).filter(ForecastItem.forecast_id == fc.versao_base_forecast_id).all():
                     itens_base_dict[(i.produto_id, i.plano_financeiro_id)] = i
-            db.query(ForecastItem).filter(ForecastItem.forecast_id == fc.id).delete()
+            if tipo == "RECEITAS":
+                for i in db.query(ForecastItem).filter(
+                    ForecastItem.forecast_id == fc.id,
+                    ForecastItem.is_auto_generated == True,  # noqa: E712
+                ).all():
+                    auto_keys.add((i.produto_id, i.plano_financeiro_id))
+                db.query(ForecastItem).filter(
+                    ForecastItem.forecast_id == fc.id,
+                    ForecastItem.is_auto_generated == False,  # noqa: E712
+                ).delete(synchronize_session=False)
+            else:
+                db.query(ForecastItem).filter(ForecastItem.forecast_id == fc.id).delete()
 
         novos_itens = []
         for linha in linhas_validas:
+            key = (linha["produto_id"], linha["plano_financeiro_id"])
+            if tipo == "RECEITAS" and key in auto_keys:
+                continue
             fc_destino = _forecast_destino(docs, linha["produto_id"]) or dest
-            linha_base = itens_base_dict.get((linha["produto_id"], linha["plano_financeiro_id"]))
+            linha_base = itens_base_dict.get(key)
             item_final = {}
             for mes_idx, mes_str in enumerate(MESES_STR, start=1):
                 valor_novo = linha.get(mes_str, 0.0) or 0.0
@@ -1652,6 +1667,7 @@ async def importar_excel(
                 plano_financeiro_id=linha["plano_financeiro_id"],
                 **item_final,
                 total_anual=sum(item_final.values()),
+                is_auto_generated=False,
             ))
         db.bulk_save_objects(novos_itens)
 
