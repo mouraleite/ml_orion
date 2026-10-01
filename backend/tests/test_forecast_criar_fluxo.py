@@ -219,3 +219,27 @@ def test_criar_vendas_admin_ok(client, db_session):
     assert item is not None
     assert item.produto_id == 1
     assert item.ano == 2078
+
+
+def test_salvar_inclui_empreendimento_novo_no_mesmo_documento(client, db_session):
+    db_session.add(ProdutoPlanoFinanceiro(produto_id=2, plano_financeiro_id=1, permitido=True))
+    db_session.commit()
+    r = client.post("/api/v1/forecasts/criar_de_base", json={
+        "ano": 2079, "tipo": "DESPESAS", "produto_id": 1, "plano_financeiro_id": 1,
+    })
+    assert r.status_code == 200, r.text
+    fid = r.json()["forecast_id"]
+    r2 = client.post("/api/v1/forecasts/despesas/2079/salvar", json={
+        "itens": [
+            {"produto_id": 1, "plano_financeiro_id": 1, "jan": 10.0, "total_anual": 10.0},
+            {"produto_id": 2, "plano_financeiro_id": 1, "jan": 5.0, "total_anual": 5.0},
+        ]
+    })
+    assert r2.status_code == 200, r2.text
+    db_session.expire_all()
+    pids = {
+        i.produto_id
+        for i in db_session.query(ForecastItem).filter_by(forecast_id=fid).all()
+    }
+    assert pids == {1, 2}
+    assert db_session.query(Forecast).filter_by(ano=2079, tipo="DESPESAS").count() == 1

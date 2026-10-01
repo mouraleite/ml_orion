@@ -26,6 +26,7 @@ import { buildEmpresaLinkedOptions } from "@/lib/gridFilters";
 import { HoldingMlduBanner } from "@/components/shared/HoldingMlduBanner";
 import { useHoldingMldu } from "@/hooks/useHoldingMldu";
 import { useActiveDepartmentId } from "@/lib/useActiveDepartmentId";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { CriarForecastModal } from "@/components/forecast/CriarForecastModal";
 import { MonthSelector } from "@/components/orcamento/MonthSelector";
 import { TableHead } from "@/components/ui/Table";
@@ -322,6 +323,35 @@ export default function ForecastVendasPage() {
     setLinhas([...linhas, novaLinha]);
     if (!expandedProducts.includes(produtoId)) {
       setExpandedProducts([...expandedProducts, produtoId]);
+    }
+  };
+
+  const handleAdicionarLinhaMatriz = () => {
+    if (!novoProdutoId || !novoPlanoId) {
+      toast.error("Selecione um empreendimento e um plano de venda.");
+      return;
+    }
+    const isDistratoTab = activeTab === "distratos";
+    const duplicada = linhas.some(
+      (l) =>
+        l.produto_id === novoProdutoId &&
+        l.plano_venda_id === novoPlanoId &&
+        isDistratoFn(l) === isDistratoTab,
+    );
+    if (duplicada) {
+      toast.error("Esta combinação empreendimento + plano já está no forecast.");
+      return;
+    }
+    const pid = Number(novoProdutoId);
+    const novaLinha: OrcamentoVendaLinha = {
+      produto_id: pid,
+      plano_venda_id: Number(novoPlanoId),
+      meses: MESES.map((m) => ({ mes: m.id, ticket_medio: 0, numero_vendas: 0, vgv: 0 })),
+      observacao: isDistratoTab ? "(Distrato)" : "",
+    };
+    setLinhas([...linhas, novaLinha]);
+    if (!expandedProducts.includes(pid)) {
+      setExpandedProducts([...expandedProducts, pid]);
     }
   };
 
@@ -865,6 +895,41 @@ export default function ForecastVendasPage() {
           </BudgetMatrixScrollArea>
         )}
 
+        {!isBlocked && activeTab !== 'liquidas' && (
+          <div className="p-5 border-t bg-slate-50 flex flex-wrap items-end gap-4">
+            <div className="flex-1 min-w-[200px] max-w-sm">
+              <label className="block text-xs text-slate-500 font-medium mb-1">Centro de Custo</label>
+              <SearchableSelect
+                options={data?.opcoes_produtos.map((p) => ({
+                  id: p.id,
+                  label: p.id_sienge ? `${p.id_sienge} - ${p.nome}` : p.nome,
+                })) || []}
+                value={novoProdutoId}
+                onChange={(val) => setNovoProdutoId(Number(val))}
+                placeholder="Pesquise ou selecione..."
+              />
+            </div>
+            <div className="flex-1 min-w-[200px] max-w-sm">
+              <label className="block text-xs text-slate-500 font-medium mb-1">Plano de venda</label>
+              <SearchableSelect
+                options={data?.opcoes_planos.map((p) => ({
+                  id: p.id,
+                  label: p.db_id ? `${p.db_id} - ${p.nome}` : p.nome,
+                })) || []}
+                value={novoPlanoId}
+                onChange={(val) => setNovoPlanoId(Number(val))}
+                placeholder="Pesquise ou selecione..."
+              />
+            </div>
+            <Button
+              variant="outline"
+              className="text-brand-700 border-brand-200 bg-white hover:bg-brand-50 min-w-[160px] h-[38px]"
+              onClick={handleAdicionarLinhaMatriz}
+            >
+              <Plus className="mr-2 h-4 w-4" /> Adicionar à Matriz
+            </Button>
+          </div>
+        )}
         
       </div>
       )}
