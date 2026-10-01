@@ -85,6 +85,20 @@ export const forecastService = {
     return response.data;
   },
 
+  getReceitas: async (ano: number, departamento_id: number, consolidado: boolean = false, versao_id?: number, holdingMldu: boolean = false) => {
+    const q = buildBudgetQuery(consolidado, holdingMldu);
+    const url = versao_id
+      ? `/forecasts/receitas/${ano}?${q}&versao_id=${versao_id}`
+      : `/forecasts/receitas/${ano}?${q}`;
+    const response = await api.get(url, deptHeader(departamento_id));
+    return response.data as ForecastDespesasResponse;
+  },
+
+  salvarReceitas: async (ano: number, departamento_id: number, itens: OrcamentoItemData[]) => {
+    const response = await api.post(`/forecasts/receitas/${ano}/salvar`, { itens }, deptHeader(departamento_id));
+    return response.data;
+  },
+
   getVendas: async (ano: number, departamento_id: number, consolidado: boolean = false, versao_id?: number, holdingMldu: boolean = false) => {
     const q = buildBudgetQuery(consolidado, holdingMldu);
     const url = versao_id

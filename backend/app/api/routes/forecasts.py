@@ -32,6 +32,7 @@ from app.services.budget_shared import (
     merge_catalog_with_used_items,
     pode_editar_orcamento_vendas,
     resolve_forecast_despesas_catalog,
+    resolve_forecast_receitas_catalog,
     serialize_base_monthly_item,
     serialize_monthly_item_row,
     serialize_venda_base_item,
@@ -204,7 +205,7 @@ def criar_forecast_de_base(
 ):
     """Inclui um empreendimento no documento do departamento para a versão rolling (ex.: Forecast - 9+3)."""
     tipo = (data.tipo or "DESPESAS").upper()
-    if tipo not in ("DESPESAS", "VENDAS"):
+    if tipo not in ("DESPESAS", "VENDAS", "RECEITAS"):
         raise HTTPException(status_code=400, detail="Tipo inválido.")
     if tipo == "VENDAS":
         _exigir_vendas(current_user, dept)
@@ -573,6 +574,210 @@ def salvar_forecast_despesas(
     db.bulk_save_objects(novos_itens)
     db.commit()
     return {"message": "Salvo com sucesso!", "linhas": len(novos_itens)}
+
+
+@router.get("/receitas/{ano}")
+def get_forecast_receitas(
+    ano: int,
+    consolidado: bool = False,
+    holding_mldu: bool = False,
+    versao_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    dept: Departamento = Depends(get_active_department),
+    current_user = Depends(get_current_user)
+):
+    fix_forecasts_sharepoint_sem_departamento(db)
+    planos_permitidos, produtos_permitidos, is_consolidado = resolve_forecast_receitas_catalog(
+        db, dept, consolidado, current_user
+    )
+
+    forecast = None
+    if not is_consolidado:
+        if versao_id:
+            forecast = db.query(Forecast).filter(
+                Forecast.id == versao_id,
+                Forecast.tipo == "RECEITAS",
+                criterio_departamento(Forecast.departamento_id, db, dept),
+            ).first()
+        else:
+            forecast = db.query(Forecast).filter(
+                Forecast.ano == ano, Forecast.tipo == "RECEITAS", Forecast.status != "Substituído",
+                criterio_departamento(Forecast.departamento_id, db, dept),
+            ).order_by(Forecast.versao_numero.desc()).first()
+
+    if not forecast:
+        opcoes_base_orc = db.query(Orcamento).filter(
+            Orcamento.ano == ano, Orcamento.tipo == "RECEITAS",
+            criterio_departamento(Orcamento.departamento_id, db, dept),
+            Orcamento.status != "Substituído",
+        ).order_by(Orcamento.versao_numero.desc()).all()
+        opcoes_base_for = db.query(Forecast).filter(
+            Forecast.ano == ano, Forecast.tipo == "RECEITAS",
+            criterio_departamento(Forecast.departamento_id, db, dept),
+            Forecast.status != "Substituído",
+        ).order_by(Forecast.versao_numero.desc()).all()
+        empresas_map = build_empresas_map(db)
+        return {
+            "is_empty": True,
+            "opcoes_base": [
+                {"id": o.id, "tipo": "Orcamento", "descricao": o.descricao} for o in opcoes_base_orc
+            ] + [
+                {"id": o.id, "tipo": "Forecast", "descricao": o.descricao} for o in opcoes_base_for
+            ],
+            "opcoes_produtos": build_opcoes_produtos(produtos_permitidos, empresas_map),
+            "opcoes_planos": [{"id": p.id, "nome": p.name, "db_id": p.db_id} for p in planos_permitidos],
+        }
+
+    forecasts_do_grupo = db.query(Forecast).filter(
+        Forecast.ano == ano,
+        Forecast.tipo == "RECEITAS",
+        Forecast.descricao == forecast.descricao,
+        Forecast.status != "Substituído",
+        criterio_departamento(Forecast.departamento_id, db, dept),
+    ).all()
+
+    itens_base = []
+    itens_base_db = []
+    itens_db = []
+    mapa_ids = {}
+    for fc in forecasts_do_grupo:
+        mapa_ids[fc.produto_id] = fc.id
+        if fc.versao_base_orcamento_id:
+            itens_base_db.extend(db.query(OrcamentoItem).filter(OrcamentoItem.orcamento_id == fc.versao_base_orcamento_id).all())
+        elif fc.versao_base_forecast_id:
+            itens_base_db.extend(db.query(ForecastItem).filter(ForecastItem.forecast_id == fc.versao_base_forecast_id).all())
+        itens_db.extend(db.query(ForecastItem).filter(ForecastItem.forecast_id == fc.id).all())
+
+    for ib in itens_base_db:
+        itens_base.append(serialize_base_monthly_item(ib, zero_defaults=True))
+
+    produtos_finais, planos_finais = merge_catalog_with_used_items(
+        db, produtos_permitidos, planos_permitidos, itens_db
+    )
+    empresas_map = build_empresas_map(db)
+    itens = []
+    for item in itens_db:
+        row = serialize_monthly_item_row(item)
+        row["is_auto_generated"] = bool(getattr(item, "is_auto_generated", False))
+        itens.append(row)
+
+    is_locked_by_other, usuario_edicao_nome = check_pessimistic_lock(
+        forecast, current_user.id, lock_user_label="Usuário"
+    )
+    meses_fechados = [mf.mes for mf in db.query(ClosedMonth).filter(ClosedMonth.ano == ano).all()]
+
+    return maybe_apply_holding_mldu(
+        db,
+        holding_mldu,
+        {
+            "forecast_id": forecast.id,
+            "ano": forecast.ano,
+            "tipo": forecast.tipo,
+            "status": forecast.status,
+            "versao_numero": forecast.versao_numero,
+            "motivo_reabertura": forecast.motivo_reabertura,
+            "data_criacao": forecast.data_criacao.isoformat() if forecast.data_criacao else None,
+            "is_locked_by_other": is_locked_by_other,
+            "usuario_edicao_nome": usuario_edicao_nome,
+            "is_consolidado": is_consolidado,
+            "meses_fechados": meses_fechados,
+            "itens": itens,
+            "itens_base": itens_base,
+            "opcoes_produtos": build_opcoes_produtos(produtos_finais, empresas_map),
+            "opcoes_planos": build_opcoes_planos(planos_finais),
+            "mapa_ids": mapa_ids,
+            "versoes_disponiveis": list_forecast_versoes_disponiveis(db, ano, "RECEITAS", dept.id),
+        },
+        item_kind="monthly",
+    )
+
+
+@router.post("/receitas/{ano}/salvar")
+def salvar_forecast_receitas(
+    ano: int,
+    data: ForecastDespesasSaveRequest,
+    db: Session = Depends(get_db),
+    dept: Departamento = Depends(get_active_department),
+    current_user = Depends(get_current_user)
+):
+    forecast_ref = db.query(Forecast).filter(
+        Forecast.ano == ano, Forecast.tipo == "RECEITAS", Forecast.departamento_id == dept.id,
+        Forecast.status != "Substituído",
+    ).order_by(Forecast.versao_numero.desc()).first()
+    if not forecast_ref:
+        raise HTTPException(status_code=404, detail="Forecast não encontrado.")
+
+    forecasts_do_grupo = db.query(Forecast).filter(
+        Forecast.ano == ano,
+        Forecast.tipo == "RECEITAS",
+        Forecast.departamento_id == dept.id,
+        Forecast.descricao == forecast_ref.descricao,
+        Forecast.status != "Substituído",
+    ).all()
+
+    meses_fechados_idx = [mf.mes for mf in db.query(ClosedMonth).filter(ClosedMonth.ano == ano).all()]
+    itens_base_dict = {}
+    auto_keys = set()
+    for fc in forecasts_do_grupo:
+        if fc.status in STATUS_ORCAMENTO_BLOQUEADO:
+            raise HTTPException(status_code=403, detail="O forecast deste departamento está em aprovação ou fechado. Não é possível alterar.")
+        if fc.versao_base_orcamento_id:
+            for i in db.query(OrcamentoItem).filter(OrcamentoItem.orcamento_id == fc.versao_base_orcamento_id).all():
+                itens_base_dict[(i.produto_id, i.plano_financeiro_id)] = i
+        elif fc.versao_base_forecast_id:
+            for i in db.query(ForecastItem).filter(ForecastItem.forecast_id == fc.versao_base_forecast_id).all():
+                itens_base_dict[(i.produto_id, i.plano_financeiro_id)] = i
+        for i in db.query(ForecastItem).filter(
+            ForecastItem.forecast_id == fc.id,
+            ForecastItem.is_auto_generated == True,  # noqa: E712
+        ).all():
+            auto_keys.add((i.produto_id, i.plano_financeiro_id))
+        db.query(ForecastItem).filter(
+            ForecastItem.forecast_id == fc.id,
+            ForecastItem.is_auto_generated == False,  # noqa: E712
+        ).delete(synchronize_session=False)
+
+    novos_itens = []
+    for item_data in data.itens:
+        key = (item_data.produto_id, item_data.plano_financeiro_id)
+        if key in auto_keys:
+            continue
+        if skip_linha_total_zero(item_data):
+            continue
+        fc_destino = _forecast_destino(forecasts_do_grupo, item_data.produto_id)
+        if not fc_destino:
+            raise HTTPException(400, f"O Empreendimento {item_data.produto_id} não possui o Forecast {forecast_ref.descricao} criado. Crie-o primeiro na listagem.")
+        tem_permissao = validate_budget_allocation(
+            db=db, departamento_id=dept.id, produto_id=item_data.produto_id,
+            plano_financeiro_id=item_data.plano_financeiro_id,
+        )
+        if not tem_permissao:
+            db.rollback()
+            raise HTTPException(403, f"Permissão negada (Prod {item_data.produto_id} x Plano {item_data.plano_financeiro_id}).")
+        linha_base = itens_base_dict.get(key)
+        item_final = {}
+        for mes_idx, mes_str in enumerate(MESES_STR, start=1):
+            valor_novo = getattr(item_data, mes_str)
+            if mes_idx in meses_fechados_idx:
+                valor_base = getattr(linha_base, mes_str) if linha_base else 0.0
+                if valor_novo != valor_base:
+                    raise HTTPException(403, f"Mês {mes_str} está fechado, não pode ser alterado.")
+                item_final[mes_str] = valor_base
+            else:
+                item_final[mes_str] = valor_novo
+        novos_itens.append(ForecastItem(
+            forecast_id=fc_destino.id, produto_id=item_data.produto_id, plano_financeiro_id=item_data.plano_financeiro_id,
+            jan=item_final["jan"], fev=item_final["fev"], mar=item_final["mar"], abr=item_final["abr"],
+            mai=item_final["mai"], jun=item_final["jun"], jul=item_final["jul"], ago=item_final["ago"],
+            set=item_final["set"], out=item_final["out"], nov=item_final["nov"], dez=item_final["dez"],
+            total_anual=sum(item_final.values()), observacao=item_data.observacao,
+            is_auto_generated=False,
+        ))
+
+    db.bulk_save_objects(novos_itens)
+    db.commit()
+    return {"message": "Salvo com sucesso!", "linhas": len(novos_itens)}
+
 
 # ==================== VENDAS ====================
 
@@ -1189,7 +1394,7 @@ def get_catalogo_forecast(
     current_user=Depends(get_current_user),
 ):
     tipo = tipo.upper()
-    if tipo not in ("DESPESAS", "VENDAS"):
+    if tipo not in ("DESPESAS", "VENDAS", "RECEITAS"):
         raise HTTPException(400, "Tipo inválido.")
     if tipo == "VENDAS":
         _exigir_vendas(current_user, dept)
@@ -1203,9 +1408,14 @@ def get_catalogo_forecast(
             "opcoes_planos": build_opcoes_planos(planos, nome_attr="nome"),
             "opcoes_base": _opcoes_base_forecast(db, ano, tipo, dept),
         }
-    planos_permitidos, produtos_permitidos, _ = resolve_forecast_despesas_catalog(
-        db, dept, False, current_user
-    )
+    if tipo == "RECEITAS":
+        planos_permitidos, produtos_permitidos, _ = resolve_forecast_receitas_catalog(
+            db, dept, False, current_user
+        )
+    else:
+        planos_permitidos, produtos_permitidos, _ = resolve_forecast_despesas_catalog(
+            db, dept, False, current_user
+        )
     empresas_map = build_empresas_map(db)
     return {
         "opcoes_produtos": build_opcoes_produtos(produtos_permitidos, empresas_map),

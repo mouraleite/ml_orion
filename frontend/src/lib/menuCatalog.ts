@@ -123,6 +123,7 @@ const RAW_MENU: MenuModuleDef[] = [
     icon: FileText,
     items: [
       { name: "Forecast de Despesas", icon: FileText, href: "/dashboard/forecast/despesas" },
+      { name: "Forecast de Receitas", icon: FileText, href: "/dashboard/forecast/receitas" },
       { name: "Forecast de Vendas", icon: FileText, href: "/dashboard/forecast/vendas" },
     ],
   },

@@ -38,6 +38,7 @@ export interface OrcamentoItemData {
   dez: number;
   total_anual: number;
   observacao?: string;
+  is_auto_generated?: boolean;
 }
 
 export const orcamentoService = {

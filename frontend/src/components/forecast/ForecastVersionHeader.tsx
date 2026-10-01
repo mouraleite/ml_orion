@@ -128,7 +128,7 @@ export function ForecastVersionHeader({ forecast, deptId, onStatusChanged }: For
           </div>
           <div>
             <h2 className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              Forecast de {forecast.tipo === "DESPESAS" ? "Despesas" : "Vendas"} {forecast.ano}
+              Forecast de {forecast.tipo === "DESPESAS" ? "Despesas" : forecast.tipo === "RECEITAS" ? "Receitas" : "Vendas"} {forecast.ano}
               <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${colorClass}`}>
                 {forecast.status === "Importado Sienge" ? "Base Inicial" : forecast.status}
               </span>

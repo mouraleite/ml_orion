@@ -21,6 +21,7 @@ tests/test_budget_shared.py
 tests/test_budget_status.py
 tests/test_orcamento_reabertura.py
 tests/test_forecast_reabertura.py
+tests/test_forecast_receitas.py
 tests/test_sienge_client.py
 tests/test_user_department_scope.py
 tests/test_departamento_leitura.py

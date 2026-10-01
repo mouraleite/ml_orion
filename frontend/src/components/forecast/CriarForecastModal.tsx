@@ -6,7 +6,7 @@ import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { forecastService, ForecastBaseOption, OpcaoPlano, OpcaoProduto } from "@/services/forecast";
 import toast from "react-hot-toast";
 
-type TipoForecast = "DESPESAS" | "VENDAS";
+type TipoForecast = "DESPESAS" | "VENDAS" | "RECEITAS";
 
 export function CriarForecastModal({
   tipo,

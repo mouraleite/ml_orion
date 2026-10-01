@@ -178,6 +178,32 @@ def resolve_forecast_despesas_catalog(
     return planos_permitidos, produtos_permitidos, is_consolidado
 
 
+def resolve_forecast_receitas_catalog(
+    db: Session,
+    dept: Departamento,
+    consolidado: bool,
+    current_user,
+) -> Tuple[list, list, bool]:
+    """Catálogo permitido para GET receitas do forecast (planos de receita)."""
+    from app.services.departamento_leitura import planos_ids_leitura, produtos_ids_leitura
+
+    _ = consolidado
+    is_consolidado = False
+    plano_ids = planos_ids_leitura(db, dept, "R")
+    planos_permitidos = (
+        db.query(FinancialPlan).filter(FinancialPlan.id.in_(plano_ids)).all()
+        if plano_ids
+        else []
+    )
+    produtos_ids = produtos_ids_leitura(db, dept)
+    produtos_permitidos = (
+        db.query(CostCenter).filter(CostCenter.id.in_(produtos_ids)).all()
+        if produtos_ids
+        else []
+    )
+    return planos_permitidos, produtos_permitidos, is_consolidado
+
+
 def merge_catalog_with_used_items(
     db: Session,
     produtos_permitidos: list,
