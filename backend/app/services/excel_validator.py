@@ -148,7 +148,7 @@ def validar_vendas(
     linhas_validas: List[Dict] = []
 
     produtos_por_nome = {p.nome.strip().lower(): p for p in db.query(CostCenter).all() if p.nome}
-    planos_por_nome   = {p.name.strip().lower(): p for p in db.query(PaymentPlan).all()}
+    planos_por_nome   = {p.nome.strip().lower(): p for p in db.query(PaymentPlan).all() if p.nome}
 
     for i, row in enumerate(rows, start=2):
         linha_erros = False
@@ -193,7 +193,7 @@ def validar_vendas(
         ticket_medio  = _to_float(ticket_raw)
         vgv           = _to_float(vgv_raw)
 
-        is_distrato = bool(plano_obj and "distrato" in plano_obj.name.lower())
+        is_distrato = bool(plano_obj and "distrato" in (plano_obj.nome or "").lower())
 
         if numero_vendas is None or (numero_vendas < 0 and not is_distrato):
             erros.append(_erro(i, "numero_vendas", "V06", f"Número de vendas inválido: '{num_raw}'."))

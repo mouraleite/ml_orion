@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { confirmDialog } from "@/components/ui/confirmDialog";
 import { forecastService, ForecastVendasResponse } from "@/services/forecast";
 import { OrcamentoVendaLinha, MesVenda } from "@/services/orcamento";
-import { Save, Copy, Plus, Trash2, ChevronDown, ChevronRight, Lock } from "lucide-react";
+import { Save, Copy, Plus, Trash2, ChevronDown, ChevronRight, Lock, FileSpreadsheet } from "lucide-react";
 import { ForecastVersionHeader } from "@/components/forecast/ForecastVersionHeader";
 import { useAuth } from "@/contexts/AuthContext";
 import { isAdminOrDiretorUser } from "@/lib/roles";
@@ -28,6 +28,7 @@ import { useHoldingMldu } from "@/hooks/useHoldingMldu";
 import { useActiveDepartmentId } from "@/lib/useActiveDepartmentId";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { CriarForecastModal } from "@/components/forecast/CriarForecastModal";
+import { ExcelImportModal } from "@/components/forecast/ExcelImportModal";
 import { MonthSelector } from "@/components/orcamento/MonthSelector";
 import { TableHead } from "@/components/ui/Table";
 import { useTableSort, SortConfig } from "@/hooks/useTableSort";
@@ -55,6 +56,7 @@ export default function ForecastVendasPage() {
   const [novoProdutoId, setNovoProdutoId] = useState<number | "">("");
   const [novoPlanoId, setNovoPlanoId] = useState<number | "">("");
   const [showCriarModal, setShowCriarModal] = useState(false);
+  const [showExcel, setShowExcel] = useState(false);
   const [produtoModalAdicionarLinha, setProdutoModalAdicionarLinha] = useState<number | 0>(0);
   const [gerandoLote, setGerandoLote] = useState(false);
   const isAdminOrDiretor = isAdminOrDiretorUser(user);
@@ -584,6 +586,13 @@ export default function ForecastVendasPage() {
                 <Plus className="w-4 h-4 text-brand-600" />
                 Criar Forecast
               </button>
+              <button
+                onClick={() => setShowExcel(true)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-sm font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition shadow-sm"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-brand-green" />
+                Excel
+              </button>
               {!isBlocked ? (
                 <Button variant="primary" onClick={salvar} disabled={saving || loading}>
                   <Save className="mr-2 h-4 w-4" /> {saving ? "Salvando..." : "Salvar Forecast"}
@@ -932,6 +941,17 @@ export default function ForecastVendasPage() {
         )}
         
       </div>
+      )}
+
+      {showExcel && (
+        <ExcelImportModal
+          tipo="VENDAS"
+          ano={ano}
+          deptId={deptId}
+          orcamentoId={data?.forecast_id}
+          onClose={() => setShowExcel(false)}
+          onSuccess={() => { setShowExcel(false); carregarDados(ano); }}
+        />
       )}
 
       {showCriarModal && (

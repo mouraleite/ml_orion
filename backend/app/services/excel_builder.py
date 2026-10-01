@@ -140,10 +140,10 @@ def gerar_modelo_vendas(db: Session, ano: int) -> bytes:
     ws.title = f"Orçamento_VENDAS_{ano}"
 
     produtos    = db.query(CostCenter).order_by(CostCenter.nome).all()
-    planos_vnd  = db.query(PaymentPlan).order_by(PaymentPlan.name).all()
+    planos_vnd  = db.query(PaymentPlan).order_by(PaymentPlan.nome).all()
 
     ref_prod  = _add_lookup_sheet(wb, "Produtos",    [p.nome for p in produtos])
-    ref_plano = _add_lookup_sheet(wb, "PlanosVenda", [p.name for p in planos_vnd])
+    ref_plano = _add_lookup_sheet(wb, "PlanosVenda", [p.nome for p in planos_vnd])
 
     header = ["produto", "plano_venda", "mes", "numero_vendas", "ticket_medio", "vgv"]
     _apply_header(ws, 1, header)
@@ -221,7 +221,7 @@ def exportar_orcamento(orcamento_id: int, db: Session) -> bytes:
             fill  = _zebra_fill(r)
             vals  = [
                 prod.nome  if prod  else item.produto_id,
-                plano.name if plano else item.plano_venda_id,
+                plano.nome if plano else item.plano_venda_id,
                 item.mes,
                 item.numero_vendas or 0,
                 item.ticket_medio  or 0.0,
@@ -311,7 +311,7 @@ def exportar_forecast(forecast_id: int, db: Session) -> bytes:
             fill  = _zebra_fill(r)
             vals  = [
                 prod.nome  if prod  else item.produto_id,
-                plano.name if plano else item.plano_venda_id,
+                plano.nome if plano else item.plano_venda_id,
                 item.mes,
                 item.numero_vendas,
                 item.ticket_medio,
@@ -332,7 +332,7 @@ def exportar_forecast(forecast_id: int, db: Session) -> bytes:
             ws.column_dimensions[get_column_letter(col)].width = 12
         ws.column_dimensions["O"].width = 30
 
-        for r, item in enumerate(orc.itens, start=2):
+        for r, item in enumerate(orc.itens_despesa, start=2):
             prod  = db.query(CostCenter).filter(CostCenter.id == item.produto_id).first()
             plano = db.query(FinancialPlan).filter(FinancialPlan.id == item.plano_financeiro_id).first()
             fill  = _zebra_fill(r)

@@ -1073,6 +1073,7 @@ def get_catalogo_forecast(
 
 
 from app.services.excel_builder import gerar_modelo_despesas_receitas, gerar_modelo_vendas, exportar_forecast
+from app.services.excel_validator import validar_despesas_receitas, validar_vendas, ler_excel
 from fastapi.responses import Response
 from fastapi import File, UploadFile
 import io
@@ -1126,7 +1127,34 @@ async def validar_excel(
     dept: Departamento = Depends(get_active_department),
     current_user=Depends(get_current_user),
 ):
-    raise HTTPException(status_code=501, detail="Validação de importação de Forecast ainda não implementada no backend.")
+    tipo = tipo.upper()
+    if tipo not in ("DESPESAS", "VENDAS"):
+        raise HTTPException(status_code=400, detail="Forecast importa Despesas ou Vendas.")
+
+    conteudo = await file.read()
+    try:
+        rows, _ = ler_excel(conteudo, tipo)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    if not rows:
+        raise HTTPException(status_code=422, detail="Planilha sem dados.")
+
+    if tipo == "VENDAS":
+        erros, linhas_validas = validar_vendas(rows, ano, dept.id, db)
+    else:
+        erros, linhas_validas = validar_despesas_receitas(rows, tipo, ano, dept.id, db)
+
+    return {
+        "tipo": tipo,
+        "ano": ano,
+        "total_linhas": len(rows),
+        "total_erros": len(erros),
+        "total_validas": len(linhas_validas),
+        "pode_importar": len(erros) == 0,
+        "erros": erros,
+    }
+
 
 @router.post("/excel/importar/{tipo}/{ano}")
 async def importar_excel(
@@ -1137,7 +1165,163 @@ async def importar_excel(
     dept: Departamento = Depends(get_active_department),
     current_user=Depends(get_current_user),
 ):
-    raise HTTPException(status_code=501, detail="Importação de Forecast ainda não implementada no backend.")
+    """Tudo-ou-nada na versão rolling atual. Não cria nem altera outra descrição (ex.: 7+5)."""
+    tipo = tipo.upper()
+    if tipo not in ("DESPESAS", "VENDAS"):
+        raise HTTPException(status_code=400, detail="Forecast importa Despesas ou Vendas.")
+    if tipo == "VENDAS":
+        _exigir_vendas(current_user, dept)
+
+    descricao = _descricao_forecast_rolling(ano)
+    docs = _docs_forecast_versao(db, ano, tipo, dept.id, descricao)
+    outros = (
+        db.query(Forecast)
+        .filter(
+            Forecast.ano == ano,
+            Forecast.tipo == tipo,
+            Forecast.departamento_id == dept.id,
+            Forecast.status != "Substituído",
+        )
+        .all()
+    )
+    if not docs and outros:
+        raise HTTPException(
+            status_code=400,
+            detail="Já existe forecast deste ano neste departamento em outra versão. Use a matriz; o Excel não altera versões antigas.",
+        )
+    if docs:
+        _assert_forecasts_editaveis(docs)
+
+    conteudo = await file.read()
+    try:
+        rows, _ = ler_excel(conteudo, tipo)
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    if not rows:
+        raise HTTPException(status_code=422, detail="Planilha sem dados.")
+
+    if tipo == "VENDAS":
+        erros, linhas_validas = validar_vendas(rows, ano, dept.id, db)
+    else:
+        erros, linhas_validas = validar_despesas_receitas(rows, tipo, ano, dept.id, db)
+
+    if erros:
+        return {
+            "gravado": False,
+            "mensagem": "Importação recusada: a planilha contém erros. Nenhum dado foi alterado.",
+            "total_linhas": len(rows),
+            "total_erros": len(erros),
+            "erros": erros,
+        }
+
+    dest = _umbrella_ou_novo(
+        db,
+        docs,
+        descricao=descricao,
+        ano=ano,
+        tipo=tipo,
+        current_user=current_user,
+        dept=dept,
+        versao_base_orcamento_id=None,
+        versao_base_forecast_id=None,
+    )
+    if dest not in docs:
+        docs = list(docs) + [dest]
+
+    meses_fechados_idx = [mf.mes for mf in db.query(ClosedMonth).filter(ClosedMonth.ano == ano).all()]
+    itens_base_dict: dict = {}
+
+    if tipo == "VENDAS":
+        for fc in docs:
+            if fc.versao_base_orcamento_id:
+                for i in db.query(OrcamentoVendaItem).filter(OrcamentoVendaItem.orcamento_id == fc.versao_base_orcamento_id).all():
+                    itens_base_dict[(i.produto_id, i.plano_venda_id, i.mes)] = i
+            elif fc.versao_base_forecast_id:
+                for i in db.query(ForecastVendaItem).filter(ForecastVendaItem.forecast_id == fc.versao_base_forecast_id).all():
+                    itens_base_dict[(i.produto_id, i.plano_venda_id, i.mes)] = i
+            db.query(ForecastVendaItem).filter(ForecastVendaItem.forecast_id == fc.id).delete()
+
+        novos_itens = []
+        for linha in linhas_validas:
+            fc_destino = _forecast_destino(docs, linha["produto_id"]) or dest
+            mes = linha["mes"]
+            linha_base = itens_base_dict.get((linha["produto_id"], linha["plano_venda_id"], mes))
+            if mes in meses_fechados_idx:
+                ticket_val = linha_base.ticket_medio if linha_base else 0.0
+                vendas_val = linha_base.numero_vendas if linha_base else 0
+                vgv_val = linha_base.vgv if linha_base else 0.0
+                if linha["ticket_medio"] != ticket_val or linha["numero_vendas"] != vendas_val:
+                    db.rollback()
+                    raise HTTPException(status_code=403, detail=f"Mês {mes} está fechado, não pode ser alterado.")
+            else:
+                ticket_val = linha["ticket_medio"]
+                vendas_val = linha["numero_vendas"]
+                vgv_val = linha["vgv"]
+            novos_itens.append(ForecastVendaItem(
+                forecast_id=fc_destino.id,
+                produto_id=linha["produto_id"],
+                plano_venda_id=linha["plano_venda_id"],
+                mes=mes,
+                ano=ano,
+                numero_vendas=vendas_val,
+                ticket_medio=ticket_val,
+                vgv=vgv_val,
+            ))
+        db.bulk_save_objects(novos_itens)
+    else:
+        for fc in docs:
+            if fc.versao_base_orcamento_id:
+                for i in db.query(OrcamentoItem).filter(OrcamentoItem.orcamento_id == fc.versao_base_orcamento_id).all():
+                    itens_base_dict[(i.produto_id, i.plano_financeiro_id)] = i
+            elif fc.versao_base_forecast_id:
+                for i in db.query(ForecastItem).filter(ForecastItem.forecast_id == fc.versao_base_forecast_id).all():
+                    itens_base_dict[(i.produto_id, i.plano_financeiro_id)] = i
+            db.query(ForecastItem).filter(ForecastItem.forecast_id == fc.id).delete()
+
+        novos_itens = []
+        for linha in linhas_validas:
+            fc_destino = _forecast_destino(docs, linha["produto_id"]) or dest
+            linha_base = itens_base_dict.get((linha["produto_id"], linha["plano_financeiro_id"]))
+            item_final = {}
+            for mes_idx, mes_str in enumerate(MESES_STR, start=1):
+                valor_novo = linha.get(mes_str, 0.0) or 0.0
+                if mes_idx in meses_fechados_idx:
+                    valor_base = getattr(linha_base, mes_str) if linha_base else 0.0
+                    if valor_novo != valor_base:
+                        db.rollback()
+                        raise HTTPException(status_code=403, detail=f"Mês {mes_str} está fechado, não pode ser alterado.")
+                    item_final[mes_str] = valor_base
+                else:
+                    item_final[mes_str] = valor_novo
+            novos_itens.append(ForecastItem(
+                forecast_id=fc_destino.id,
+                produto_id=linha["produto_id"],
+                plano_financeiro_id=linha["plano_financeiro_id"],
+                **item_final,
+                total_anual=sum(item_final.values()),
+            ))
+        db.bulk_save_objects(novos_itens)
+
+    db.add(Auditoria(
+        evento="Importacao",
+        tabela_afetada="forecasts",
+        registro_id=dest.id,
+        campo=None,
+        valor_anterior=None,
+        novo_valor=f"{len(linhas_validas)} linhas importadas via Excel ({file.filename})",
+        usuario_id=current_user.id,
+    ))
+    db.commit()
+    if tipo == "VENDAS":
+        injetar_vendas_em_receitas(dest, db)
+
+    return {
+        "gravado": True,
+        "mensagem": f"{len(linhas_validas)} linha(s) importada(s) com sucesso.",
+        "forecast_id": dest.id,
+        "total_linhas": len(linhas_validas),
+    }
 
 
 # =====================================================================
