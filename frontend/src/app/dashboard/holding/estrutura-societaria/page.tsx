@@ -142,7 +142,7 @@ function OrgCard({
       </p>
       {!isRoot && (
         <p className="text-[10px] text-slate-500 mt-1" title={node.calculo_tooltip}>
-          Fatia MLDU: <span className="font-semibold text-ml-green">{formatPct(node.participacao_efetiva)}</span>
+          Participação MLDU: <span className="font-semibold text-ml-green">{formatPct(node.participacao_efetiva)}</span>
         </p>
       )}
       <div className="flex items-center justify-center mt-2">
@@ -289,7 +289,7 @@ export default function EstruturaSocietariaPage() {
               <Link href="/dashboard/apoio/empresas" className="text-ml-green font-medium hover:underline inline-flex items-center gap-0.5">
                 Apoio → Empresas <ExternalLink className="w-3 h-3" />
               </Link>
-              . A fatia é o quanto a holding fica no fim da cadeia.
+              . A participação MLDU é o quanto a holding fica no fim da cadeia.
             </p>
           </div>
         </div>
@@ -316,9 +316,9 @@ export default function EstruturaSocietariaPage() {
           </p>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 px-4 py-3">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-ml-green">3 · Fatia</p>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-ml-green">3 · Participação</p>
           <p className="text-sm text-slate-600 mt-1">
-            Fatia MLDU é a conta da cadeia. Não se digita no cadastro.
+            Participação MLDU é a conta da cadeia. Não se digita no cadastro.
           </p>
         </div>
       </div>
@@ -344,7 +344,7 @@ export default function EstruturaSocietariaPage() {
           <div>
             <h2 className="text-sm font-semibold text-slate-800">Árvore societária</h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Sócios acima da caixa verde. % na linha = participação direta. “Fatia MLDU” = o quanto a holding fica no fim da cadeia.
+              Sócios acima da caixa verde. % na linha = participação direta. “Participação MLDU” = o quanto a holding fica no fim da cadeia.
             </p>
           </div>
           <div className="hidden sm:flex items-center gap-2 text-[11px] text-slate-500">
