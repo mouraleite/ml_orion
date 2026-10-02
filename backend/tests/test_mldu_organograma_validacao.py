@@ -16,7 +16,9 @@ def _seed_all_reference_companies(db_session):
         ("13", "Vercellino"),
         ("16", "Loteadora Ypês IV"),
         ("21", "Reserva Ypês IV"),
+        ("15", "Mirante dos Ramos"),
         ("28", "Reserva Ramos"),
+        ("17", "Parque Cidade II"),
         ("32", "Novo Horizonte"),
     ]
     for id_sienge, nome in specs:

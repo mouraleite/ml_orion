@@ -73,16 +73,19 @@ def test_ypes_reserva_238(db_session):
 
 def test_ramos_2258(db_session):
     by_sienge = _seed_companies(db_session)
+    mirante = Company(id_sienge="15", cnpj="15", razao_social="Mirante dos Ramos", nome_fantasia="Mirante")
+    db_session.add(mirante)
+    db_session.commit()
     db_session.add(
         CompanyOwnershipLink(
             parent_company_id=by_sienge["1"].id,
-            child_company_id=by_sienge["16"].id,
+            child_company_id=mirante.id,
             percentage=35.0,
         )
     )
     db_session.add(
         CompanyOwnershipLink(
-            parent_company_id=by_sienge["16"].id,
+            parent_company_id=mirante.id,
             child_company_id=by_sienge["28"].id,
             percentage=64.5,
         )
