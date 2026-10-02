@@ -156,6 +156,9 @@ def update_ownership_link(
         link.consolidates = data.consolidates
     if data.notes is not None:
         link.notes = data.notes
+        child = db.query(Company).filter(Company.id == link.child_company_id).first()
+        if child:
+            child.organograma_nota = data.notes
 
     db.commit()
     sync_company_effective_percentages(db)

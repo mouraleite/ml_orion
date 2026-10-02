@@ -50,11 +50,42 @@ def apply_schema_patches(engine: Engine) -> None:
             ("participacao_mldu_efetiva", "FLOAT"),
             ("participacao_mldu_manual", "FLOAT"),
             ("usa_participacao_manual", "BOOLEAN DEFAULT 0"),
+            ("organograma_nota", "TEXT"),
         )
         for col, col_type in company_cols:
             if not _has_column(engine, "companies", col):
                 conn.execute(text(f"ALTER TABLE companies ADD COLUMN {col} {col_type}"))
                 logger.info("schema_patches: companies.%s adicionada", col)
+
+        if _has_column(engine, "companies", "organograma_nota") and _has_table(engine, "company_ownership_links"):
+            if dialect == "sqlite":
+                conn.execute(
+                    text(
+                        """
+                        UPDATE companies
+                        SET organograma_nota = (
+                            SELECT notes FROM company_ownership_links
+                            WHERE company_ownership_links.child_company_id = companies.id
+                              AND notes IS NOT NULL AND notes != ''
+                            LIMIT 1
+                        )
+                        WHERE organograma_nota IS NULL OR organograma_nota = ''
+                        """
+                    )
+                )
+            else:
+                conn.execute(
+                    text(
+                        """
+                        UPDATE companies AS c
+                        SET organograma_nota = l.notes
+                        FROM company_ownership_links AS l
+                        WHERE l.child_company_id = c.id
+                          AND l.notes IS NOT NULL AND l.notes <> ''
+                          AND (c.organograma_nota IS NULL OR c.organograma_nota = '')
+                        """
+                    )
+                )
 
         if not _has_table(engine, "company_ownership_periods"):
             if dialect == "sqlite":

@@ -198,12 +198,14 @@ def apply_structural_partner(db: Session, partner: CompanyPartner) -> None:
                 if period.valid_until is None:
                     period.percentage = new_pct
     else:
+        child = db.query(Company).filter(Company.id == child_id).first()
         db.add(
             CompanyOwnershipLink(
                 parent_company_id=parent_id,
                 child_company_id=child_id,
                 percentage=float(partner.percentage or 0),
                 consolidates=bool(partner.is_consolidated),
+                notes=child.organograma_nota if child else None,
             )
         )
     sync_company_effective_percentages(db)
@@ -221,6 +223,9 @@ def remove_structural_partner(db: Session, partner: CompanyPartner) -> None:
         .first()
     )
     if link:
+        child = db.query(Company).filter(Company.id == partner.company_id).first()
+        if child and link.notes:
+            child.organograma_nota = link.notes
         db.delete(link)
     sync_company_effective_percentages(db)
 

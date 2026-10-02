@@ -243,3 +243,46 @@ def test_nota_nao_altera_percentual(client, db_session):
     db_session.refresh(link)
     assert link.notes == "Moura Leite tem 50% na filha."
     assert float(link.percentage) == 50.0
+
+
+def test_trocar_percentual_preserva_nota(db_session):
+    from app.models.company import CompanyPartner
+    from app.services.mldu_ownership import apply_structural_partner, remove_structural_partner
+
+    mae = Company(id_sienge="911", cnpj="911", razao_social="Mae", nome_fantasia="Mae")
+    filha = Company(id_sienge="912", cnpj="912", razao_social="Filha", nome_fantasia="Filha")
+    db_session.add_all([mae, filha])
+    db_session.commit()
+    link = CompanyOwnershipLink(
+        parent_company_id=mae.id,
+        child_company_id=filha.id,
+        percentage=50.0,
+        notes="Receita por equivalência patrimonial.",
+    )
+    socio = CompanyPartner(
+        company_id=filha.id,
+        tipo="Sócio",
+        partner_company_id=mae.id,
+        percentage=50.0,
+    )
+    db_session.add_all([link, socio])
+    db_session.commit()
+
+    remove_structural_partner(db_session, socio)
+    db_session.delete(socio)
+    db_session.commit()
+    assert filha.organograma_nota == "Receita por equivalência patrimonial."
+
+    novo = CompanyPartner(
+        company_id=filha.id,
+        tipo="Sócio",
+        partner_company_id=mae.id,
+        percentage=40.0,
+    )
+    db_session.add(novo)
+    db_session.commit()
+    apply_structural_partner(db_session, novo)
+
+    recriado = db_session.query(CompanyOwnershipLink).filter_by(child_company_id=filha.id).one()
+    assert float(recriado.percentage) == 40.0
+    assert recriado.notes == "Receita por equivalência patrimonial."

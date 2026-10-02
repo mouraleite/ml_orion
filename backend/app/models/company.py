@@ -20,6 +20,7 @@ class Company(Base):
     participacao_mldu_efetiva = Column(Float, nullable=True)
     participacao_mldu_manual = Column(Float, nullable=True)
     usa_participacao_manual = Column(Boolean, default=False)
+    organograma_nota = Column(String, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
