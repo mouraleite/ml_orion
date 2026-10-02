@@ -224,3 +224,22 @@ def test_alterar_socio_atualiza_percentual_atual_e_preserva_passado(db_session):
     assert percentage_as_of(link, link.periods, 2026, 6) == 20.0
     db_session.refresh(by_sienge["5"])
     assert by_sienge["5"].participacao_mldu_efetiva == 20.0
+
+
+def test_nota_nao_altera_percentual(client, db_session):
+    mae = Company(id_sienge="901", cnpj="901", razao_social="Mae", nome_fantasia="Mae")
+    filha = Company(id_sienge="902", cnpj="902", razao_social="Filha", nome_fantasia="Filha")
+    db_session.add_all([mae, filha])
+    db_session.commit()
+    link = CompanyOwnershipLink(parent_company_id=mae.id, child_company_id=filha.id, percentage=50.0)
+    db_session.add(link)
+    db_session.commit()
+
+    resp = client.put(
+        f"/api/v1/holding/ownership-links/{link.id}",
+        json={"notes": "Moura Leite tem 50% na filha."},
+    )
+    assert resp.status_code == 200, resp.text
+    db_session.refresh(link)
+    assert link.notes == "Moura Leite tem 50% na filha."
+    assert float(link.percentage) == 50.0

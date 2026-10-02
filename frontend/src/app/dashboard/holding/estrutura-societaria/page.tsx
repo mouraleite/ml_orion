@@ -161,6 +161,76 @@ function OrgCard({
   );
 }
 
+function OrgNote({
+  node,
+  onSave,
+}: {
+  node: OwnershipTreeNode;
+  onSave: (linkId: number, notes: string) => Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(node.notes || "");
+  const [saving, setSaving] = useState(false);
+  if (!node.link_id) return null;
+
+  const salvar = async () => {
+    setSaving(true);
+    try {
+      await onSave(node.link_id!, text.trim());
+      setEditing(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="mt-2 w-[190px]">
+      {editing ? (
+        <div className="space-y-1">
+          <textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={5}
+            className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-[10px] leading-snug text-slate-700"
+          />
+          <div className="flex justify-end gap-1">
+            <button
+              type="button"
+              className="px-1.5 py-0.5 text-[10px] text-slate-500"
+              onClick={() => {
+                setText(node.notes || "");
+                setEditing(false);
+              }}
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={saving}
+              className="px-1.5 py-0.5 text-[10px] font-medium text-ml-green"
+              onClick={salvar}
+            >
+              {saving ? "Salvando..." : "Salvar"}
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setText(node.notes || "");
+            setEditing(true);
+          }}
+          className="w-full rounded-md border border-dashed border-slate-300 bg-white/80 px-2 py-1.5 text-left text-[10px] leading-snug text-slate-600 hover:border-ml-green"
+          title="Editar nota"
+        >
+          {node.notes?.trim() ? node.notes : "Adicionar nota"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function HoldingShareholders({ socios }: { socios: SocioHolding[] }) {
   if (!socios.length) return null;
   return (
@@ -200,7 +270,13 @@ function HoldingShareholders({ socios }: { socios: SocioHolding[] }) {
   );
 }
 
-function OrgChildren({ nodes }: { nodes: OwnershipTreeNode[] }) {
+function OrgChildren({
+  nodes,
+  onSaveNote,
+}: {
+  nodes: OwnershipTreeNode[];
+  onSaveNote: (linkId: number, notes: string) => Promise<void>;
+}) {
   if (!nodes.length) return null;
   return (
     <div className="flex flex-col items-center">
@@ -220,7 +296,8 @@ function OrgChildren({ nodes }: { nodes: OwnershipTreeNode[] }) {
               {formatPct(child.percentage)}
             </span>
             <OrgCard node={child} />
-            <OrgChildren nodes={child.children || []} />
+            <OrgNote node={child} onSave={onSaveNote} />
+            <OrgChildren nodes={child.children || []} onSaveNote={onSaveNote} />
           </div>
         ))}
       </div>
@@ -268,6 +345,18 @@ export default function EstruturaSocietariaPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  const salvarNota = async (linkId: number, notes: string) => {
+    setError("");
+    try {
+      await holdingService.updateLink(linkId, { notes });
+      const estrutura = await holdingService.getEstrutura();
+      setTree(estrutura.root);
+    } catch (e: any) {
+      setError(e.response?.data?.detail || "Erro ao salvar a nota.");
+      throw e;
+    }
+  };
 
   const temFilhos = Boolean(tree?.children?.length);
 
@@ -363,7 +452,7 @@ export default function EstruturaSocietariaPage() {
               <OrgCard node={tree} isRoot />
 
               {temFilhos ? (
-                <OrgChildren nodes={tree.children || []} />
+                <OrgChildren nodes={tree.children || []} onSaveNote={salvarNota} />
               ) : (
                 <div className="mt-8 max-w-md text-center">
                   <div className="w-px h-8 bg-slate-300 mx-auto mb-3" />
