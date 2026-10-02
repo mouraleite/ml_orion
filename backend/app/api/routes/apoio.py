@@ -164,7 +164,17 @@ def add_company_partner(db_id: int, partner: PartnerCreate, current_user: UserRe
         is_consolidated=partner.is_consolidated
     )
     db.add(new_partner)
-    db.commit()
+    db.flush()
+    if new_partner.partner_company_id:
+        from app.services.mldu_ownership import apply_structural_partner
+
+        try:
+            apply_structural_partner(db, new_partner)
+        except ValueError as exc:
+            db.rollback()
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    else:
+        db.commit()
     db.refresh(new_partner)
     return {"message": "Sócio adicionado com sucesso!", "id": new_partner.id}
 
@@ -174,6 +184,10 @@ def delete_company_partner(db_id: int, partner_id: int, current_user: UserRespon
     if not partner:
         raise HTTPException(status_code=404, detail="Sócio não encontrado.")
     
+    if partner.partner_company_id:
+        from app.services.mldu_ownership import remove_structural_partner
+
+        remove_structural_partner(db, partner)
     db.delete(partner)
     db.commit()
     return {"message": "Sócio removido com sucesso!"}

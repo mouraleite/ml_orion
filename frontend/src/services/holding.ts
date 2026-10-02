@@ -31,6 +31,7 @@ export interface EstruturaMlduResponse {
   root: OwnershipTreeNode | null;
   message?: string;
   empresas_sem_vinculo?: OwnershipTreeNode[];
+  divergencias?: { nome: string; pai: string; apoio_pct: number; consolidacao_pct: number }[];
 }
 
 export interface OwnershipLinkPayload {

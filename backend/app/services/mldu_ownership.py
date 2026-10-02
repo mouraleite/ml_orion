@@ -7,7 +7,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.models.company import Company, CompanyOwnershipLink, CompanyOwnershipPeriod
+from app.models.company import Company, CompanyOwnershipLink, CompanyOwnershipPeriod, CompanyPartner
 
 ROOT_SIENGE_ID = "1"
 
@@ -121,10 +121,119 @@ def serialize_company_brief(company: Company) -> dict[str, Any]:
     }
 
 
+def ensure_structural_partners_from_links(db: Session) -> dict[str, Any]:
+    """Copia o vínculo da árvore para o sócio do Apoio só quando essa participação ainda não existe.
+
+    Não altera percentual já cadastrado nem o fator da consolidação.
+    """
+    links = db.query(CompanyOwnershipLink).all()
+    partners = (
+        db.query(CompanyPartner)
+        .filter(CompanyPartner.partner_company_id.isnot(None))
+        .all()
+    )
+    by_edge = {(p.company_id, p.partner_company_id): p for p in partners}
+    companies = {c.id: c for c in db.query(Company).all()}
+    created = 0
+    divergencias: list[dict[str, Any]] = []
+
+    for link in links:
+        key = (link.child_company_id, link.parent_company_id)
+        existing = by_edge.get(key)
+        if existing is None:
+            db.add(
+                CompanyPartner(
+                    company_id=link.child_company_id,
+                    tipo="Sócio",
+                    partner_company_id=link.parent_company_id,
+                    percentage=link.percentage,
+                    is_consolidated=bool(link.consolidates),
+                )
+            )
+            created += 1
+            continue
+        if abs(float(existing.percentage or 0) - float(link.percentage)) > 0.02:
+            child = companies.get(link.child_company_id)
+            parent = companies.get(link.parent_company_id)
+            divergencias.append(
+                {
+                    "company_id": link.child_company_id,
+                    "nome": (child.nome_fantasia or child.razao_social) if child else "Empresa",
+                    "pai": (parent.nome_fantasia or parent.razao_social) if parent else "Sócio",
+                    "apoio_pct": float(existing.percentage or 0),
+                    "consolidacao_pct": float(link.percentage),
+                }
+            )
+
+    if created:
+        db.commit()
+    return {"created": created, "divergencias": divergencias}
+
+
+def _partner_pct_for_link(partners_by_edge: dict, link: CompanyOwnershipLink) -> float:
+    partner = partners_by_edge.get((link.child_company_id, link.parent_company_id))
+    if partner is None:
+        return float(link.percentage)
+    return float(partner.percentage or 0)
+
+
+def apply_structural_partner(db: Session, partner: CompanyPartner) -> None:
+    """Sócio empresa→empresa passa a ser o percentual atual da consolidação. Faixas passadas ficam."""
+    if not partner.partner_company_id:
+        return
+    parent_id = partner.partner_company_id
+    child_id = partner.company_id
+    if would_create_cycle(db, parent_id, child_id):
+        raise ValueError("Vínculo criaria ciclo na árvore.")
+    existing = child_has_other_parent(db, child_id)
+    if existing and existing.parent_company_id != parent_id:
+        raise ValueError("Empresa filha já possui outro vínculo pai na árvore MLDU.")
+    if existing:
+        new_pct = float(partner.percentage or 0)
+        if abs(float(existing.percentage) - new_pct) >= 1e-9:
+            existing.percentage = new_pct
+            from app.services.mldu_ownership_periods import list_periods_for_link
+
+            for period in list_periods_for_link(db, existing.id):
+                if period.valid_until is None:
+                    period.percentage = new_pct
+    else:
+        db.add(
+            CompanyOwnershipLink(
+                parent_company_id=parent_id,
+                child_company_id=child_id,
+                percentage=float(partner.percentage or 0),
+                consolidates=bool(partner.is_consolidated),
+            )
+        )
+    sync_company_effective_percentages(db)
+
+
+def remove_structural_partner(db: Session, partner: CompanyPartner) -> None:
+    if not partner.partner_company_id:
+        return
+    link = (
+        db.query(CompanyOwnershipLink)
+        .filter(
+            CompanyOwnershipLink.child_company_id == partner.company_id,
+            CompanyOwnershipLink.parent_company_id == partner.partner_company_id,
+        )
+        .first()
+    )
+    if link:
+        db.delete(link)
+    sync_company_effective_percentages(db)
+
+
 def build_tree(db: Session) -> dict[str, Any]:
+    cadastro = ensure_structural_partners_from_links(db)
     links = db.query(CompanyOwnershipLink).all()
     companies = {c.id: c for c in db.query(Company).all()}
     effective, paths = compute_effective_map(db)
+    partners_by_edge = {
+        (p.company_id, p.partner_company_id): p
+        for p in db.query(CompanyPartner).filter(CompanyPartner.partner_company_id.isnot(None)).all()
+    }
     from app.services.mldu_ownership_periods import serialize_periods
 
     periods_by_link: dict[int, list] = defaultdict(list)
@@ -152,7 +261,7 @@ def build_tree(db: Session) -> dict[str, Any]:
                 child_nodes.append(n)
         return {
             "link_id": link.id,
-            "percentage": link.percentage,
+            "percentage": _partner_pct_for_link(partners_by_edge, link),
             "consolidates": link.consolidates,
             "notes": link.notes,
             "historico": serialize_periods(periods_by_link.get(link.id, [])),
@@ -179,7 +288,11 @@ def build_tree(db: Session) -> dict[str, Any]:
         if c.id not in linked_ids and c.id_sienge != ROOT_SIENGE_ID
     ]
 
-    return {"root": root_data, "empresas_sem_vinculo": unlinked}
+    return {
+        "root": root_data,
+        "empresas_sem_vinculo": unlinked,
+        "divergencias": cadastro["divergencias"],
+    }
 
 
 # Referência organograma (MLES = 33% conforme decisão do usuário)

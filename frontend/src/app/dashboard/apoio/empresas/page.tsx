@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Plus, Pencil, Trash2, Building2, AlertCircle, Users, ArrowUpDown, ArrowUp, ArrowDown, RefreshCw, Info, Search, X } from "lucide-react";
 import toast from "react-hot-toast";
 import { Button } from "@/components/ui/Button";
@@ -60,6 +61,8 @@ const emptyPartner = {
 };
 
 export default function EmpresasPage() {
+  const searchParams = useSearchParams();
+  const sociosAbertos = useRef(false);
   const [empresas, setEmpresas] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -222,6 +225,16 @@ export default function EmpresasPage() {
     loadPartners(emp.db_id);
     apoioService.getUsuariosParaSocios().then(setUsuariosSocios).catch(() => setUsuariosSocios([]));
   };
+
+  useEffect(() => {
+    if (sociosAbertos.current || isLoading) return;
+    const sociosId = searchParams.get("socios");
+    if (!sociosId) return;
+    const emp = empresas.find((item) => String(item.db_id) === sociosId);
+    if (!emp) return;
+    sociosAbertos.current = true;
+    openPartnersModal(emp);
+  }, [empresas, isLoading, searchParams]);
 
   const handleToggleConsolidacao = async (emp: any) => {
     if (!emp.db_id) {
