@@ -20,7 +20,7 @@ from app.models.actual_transaction import ActualTransaction
 
 from app.models.unit import Unit
 
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, cast, String
 
 from app.services.math_engine import calculate_viability_results
 
@@ -40,6 +40,10 @@ from datetime import datetime
 
 router = APIRouter()
 
+
+def _ano_mes_transacao():
+    """Mês YYYY-MM. No Postgres a coluna é DATE e substr direto nela não existe."""
+    return func.substr(cast(ActualTransaction.transaction_date, String), 1, 7)
 
 
 def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mult_apportioned: float = 1.0, mult_default: float = 1.0, cached_cat_to_group: dict = None):
@@ -72,7 +76,7 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
     real_agg = db.query(
 
-        func.substr(ActualTransaction.transaction_date, 1, 7).label("mes"),
+        _ano_mes_transacao().label("mes"),
 
         ActualTransaction.category,
 
@@ -92,7 +96,7 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
     ).group_by(
 
-        func.substr(ActualTransaction.transaction_date, 1, 7),
+        _ano_mes_transacao(),
 
         ActualTransaction.category,
 
@@ -106,7 +110,7 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
     fcst_agg = db.query(
 
-        func.substr(ActualTransaction.transaction_date, 1, 7).label("mes"),
+        _ano_mes_transacao().label("mes"),
 
         ActualTransaction.category,
 
@@ -124,7 +128,7 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
     ).group_by(
 
-        func.substr(ActualTransaction.transaction_date, 1, 7),
+        _ano_mes_transacao(),
 
         ActualTransaction.category,
 
