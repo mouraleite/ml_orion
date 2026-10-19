@@ -39,3 +39,45 @@ services:
         sync: false
       - key: CRON_SECRET
         sync: false
+
+  # O web no plano free dorme e o relógio interno não dispara.
+  # 12:00 e 17:00 UTC = 09:00 e 14:00 em Brasília.
+  - type: cron
+    name: erp-ml-sienge-sync
+    runtime: python
+    schedule: "0 12,17 * * *"
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -c "from app.core.scheduler import daily_sienge_sync; daily_sienge_sync()"
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: DATABASE_URL
+        fromService:
+          name: erp-ml-api
+          type: web
+          envVarKey: DATABASE_URL
+      - key: SECRET_KEY
+        fromService:
+          name: erp-ml-api
+          type: web
+          envVarKey: SECRET_KEY
+      - key: SIENGE_SUBDOMAIN
+        fromService:
+          name: erp-ml-api
+          type: web
+          envVarKey: SIENGE_SUBDOMAIN
+      - key: SIENGE_USER
+        fromService:
+          name: erp-ml-api
+          type: web
+          envVarKey: SIENGE_USER
+      - key: SIENGE_PASS
+        fromService:
+          name: erp-ml-api
+          type: web
+          envVarKey: SIENGE_PASS
+      - key: REDIS_URL
+        value: redis://localhost:6379/0

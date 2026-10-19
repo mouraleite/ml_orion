@@ -59,11 +59,16 @@ def sync_all_sienge_data(db: Session, full_load: bool = False):
     else:
         centros = tracked
     
+    falhas: list[str] = []
     for cc in centros:
         if not cc.id_sienge:
             continue
-            
-        sync_single_cc_sienge_data(db, cc, start_date, end_date)
+        try:
+            sync_single_cc_sienge_data(db, cc, start_date, end_date)
+        except Exception as exc:
+            db.rollback()
+            falhas.append(f"{cc.id_sienge}: {exc}")
+            print(f"[Sienge Sync] Falha no CC {cc.id_sienge} ({cc.nome}): {exc}")
 
     # Caixa e Bancos — uma passagem para todos os CCs do sync
     print("Sincronizando Caixa e Bancos (BM-*)...")
@@ -72,7 +77,12 @@ def sync_all_sienge_data(db: Session, full_load: bool = False):
     # Ao final do sincronismo de centros de custo, sincroniza também os colaboradores
     print("Sincronizando Colaboradores (Credores) do Sienge...")
     sync_sienge_colaboradores(db)
-    
+
+    if falhas:
+        raise RuntimeError(
+            "Sincronização Sienge incompleta: " + "; ".join(falhas[:8])
+        )
+
     # Gravar timestamp exato da sincronização para exibir no frontend
     try:
         from app.models.system_settings import SystemSettings
@@ -665,15 +675,20 @@ def sync_incomes(db: Session, cc: CostCenter, start_date: str, end_date: str):
 
     db.commit()
 
+def _clear_open_forecast(db: Session, cost_center_id: int, transaction_type: str) -> None:
+    """Apaga previsões em aberto. Boolean no Postgres; não comparar com inteiro 1."""
+    db.query(ActualTransaction).filter(
+        ActualTransaction.cost_center_id == cost_center_id,
+        ActualTransaction.transaction_type == transaction_type,
+        ActualTransaction.is_forecast.is_(True),
+    ).delete(synchronize_session=False)
+    db.commit()
+
+
 def sync_receivables_forecast(db: Session, cc: CostCenter):
     from datetime import datetime
     current_year = datetime.now().year
-    from sqlalchemy import text as sa_text
-    db.execute(
-        sa_text("DELETE FROM actual_transactions WHERE cost_center_id=:cc AND transaction_type='INCOME' AND is_forecast=1"),
-        {"cc": cc.id}
-    )
-    db.commit()
+    _clear_open_forecast(db, cc.id, "INCOME")
 
     count = 0
     try:
@@ -755,13 +770,7 @@ def sync_payables_forecast(db: Session, cc: CostCenter):
     from datetime import datetime
     current_year = datetime.now().year
 
-    # Limpar previsões antigas para este CC
-    from sqlalchemy import text as sa_text
-    db.execute(
-        sa_text("DELETE FROM actual_transactions WHERE cost_center_id=:cc AND transaction_type='OUTCOME' AND is_forecast=1"),
-        {"cc": cc.id}
-    )
-    db.commit()
+    _clear_open_forecast(db, cc.id, "OUTCOME")
 
     count = 0
     try:
