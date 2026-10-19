@@ -85,7 +85,73 @@ def _projetar_vgv_estoque_no_fluxo(anual_cf_fcst, monthly_net_cf_fcst, estoque_a
         monthly_net_cf_fcst[f"{y}-{m:02d}"] += running
 
 
-def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mult_apportioned: float = 1.0, mult_default: float = 1.0, cached_cat_to_group: dict = None):
+def _prefetch_tracking_actuals(db, cc_ids):
+    """Uma leitura para todos os centros da lista. As contas continuam em _calc_actuals_for_cc."""
+    cc_ids = list({cid for cid in cc_ids if cid is not None})
+    sales_by = defaultdict(list)
+    real_by = defaultdict(list)
+    fcst_by = defaultdict(list)
+    units_by = defaultdict(list)
+    cc_by = {}
+    if not cc_ids:
+        return {"sales": sales_by, "real": real_by, "fcst": fcst_by, "units": units_by, "ccs": cc_by}
+
+    sales = db.query(ActualTransaction).options(joinedload(ActualTransaction.unit)).filter(
+        ActualTransaction.cost_center_id.in_(cc_ids),
+        ActualTransaction.is_forecast == False,
+        ActualTransaction.transaction_type == "SALE",
+    ).all()
+    for sale in sales:
+        sales_by[sale.cost_center_id].append(sale)
+
+    real_rows = db.query(
+        ActualTransaction.cost_center_id,
+        _ano_mes_transacao().label("mes"),
+        ActualTransaction.category,
+        ActualTransaction.transaction_type,
+        func.sum(ActualTransaction.value).label("total_value"),
+        func.count(ActualTransaction.id).label("count"),
+    ).filter(
+        ActualTransaction.cost_center_id.in_(cc_ids),
+        ActualTransaction.is_forecast == False,
+        ActualTransaction.transaction_type != "SALE",
+    ).group_by(
+        ActualTransaction.cost_center_id,
+        _ano_mes_transacao(),
+        ActualTransaction.category,
+        ActualTransaction.transaction_type,
+    ).all()
+    for row in real_rows:
+        real_by[row.cost_center_id].append(row)
+
+    fcst_rows = db.query(
+        ActualTransaction.cost_center_id,
+        _ano_mes_transacao().label("mes"),
+        ActualTransaction.category,
+        ActualTransaction.transaction_type,
+        func.sum(ActualTransaction.value).label("total_value"),
+        func.count(ActualTransaction.id).label("count"),
+    ).filter(
+        ActualTransaction.cost_center_id.in_(cc_ids),
+        ActualTransaction.is_forecast == True,
+    ).group_by(
+        ActualTransaction.cost_center_id,
+        _ano_mes_transacao(),
+        ActualTransaction.category,
+        ActualTransaction.transaction_type,
+    ).all()
+    for row in fcst_rows:
+        fcst_by[row.cost_center_id].append(row)
+
+    estoque_status = ["D", "R", "C", "P", "G"]
+    for unit in db.query(Unit).filter(Unit.cost_center_id.in_(cc_ids), Unit.status.in_(estoque_status)).all():
+        units_by[unit.cost_center_id].append(unit)
+    for cc in db.query(CostCenter).filter(CostCenter.id.in_(cc_ids)).all():
+        cc_by[cc.id] = cc
+    return {"sales": sales_by, "real": real_by, "fcst": fcst_by, "units": units_by, "ccs": cc_by}
+
+
+def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mult_apportioned: float = 1.0, mult_default: float = 1.0, cached_cat_to_group: dict = None, prefetched=None, kpis_only: bool = False):
 
     """Calcula os valores realizados de um CC para DRE e Fluxo de Caixa.
 
@@ -97,15 +163,18 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
     # 1. Buscar transações de VENDAS separadamente (para ter a entidade unit e área)
 
-    transactions_sales = db.query(ActualTransaction).options(joinedload(ActualTransaction.unit)).filter_by(
+    if prefetched is not None:
+        transactions_sales = prefetched["sales"].get(cc_id, [])
+    else:
+        transactions_sales = db.query(ActualTransaction).options(joinedload(ActualTransaction.unit)).filter_by(
 
-        cost_center_id=cc_id, 
+            cost_center_id=cc_id,
 
-        is_forecast=False,
+            is_forecast=False,
 
-        transaction_type='SALE'
+            transaction_type='SALE'
 
-    ).all()
+        ).all()
 
     
 
@@ -113,7 +182,10 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
     from sqlalchemy import func
 
-    real_agg = db.query(
+    if prefetched is not None:
+        real_agg = prefetched["real"].get(cc_id, [])
+    else:
+        real_agg = db.query(
 
         _ano_mes_transacao().label("mes"),
 
@@ -147,7 +219,10 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
     # 3. Agregação no banco de dados para INCOME e OUTCOME previstos (is_forecast=True)
 
-    fcst_agg = db.query(
+    if prefetched is not None:
+        fcst_agg = prefetched["fcst"].get(cc_id, [])
+    else:
+        fcst_agg = db.query(
 
         _ano_mes_transacao().label("mes"),
 
@@ -621,7 +696,10 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
     estoque_status = ["D", "R", "C", "P", "G"]
 
-    available_units = db.query(Unit).filter(Unit.cost_center_id == cc_id, Unit.status.in_(estoque_status)).all()
+    if prefetched is not None:
+        available_units = prefetched["units"].get(cc_id, [])
+    else:
+        available_units = db.query(Unit).filter(Unit.cost_center_id == cc_id, Unit.status.in_(estoque_status)).all()
 
     available_area = sum(u.private_area for u in available_units)
 
@@ -633,7 +711,7 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
     # Se houver custo de terreno manual, insere como investimento inicial no primeiro mês do fluxo
 
-    cc = db.query(CostCenter).filter(CostCenter.id == cc_id).first()
+    cc = prefetched["ccs"].get(cc_id) if prefetched is not None else db.query(CostCenter).filter(CostCenter.id == cc_id).first()
 
     if cc and cc.manual_land_cost and float(cc.manual_land_cost) > 0:
 
@@ -773,7 +851,7 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
     # ---------------------------------------------------------
 
-    cc_record = db.query(CostCenter).filter(CostCenter.id == cc_id).first()
+    cc_record = cc if prefetched is not None else db.query(CostCenter).filter(CostCenter.id == cc_id).first()
 
     if cc_record and cc_record.manual_land_cost:
 
@@ -1277,7 +1355,32 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
     rent_inv = (lucro_operacional / vgv_vendido) * 100 if vgv_vendido > 0 else 0.0
 
-
+    if kpis_only:
+        return {
+            "vgv_vendido": vgv_vendido,
+            "distratos": distratos,
+            "vgv_estoque": vgv_estoque,
+            "lucro_operacional": lucro_operacional,
+            "lucro_liq_operacional": lucro_liq_operacional,
+            "receita_bruta": vgv_liquido,
+            "final_cf_dict": final_cf_dict,
+            "monthly_net_cf_real": monthly_net_cf_real,
+            "monthly_net_cf_fcst": monthly_net_cf_fcst,
+            "monthly_revenues_real": monthly_revenues_real,
+            "monthly_revenues_fcst": monthly_revenues_fcst,
+            "dre": dre,
+            "fluxo_caixa": fluxo_caixa,
+            "tir_anual": tir_anual,
+            "tir_mensal": tir_mensal_final,
+            "mtir_anual": mtir_anual,
+            "mtir_mensal": mtir_mensal_final,
+            "payback": payback,
+            "periodo_exposicao": periodo_exposicao,
+            "vida": vida,
+            "exposicao_maxima": exposicao_maxima,
+            "rent_inv": rent_inv,
+            "estoque_unidades": len(available_units),
+        }
 
     # Calcular Velocidade de Vendas (VSO)
 
@@ -1729,7 +1832,7 @@ def _calculate_financial_indicators(cf_dict):
 
 
 
-def _calc_slice_actuals(db, macro_prefix, native_cc_id, pct, view_mode, cached_cat_to_group, actuals_cache=None):
+def _calc_slice_actuals(db, macro_prefix, native_cc_id, pct, view_mode, cached_cat_to_group, actuals_cache=None, prefetched=None, kpis_only: bool = False):
 
     native_cc = db.query(CostCenter).filter(CostCenter.id == native_cc_id).first()
 
@@ -1774,7 +1877,7 @@ def _calc_slice_actuals(db, macro_prefix, native_cc_id, pct, view_mode, cached_c
         if actuals_cache is not None and sub_cc.id in actuals_cache:
             act = actuals_cache[sub_cc.id]
         else:
-            act = _calc_actuals_for_cc(db, sub_cc.id, None, 1.0, 1.0, cached_cat_to_group)
+            act = _calc_actuals_for_cc(db, sub_cc.id, None, 1.0, 1.0, cached_cat_to_group, prefetched=prefetched, kpis_only=kpis_only)
             if actuals_cache is not None:
                 actuals_cache[sub_cc.id] = act
 
@@ -1831,7 +1934,7 @@ def _calc_slice_actuals(db, macro_prefix, native_cc_id, pct, view_mode, cached_c
     if actuals_cache is not None and native_cc_id in actuals_cache:
         native_act = actuals_cache[native_cc_id]
     else:
-        native_act = _calc_actuals_for_cc(db, native_cc_id, None, 1.0, 1.0, cached_cat_to_group)
+        native_act = _calc_actuals_for_cc(db, native_cc_id, None, 1.0, 1.0, cached_cat_to_group, prefetched=prefetched, kpis_only=kpis_only)
         if actuals_cache is not None:
             actuals_cache[native_cc_id] = native_act
 
@@ -2334,13 +2437,22 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
 
 
 
+    needed_ids = {sub_cc.id for members in cc_groups.values() for sub_cc in members}
+    for sl in slices:
+        needed_ids.add(sl["cc"].id)
+        for (cid,) in db.query(CostCenter.id).filter(CostCenter.id_sienge.like(f"{sl['macro_prefix']}%")).all():
+            needed_ids.add(cid)
+    prefetched = _prefetch_tracking_actuals(db, needed_ids)
+
     cached_actuals = {}
 
     def get_actuals(cc_id):
 
         if cc_id not in cached_actuals:
 
-            cached_actuals[cc_id] = _calc_actuals_for_cc(db, cc_id, cached_cat_to_group=cached_cat_to_group)
+            cached_actuals[cc_id] = _calc_actuals_for_cc(
+                db, cc_id, cached_cat_to_group=cached_cat_to_group, prefetched=prefetched, kpis_only=True
+            )
 
         return cached_actuals[cc_id]
 
@@ -2393,7 +2505,10 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
         raw_id = f"cg-{macro_prefix}_slice_{c.id}"
         kpis = {}
         try:
-            slice_act = _calc_slice_actuals(db, macro_prefix, c.id, pct, "consolidado", cached_cat_to_group, cached_actuals)
+            slice_act = _calc_slice_actuals(
+                db, macro_prefix, c.id, pct, "consolidado", cached_cat_to_group,
+                cached_actuals, prefetched=prefetched, kpis_only=True,
+            )
             kpis = _kpis_da_fatia(slice_act)
         except Exception as e:
             print(f"Error calculating details for slice {raw_id}: {e}")
