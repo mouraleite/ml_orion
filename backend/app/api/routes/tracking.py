@@ -85,6 +85,22 @@ def _projetar_vgv_estoque_no_fluxo(anual_cf_fcst, monthly_net_cf_fcst, estoque_a
         monthly_net_cf_fcst[f"{y}-{m:02d}"] += running
 
 
+class _AreaLista:
+    def __init__(self, private_area):
+        self.private_area = private_area or 0.0
+
+
+class _VendaLista:
+    """Venda enxuta para a lista. Os campos são os mesmos que o cálculo já lê."""
+
+    def __init__(self, transaction_date, value, category, installments_number, private_area):
+        self.transaction_date = transaction_date
+        self.value = value or 0.0
+        self.category = category
+        self.installments_number = installments_number
+        self.unit = _AreaLista(private_area) if private_area is not None else None
+
+
 def _prefetch_tracking_actuals(db, cc_ids):
     """Uma leitura para todos os centros da lista. As contas continuam em _calc_actuals_for_cc."""
     cc_ids = list({cid for cid in cc_ids if cid is not None})
@@ -96,13 +112,20 @@ def _prefetch_tracking_actuals(db, cc_ids):
     if not cc_ids:
         return {"sales": sales_by, "real": real_by, "fcst": fcst_by, "units": units_by, "ccs": cc_by}
 
-    sales = db.query(ActualTransaction).options(joinedload(ActualTransaction.unit)).filter(
+    sales = db.query(
+        ActualTransaction.cost_center_id,
+        ActualTransaction.transaction_date,
+        ActualTransaction.value,
+        ActualTransaction.category,
+        ActualTransaction.installments_number,
+        Unit.private_area,
+    ).outerjoin(Unit, Unit.id == ActualTransaction.unit_id).filter(
         ActualTransaction.cost_center_id.in_(cc_ids),
         ActualTransaction.is_forecast == False,
         ActualTransaction.transaction_type == "SALE",
     ).all()
-    for sale in sales:
-        sales_by[sale.cost_center_id].append(sale)
+    for cost_center_id, transaction_date, value, category, installments_number, private_area in sales:
+        sales_by[cost_center_id].append(_VendaLista(transaction_date, value, category, installments_number, private_area))
 
     real_rows = db.query(
         ActualTransaction.cost_center_id,
@@ -747,8 +770,6 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
     estoque_atual = len(available_units)
 
-    print(f"[DEBUG] Estoque atual: {estoque_atual}, VGV Estoque: {vgv_estoque}, CC: {cc_id}")
-
     if estoque_atual > 0:
 
         # Filtrar meses que tiveram vendas reais (vendas > 0)
@@ -758,8 +779,6 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
         last_6_active_months = valid_sales_months[:6]
 
         
-
-        print(f"[DEBUG] Últimos 6 meses com vendas: {last_6_active_months}")
 
         if last_6_active_months:
 
@@ -2437,12 +2456,18 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
 
 
 
-    needed_ids = {sub_cc.id for members in cc_groups.values() for sub_cc in members}
-    for sl in slices:
-        needed_ids.add(sl["cc"].id)
-        for (cid,) in db.query(CostCenter.id).filter(CostCenter.id_sienge.like(f"{sl['macro_prefix']}%")).all():
-            needed_ids.add(cid)
-    prefetched = _prefetch_tracking_actuals(db, needed_ids)
+    try:
+        needed_ids = {sub_cc.id for members in cc_groups.values() for sub_cc in members}
+        for sl in slices:
+            needed_ids.add(sl["cc"].id)
+            for (cid,) in db.query(CostCenter.id).filter(CostCenter.id_sienge.like(f"{sl['macro_prefix']}%")).all():
+                needed_ids.add(cid)
+        prefetched = _prefetch_tracking_actuals(db, needed_ids)
+    except Exception as e:
+        print(f"Error loading tracking summary: {e}")
+        prefetched = None
+        cc_groups = {}
+        slices = []
 
     cached_actuals = {}
 

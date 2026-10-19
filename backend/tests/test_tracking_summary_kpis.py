@@ -83,6 +83,22 @@ def test_kpis_da_fatia_usam_os_campos_do_rateio():
     assert kpis["payback"] == 14
 
 
+def test_lista_usa_venda_enxuta_sem_consultar_unidade():
+    from datetime import date
+
+    from app.api.routes.tracking import _VendaLista, _calc_actuals_for_cc
+
+    prefetched = {
+        "sales": {7: [_VendaLista(date(2026, 8, 1), 1500.0, "VGV Vendido", 12, 50.0)]},
+        "real": {},
+        "fcst": {},
+        "units": {},
+        "ccs": {},
+    }
+    act = _calc_actuals_for_cc(None, 7, cached_cat_to_group={}, prefetched=prefetched, kpis_only=True)
+    assert act["vgv_vendido"] == 1500.0
+
+
 def test_calculo_do_centro_le_venda_com_data():
     import importlib
     import os
