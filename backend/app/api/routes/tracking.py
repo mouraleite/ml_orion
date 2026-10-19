@@ -2242,6 +2242,8 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
 
             if group_key not in cc_groups:
 
+                members = []
+
                 if c.id_sienge and len(c.id_sienge) >= 3:
 
                     related_ccs = db.query(CostCenter).filter(CostCenter.id_sienge.like(f"{macro_prefix}%")).all()
@@ -2252,11 +2254,13 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
 
                         if parse_project_name(rc)[1] == proj_name:
 
-                            cc_groups[group_key].append(rc)
+                            members.append(rc)
 
-                else:
+                if not any(rc.id == c.id for rc in members):
 
-                    cc_groups[group_key].append(c)
+                    members.append(c)
+
+                cc_groups[group_key] = members
 
     
 
@@ -2285,31 +2289,33 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
         if main_cc.project_phase in ["Encerrado", "Concluído"]: cat = "Encerrado"
         
         raw_id = f"cg-{base_class}"
+        kpis = {}
         try:
             details = _get_tracking_details_logic(db, raw_id, "consolidado")
-            kpis = details.get("kpis", {})
-            results_list.append({
-                "id": raw_id,
-                "db_id": base_class,
-                "itemType": "cost_center",
-                "project_name": project_name,
-                "category": cat,
-                "status": "Em comercialização" if main_cc.project_phase == "Em Andamento" else main_cc.project_phase,
-                "city": city,
-                "vgv_total": kpis.get("vgv_total", 0.0),
-                "vendas_acumuladas": kpis.get("vendas_acumuladas", 0.0),
-                "perc_vendido": kpis.get("perc_vendido", 0.0),
-                "lucro": kpis.get("lucro", 0.0) if "lucro" in kpis else kpis.get("lucro_operacional", 0.0),
-                "tir_anual": kpis.get("tir_anual", 0.0),
-                "mtir_anual": kpis.get("mtir_anual", 0.0),
-                "payback_anos": kpis.get("payback", 0.0),
-                "exposicao_max_caixa": kpis.get("exposicao_max_caixa", 0.0),
-                "exposicao_caixa_vgv": kpis.get("exposicao_caixa_vgv", 0.0),
-                "vso": kpis.get("vso", 0.0),
-                "distrato_venda": kpis.get("distrato_venda", 0.0)
-            })
+            nested = details.get("kpis") if isinstance(details, dict) else None
+            kpis = nested if isinstance(nested, dict) else (details if isinstance(details, dict) else {})
         except Exception as e:
             print(f"Error calculating details for {raw_id}: {e}")
+        results_list.append({
+            "id": raw_id,
+            "db_id": base_class,
+            "itemType": "cost_center",
+            "project_name": project_name,
+            "category": cat,
+            "status": "Em comercialização" if main_cc.project_phase == "Em Andamento" else main_cc.project_phase,
+            "city": city,
+            "vgv_total": kpis.get("vgv_total", 0.0),
+            "vendas_acumuladas": kpis.get("vendas_acumuladas", 0.0),
+            "perc_vendido": kpis.get("perc_vendido", 0.0),
+            "lucro": kpis.get("lucro", 0.0) if "lucro" in kpis else kpis.get("lucro_operacional", 0.0),
+            "tir_anual": kpis.get("tir_anual", 0.0),
+            "mtir_anual": kpis.get("mtir_anual", 0.0),
+            "payback_anos": kpis.get("payback", 0.0),
+            "exposicao_max_caixa": kpis.get("exposicao_max_caixa", 0.0),
+            "exposicao_caixa_vgv": kpis.get("exposicao_caixa_vgv", 0.0),
+            "vso": kpis.get("vso", 0.0),
+            "distrato_venda": kpis.get("distrato_venda", 0.0)
+        })
 
     # Processa os Slices
     for sl in slices:
@@ -2321,31 +2327,33 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
         if c.project_phase in ["Encerrado", "Concluído"]: cat = "Encerrado"
         
         raw_id = f"cg-{macro_prefix}_slice_{c.id}"
+        kpis = {}
         try:
             details = _get_tracking_details_logic(db, raw_id, "consolidado")
-            kpis = details.get("kpis", {})
-            results_list.append({
-                "id": raw_id,
-                "db_id": c.id,
-                "itemType": "cost_center",
-                "project_name": project_name,
-                "category": cat,
-                "status": "Em comercialização" if c.project_phase == "Em Andamento" else c.project_phase,
-                "city": city,
-                "vgv_total": kpis.get("vgv_total", 0.0),
-                "vendas_acumuladas": kpis.get("vendas_acumuladas", 0.0),
-                "perc_vendido": kpis.get("perc_vendido", 0.0),
-                "lucro": kpis.get("lucro", 0.0) if "lucro" in kpis else kpis.get("lucro_operacional", 0.0),
-                "tir_anual": kpis.get("tir_anual", 0.0),
-                "mtir_anual": kpis.get("mtir_anual", 0.0),
-                "payback_anos": kpis.get("payback", 0.0),
-                "exposicao_max_caixa": kpis.get("exposicao_max_caixa", 0.0),
-                "exposicao_caixa_vgv": kpis.get("exposicao_caixa_vgv", 0.0),
-                "vso": kpis.get("vso", 0.0),
-                "distrato_venda": kpis.get("distrato_venda", 0.0)
-            })
+            nested = details.get("kpis") if isinstance(details, dict) else None
+            kpis = nested if isinstance(nested, dict) else (details if isinstance(details, dict) else {})
         except Exception as e:
             print(f"Error calculating details for slice {raw_id}: {e}")
+        results_list.append({
+            "id": raw_id,
+            "db_id": c.id,
+            "itemType": "cost_center",
+            "project_name": project_name,
+            "category": cat,
+            "status": "Em comercialização" if c.project_phase == "Em Andamento" else c.project_phase,
+            "city": city,
+            "vgv_total": kpis.get("vgv_total", 0.0),
+            "vendas_acumuladas": kpis.get("vendas_acumuladas", 0.0),
+            "perc_vendido": kpis.get("perc_vendido", 0.0),
+            "lucro": kpis.get("lucro", 0.0) if "lucro" in kpis else kpis.get("lucro_operacional", 0.0),
+            "tir_anual": kpis.get("tir_anual", 0.0),
+            "mtir_anual": kpis.get("mtir_anual", 0.0),
+            "payback_anos": kpis.get("payback", 0.0),
+            "exposicao_max_caixa": kpis.get("exposicao_max_caixa", 0.0),
+            "exposicao_caixa_vgv": kpis.get("exposicao_caixa_vgv", 0.0),
+            "vso": kpis.get("vso", 0.0),
+            "distrato_venda": kpis.get("distrato_venda", 0.0)
+        })
 
 
     # Buscar timestamp da última execução do sync das APIs (gravado pelo scheduler/sync)
@@ -2426,6 +2434,8 @@ def _get_tracking_details_logic(db, id: str, view_mode: str = 'consolidado'):
                 except:
 
                     pass
+
+            ccs = [native_cc] if native_cc else []
 
         else:
 

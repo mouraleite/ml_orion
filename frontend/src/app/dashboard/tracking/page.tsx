@@ -32,7 +32,7 @@ export default function TrackingPage() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const res = await api.get("/tracking/summary");
+      const res = await api.get("/tracking/summary", { timeout: 180000 });
       // API returns {items: [...], last_sync_at: "..."} or legacy plain array
       if (Array.isArray(res.data)) {
         setData(res.data);
