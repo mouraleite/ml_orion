@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from typing import Any, List, Dict
 
@@ -46,6 +46,45 @@ def _ano_mes_transacao():
     return func.substr(cast(ActualTransaction.transaction_date, String), 1, 7)
 
 
+def _projetar_vgv_estoque_no_fluxo(anual_cf_fcst, monthly_net_cf_fcst, estoque_atual, avg_vendas_por_mes, avg_vgv_per_unit, weights_by_installments, proj_month, proj_year, max_months=600):
+    """Lança o VGV de estoque nos mesmos meses da projeção mês a mês."""
+    if not (estoque_atual > 0 and avg_vendas_por_mes > 0):
+        return
+    series = []
+    estoque_restante = float(estoque_atual)
+    while estoque_restante > 1e-9 and len(series) < max_months:
+        vendas_do_mes = min(avg_vendas_por_mes, estoque_restante)
+        estoque_restante -= vendas_do_mes
+        series.append(vendas_do_mes * avg_vgv_per_unit)
+    if not series:
+        return
+    insts = []
+    for inst, weight in weights_by_installments.items():
+        inst_i = int(inst)
+        if inst_i > 0 and weight:
+            insts.append((inst_i, float(weight)))
+    if not insts:
+        return
+    max_inst = max(inst_i for inst_i, _ in insts)
+    diff = [0.0] * (len(series) + max_inst + 1)
+    for inst_i, weight in insts:
+        for s, vgv_do_mes in enumerate(series):
+            parcela = (vgv_do_mes * weight) / inst_i
+            if parcela > 0:
+                diff[s] += parcela
+                diff[s + inst_i] -= parcela
+    running = 0.0
+    for idx, delta in enumerate(diff):
+        running += delta
+        if abs(running) < 1e-6:
+            running = 0.0
+            continue
+        y = proj_year + (proj_month - 1 + idx) // 12
+        m = (proj_month - 1 + idx) % 12 + 1
+        anual_cf_fcst[str(y)]["Entradas"] += running
+        monthly_net_cf_fcst[f"{y}-{m:02d}"] += running
+
+
 def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mult_apportioned: float = 1.0, mult_default: float = 1.0, cached_cat_to_group: dict = None):
 
     """Calcula os valores realizados de um CC para DRE e Fluxo de Caixa.
@@ -58,7 +97,7 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
     # 1. Buscar transações de VENDAS separadamente (para ter a entidade unit e área)
 
-    transactions_sales = db.query(ActualTransaction).filter_by(
+    transactions_sales = db.query(ActualTransaction).options(joinedload(ActualTransaction.unit)).filter_by(
 
         cost_center_id=cc_id, 
 
@@ -704,67 +743,27 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
                     proj_year += 1
 
-                
-
-                estoque_restante = estoque_atual
-
                 avg_vgv_per_unit = vgv_estoque / estoque_atual if estoque_atual > 0 else 0
 
-                max_months = 600
+                _projetar_vgv_estoque_no_fluxo(
 
-                months_simulated = 0
+                    anual_cf_fcst,
 
-                
+                    monthly_net_cf_fcst,
 
-                while estoque_restante > 0 and months_simulated < max_months:
+                    estoque_atual,
 
-                    vendas_do_mes = min(avg_vendas_por_mes, estoque_restante)
+                    avg_vendas_por_mes,
 
-                    estoque_restante -= vendas_do_mes
+                    avg_vgv_per_unit,
 
-                    
+                    weights_by_installments,
 
-                    vgv_do_mes = vendas_do_mes * avg_vgv_per_unit
+                    proj_month,
 
-                    
+                    proj_year,
 
-                    for inst, weight in weights_by_installments.items():
-
-                        vgv_parcela = (vgv_do_mes * weight) / inst
-
-                        if vgv_parcela > 0:
-
-                            for i in range(int(inst)):
-
-                                m = proj_month + i
-
-                                y = proj_year + (m - 1) // 12
-
-                                real_m = (m - 1) % 12 + 1
-
-                                
-
-                                ano_str = str(y)
-
-                                mes_str = f"{y}-{real_m:02d}"
-
-                                
-
-                                anual_cf_fcst[ano_str]["Entradas"] += vgv_parcela
-
-                                monthly_net_cf_fcst[mes_str] += vgv_parcela
-
-                                
-
-                    proj_month += 1
-
-                    if proj_month > 12:
-
-                        proj_month = 1
-
-                        proj_year += 1
-
-                    months_simulated += 1
+                )
 
 
 
@@ -1730,7 +1729,7 @@ def _calculate_financial_indicators(cf_dict):
 
 
 
-def _calc_slice_actuals(db, macro_prefix, native_cc_id, pct, view_mode, cached_cat_to_group):
+def _calc_slice_actuals(db, macro_prefix, native_cc_id, pct, view_mode, cached_cat_to_group, actuals_cache=None):
 
     native_cc = db.query(CostCenter).filter(CostCenter.id == native_cc_id).first()
 
@@ -1772,7 +1771,12 @@ def _calc_slice_actuals(db, macro_prefix, native_cc_id, pct, view_mode, cached_c
 
     for sub_cc in all_ccs:
 
-        act = _calc_actuals_for_cc(db, sub_cc.id, None, 1.0, 1.0, cached_cat_to_group)
+        if actuals_cache is not None and sub_cc.id in actuals_cache:
+            act = actuals_cache[sub_cc.id]
+        else:
+            act = _calc_actuals_for_cc(db, sub_cc.id, None, 1.0, 1.0, cached_cat_to_group)
+            if actuals_cache is not None:
+                actuals_cache[sub_cc.id] = act
 
         macro_vgv_vendido += act.get("vgv_vendido", 0.0)
 
@@ -1824,7 +1828,12 @@ def _calc_slice_actuals(db, macro_prefix, native_cc_id, pct, view_mode, cached_c
 
     # 2. Agrega o Nativo
 
-    native_act = _calc_actuals_for_cc(db, native_cc_id, None, 1.0, 1.0, cached_cat_to_group)
+    if actuals_cache is not None and native_cc_id in actuals_cache:
+        native_act = actuals_cache[native_cc_id]
+    else:
+        native_act = _calc_actuals_for_cc(db, native_cc_id, None, 1.0, 1.0, cached_cat_to_group)
+        if actuals_cache is not None:
+            actuals_cache[native_cc_id] = native_act
 
     
 
@@ -2063,6 +2072,59 @@ def parse_project_name(cc_obj):
     return city, project_name
 
 
+def _kpis_do_consolidado(acts):
+    """Mesmos indicadores da visão consolidada do detalhe, somando os centros do grupo."""
+    vgv_vendido = 0.0
+    vgv_estoque = 0.0
+    distratos = 0.0
+    lucro = 0.0
+    combined_cf = defaultdict(float)
+    for act in acts:
+        vgv_vendido += act.get("vgv_vendido", 0.0) or 0.0
+        vgv_estoque += act.get("vgv_estoque", 0.0) or 0.0
+        distratos += act.get("distratos", 0.0) or 0.0
+        lucro += act.get("lucro_liq_operacional", 0.0) or 0.0
+        for mes, val in (act.get("final_cf_dict") or {}).items():
+            combined_cf[mes] += val
+    indicators = _calculate_financial_indicators(combined_cf or {0: 0.0})
+    vendas_ativas = vgv_vendido - distratos
+    vgv_total = vendas_ativas + vgv_estoque
+    exposicao = indicators.get("exposicao_maxima") or 0.0
+    return {
+        "vgv_total": vgv_total,
+        "vendas_acumuladas": vendas_ativas,
+        "perc_vendido": (vendas_ativas / vgv_total * 100) if vgv_total > 0 else 0.0,
+        "lucro": lucro,
+        "tir_anual": indicators.get("tir_anual") or 0.0,
+        "mtir_anual": indicators.get("mtir_anual") or 0.0,
+        "payback": indicators.get("payback") or 0,
+        "exposicao_max_caixa": exposicao,
+        "exposicao_caixa_vgv": (abs(exposicao) / vgv_total * 100) if vgv_total > 0 else 0.0,
+        "vso": 0.0,
+        "distrato_venda": (distratos / vgv_vendido * 100) if vgv_vendido > 0 else 0.0,
+    }
+
+
+def _kpis_da_fatia(slice_act):
+    """Mesmos campos que o detalhe devolve para um centro com rateio."""
+    vendas_ativas = (slice_act.get("vgv_vendido", 0.0) or 0.0) - (slice_act.get("distratos", 0.0) or 0.0)
+    vgv_total = vendas_ativas + (slice_act.get("vgv_estoque", 0.0) or 0.0)
+    exposicao = slice_act.get("exposicao_maxima") or 0.0
+    vgv_vendido = slice_act.get("vgv_vendido", 0.0) or 0.0
+    return {
+        "vgv_total": vgv_total,
+        "vendas_acumuladas": vendas_ativas,
+        "perc_vendido": (vendas_ativas / vgv_total * 100) if vgv_total > 0 else 0.0,
+        "lucro": slice_act.get("lucro_liq_operacional", 0.0) or 0.0,
+        "tir_anual": slice_act.get("tir_anual", 0.0) or 0.0,
+        "mtir_anual": slice_act.get("mtir_anual", 0.0) or 0.0,
+        "payback": slice_act.get("payback", 0) or 0,
+        "exposicao_max_caixa": exposicao,
+        "exposicao_caixa_vgv": (abs(exposicao) / vgv_total * 100) if vgv_total > 0 else 0.0,
+        "vso": 0.0,
+        "distrato_venda": ((slice_act.get("distratos", 0.0) or 0.0) / vgv_vendido * 100) if vgv_vendido > 0 else 0.0,
+    }
+
 
 @router.get("/summary")
 
@@ -2295,9 +2357,7 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
         raw_id = f"cg-{base_class}"
         kpis = {}
         try:
-            details = _get_tracking_details_logic(db, raw_id, "consolidado")
-            nested = details.get("kpis") if isinstance(details, dict) else None
-            kpis = nested if isinstance(nested, dict) else (details if isinstance(details, dict) else {})
+            kpis = _kpis_do_consolidado([get_actuals(sub_cc.id) for sub_cc in ccs])
         except Exception as e:
             print(f"Error calculating details for {raw_id}: {e}")
         results_list.append({
@@ -2333,9 +2393,8 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
         raw_id = f"cg-{macro_prefix}_slice_{c.id}"
         kpis = {}
         try:
-            details = _get_tracking_details_logic(db, raw_id, "consolidado")
-            nested = details.get("kpis") if isinstance(details, dict) else None
-            kpis = nested if isinstance(nested, dict) else (details if isinstance(details, dict) else {})
+            slice_act = _calc_slice_actuals(db, macro_prefix, c.id, pct, "consolidado", cached_cat_to_group, cached_actuals)
+            kpis = _kpis_da_fatia(slice_act)
         except Exception as e:
             print(f"Error calculating details for slice {raw_id}: {e}")
         results_list.append({
