@@ -229,3 +229,21 @@ def test_lucro_da_vida_soma_recebido_a_receber_e_despesas():
     assert act["lucro_liq_operacional"] == 1000.0
     kpis = _kpis_do_consolidado([act])
     assert kpis["lucro"] == 1000.0
+
+
+def test_lista_soma_previsto_sem_ler_linha_a_linha():
+    from datetime import date
+
+    from app.api.routes.tracking import _VendaLista, _calc_actuals_for_cc, _kpis_do_consolidado
+
+    prefetched = {
+        "sales": {7: [_VendaLista(date(2026, 8, 1), 2000.0, "VGV Vendido", 12, 50.0)]},
+        "real": {},
+        "fcst": {},
+        "fcst_totals": {7: {"INCOME": 400.0, "OUTCOME": 100.0}},
+        "units": {},
+        "ccs": {},
+    }
+    act = _calc_actuals_for_cc(None, 7, cached_cat_to_group={}, prefetched=prefetched, kpis_only=True)
+    assert act["lucro_liq_operacional"] == 300.0
+    assert _kpis_do_consolidado([act])["lucro"] == 300.0

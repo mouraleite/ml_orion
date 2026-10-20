@@ -109,8 +109,9 @@ def _prefetch_tracking_actuals(db, cc_ids, include_forecast: bool = True):
     fcst_by = defaultdict(list)
     units_by = defaultdict(list)
     cc_by = {}
+    fcst_totals = defaultdict(lambda: {"INCOME": 0.0, "OUTCOME": 0.0})
     if not cc_ids:
-        return {"sales": sales_by, "real": real_by, "fcst": fcst_by, "units": units_by, "ccs": cc_by}
+        return {"sales": sales_by, "real": real_by, "fcst": fcst_by, "fcst_totals": {}, "units": units_by, "ccs": cc_by}
 
     sales = db.query(
         ActualTransaction.cost_center_id,
@@ -147,7 +148,23 @@ def _prefetch_tracking_actuals(db, cc_ids, include_forecast: bool = True):
     for row in real_rows:
         real_by[row.cost_center_id].append(row)
 
-    # Lista: previsto entra no lucro/TIR/caixa da vida do produto (agregado, não linha a linha).
+    # Lista: lucro da vida usa só a soma do previsto. Mês a mês (283k linhas) fica no detalhe.
+    tot_rows = db.query(
+        ActualTransaction.cost_center_id,
+        ActualTransaction.transaction_type,
+        func.sum(ActualTransaction.value).label("total_value"),
+    ).filter(
+        ActualTransaction.cost_center_id.in_(cc_ids),
+        ActualTransaction.is_forecast == True,
+        ActualTransaction.transaction_type.in_(["INCOME", "OUTCOME"]),
+    ).group_by(
+        ActualTransaction.cost_center_id,
+        ActualTransaction.transaction_type,
+    ).all()
+    for cost_center_id, transaction_type, total_value in tot_rows:
+        if transaction_type in ("INCOME", "OUTCOME"):
+            fcst_totals[cost_center_id][transaction_type] = float(total_value or 0)
+
     if include_forecast:
         fcst_rows = db.query(
             ActualTransaction.cost_center_id,
@@ -173,7 +190,7 @@ def _prefetch_tracking_actuals(db, cc_ids, include_forecast: bool = True):
         units_by[unit.cost_center_id].append(unit)
     for cc in db.query(CostCenter).filter(CostCenter.id.in_(cc_ids)).all():
         cc_by[cc.id] = cc
-    return {"sales": sales_by, "real": real_by, "fcst": fcst_by, "units": units_by, "ccs": cc_by}
+    return {"sales": sales_by, "real": real_by, "fcst": fcst_by, "fcst_totals": dict(fcst_totals), "units": units_by, "ccs": cc_by}
 
 
 def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mult_apportioned: float = 1.0, mult_default: float = 1.0, cached_cat_to_group: dict = None, prefetched=None, kpis_only: bool = False):
@@ -246,6 +263,8 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
     if prefetched is not None:
         fcst_agg = prefetched["fcst"].get(cc_id, [])
+    elif kpis_only:
+        fcst_agg = []
     else:
         fcst_agg = db.query(
 
@@ -682,6 +701,17 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
     for row in fcst_agg:
 
         _process_aggregated(row.transaction_type, row.category, row.total_value, row.mes, anual_cf_fcst, monthly_net_cf_fcst, False, monthly_revenues_fcst)
+
+    if kpis_only and not fcst_agg and prefetched and prefetched.get("fcst_totals"):
+        tot = prefetched["fcst_totals"].get(cc_id) or {}
+        extra_in = abs(float(tot.get("INCOME") or 0))
+        extra_out = abs(float(tot.get("OUTCOME") or 0))
+        recebimentos += extra_in
+        administrativas += extra_out
+        if extra_in or extra_out:
+            anual_cf_fcst["_vida"]["Entradas"] += extra_in
+            anual_cf_fcst["_vida"]["Administrativas"] += extra_out
+            anual_cf_fcst["_vida"]["Saidas"] += extra_out
 
 
 
@@ -2482,7 +2512,7 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
             for rc in db.query(CostCenter).filter(CostCenter.id_sienge.like(f"{sl['macro_prefix']}%")).all():
                 if _mesmo_produto_obra(slice_proj, parse_project_name(rc)[1]):
                     needed_ids.add(rc.id)
-        prefetched = _prefetch_tracking_actuals(db, needed_ids, include_forecast=True)
+        prefetched = _prefetch_tracking_actuals(db, needed_ids, include_forecast=False)
     except Exception as e:
         print(f"Error loading tracking summary: {e}")
         prefetched = None
