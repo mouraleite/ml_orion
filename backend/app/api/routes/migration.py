@@ -87,3 +87,25 @@ def _run_forecast_migration_task():
 def run_forecast_migration(background_tasks: BackgroundTasks):
     background_tasks.add_task(_run_forecast_migration_task)
     return {"message": "Migração de forecast iniciada, cheque o terminal em alguns minutos"}
+
+
+@router.post("/run-orcamento-2027")
+def run_orcamento_departamentos_2027(
+    gravar: bool = False,
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_active_admin),
+):
+    """Importa Despesas 2027 de Elaboração do Orçamento (aba fImportacao) por departamento.
+
+    Padrão é simulação (gravar=false). Só grava com gravar=true.
+    Só funciona na máquina que tem a pasta do SharePoint sincronizada.
+    """
+    from app.services.carga_orcamento_departamentos_2027 import (
+        importar_orcamentos_departamentos_2027,
+    )
+
+    return importar_orcamentos_departamentos_2027(
+        db,
+        usuario_id=current_user.id,
+        gravar=gravar,
+    )

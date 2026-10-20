@@ -1,10 +1,12 @@
 import logging
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 from app.models.actual_transaction import ActualTransaction
 from app.models.cost_center import CostCenter
 from app.models.financial_plan import FinancialPlan
 from app.services.sienge_api_service import SiengeApiService
+from app.services.sienge_client import SiengeClient, get_default_client
 import json
 
 logger = logging.getLogger(__name__)
@@ -15,7 +17,92 @@ class DummyErpService:
     def fetch_enterprises(self): return []
     def fetch_planos_financeiros(self): return []
 
-erp_service = DummyErpService()
+
+class SiengeErpService:
+    """Lê empresas, centros e obras na API Sienge v1 (o botão Sincronizar do Apoio)."""
+
+    def __init__(self, client: Optional[SiengeClient] = None):
+        self._client = client
+
+    def _client_ativo(self) -> Optional[SiengeClient]:
+        client = self._client or get_default_client()
+        if not (client.password or "").strip():
+            logger.warning("SIENGE_PASS vazio: sync Apoio não consulta a API Sienge.")
+            return None
+        return client
+
+    def _coletar(self, path: str) -> List[Dict[str, Any]]:
+        client = self._client_ativo()
+        if client is None:
+            return []
+        url = f"{client.api_v1_base_url}{path}"
+        itens: List[Dict[str, Any]] = []
+        for page in client.paginate_v1_pages(url):
+            itens.extend(page)
+        logger.info("Sienge %s: %s registro(s)", path, len(itens))
+        return itens
+
+    def fetch_empresas(self) -> List[Dict[str, Any]]:
+        out: List[Dict[str, Any]] = []
+        for item in self._coletar("/companies"):
+            cid = item.get("id")
+            if cid is None:
+                continue
+            nome = (item.get("name") or "").strip() or "N/A"
+            out.append({
+                "id": cid,
+                "cnpj": item.get("cnpj") or "N/A",
+                "razaoSocial": nome,
+                "nomeFantasia": (item.get("tradeName") or nome),
+                "status": item.get("status") or "Ativo",
+            })
+        return out
+
+    def fetch_centros_custo(self) -> List[Dict[str, Any]]:
+        out: List[Dict[str, Any]] = []
+        for item in self._coletar("/cost-centers"):
+            cid = item.get("id")
+            nome = (item.get("name") or "").strip()
+            if cid is None or not nome:
+                continue
+            out.append({
+                "id": cid,
+                "nome": nome,
+                "cnpj": item.get("cnpj"),
+                "id_empresa": item.get("idCompany"),
+            })
+        return out
+
+    def fetch_enterprises(self) -> List[Dict[str, Any]]:
+        empresas = {str(e["id"]): e for e in self.fetch_empresas()}
+        out: List[Dict[str, Any]] = []
+        for item in self._coletar("/enterprises"):
+            cid = item.get("id")
+            nome = (item.get("name") or "").strip()
+            if cid is None or not nome:
+                continue
+            id_empresa = item.get("companyId") if item.get("companyId") is not None else item.get("idCompany")
+            nome_empresa = item.get("companyName")
+            if not nome_empresa and id_empresa is not None:
+                emp = empresas.get(str(id_empresa))
+                if emp:
+                    nome_empresa = emp.get("nomeFantasia") or emp.get("razaoSocial")
+            tipo = item.get("type")
+            out.append({
+                "id": cid,
+                "nome": nome,
+                "cnpj": item.get("cnpj"),
+                "id_empresa": id_empresa,
+                "nome_empresa": nome_empresa,
+                "tipo": "" if tipo is None else str(tipo),
+            })
+        return out
+
+    def fetch_planos_financeiros(self) -> List[Dict[str, Any]]:
+        return []
+
+
+erp_service = SiengeErpService()
 
 class ErpIntegrationService:
     def __init__(self, db: Session, subdomain: str, auth_string: str):
