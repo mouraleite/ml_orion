@@ -1868,7 +1868,11 @@ def _calc_slice_actuals(db, macro_prefix, native_cc_id, pct, view_mode, cached_c
 
     base_prefix = native_cc.id_sienge[:3] if native_cc.id_sienge and len(native_cc.id_sienge) >= 3 else str(native_cc.id)
 
-    all_ccs = db.query(CostCenter).filter(CostCenter.id_sienge.like(f"{base_prefix}%")).all()
+    _, native_proj = parse_project_name(native_cc)
+    all_ccs = [
+        cc for cc in db.query(CostCenter).filter(CostCenter.id_sienge.like(f"{base_prefix}%")).all()
+        if _mesmo_produto_obra(native_proj, parse_project_name(cc)[1])
+    ]
 
     
 
@@ -2199,6 +2203,17 @@ def parse_project_name(cc_obj):
     return city, project_name
 
 
+def _mesmo_produto_obra(produto, candidato):
+    """Mesma obra: nome igual ou sufixo do produto (OBRAS, MARKETING). Não pega 'II' no lugar de 'I'."""
+    produto = (produto or "").strip()
+    candidato = (candidato or "").strip()
+    if not produto or not candidato:
+        return False
+    if candidato == produto:
+        return True
+    return candidato.startswith(produto + " - ") or candidato.startswith(produto + " (")
+
+
 def _kpis_do_consolidado(acts):
     """Mesmos indicadores da visão consolidada do detalhe, somando os centros do grupo."""
     vgv_vendido = 0.0
@@ -2445,7 +2460,7 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
 
                     for rc in related_ccs:
 
-                        if parse_project_name(rc)[1] == proj_name:
+                        if _mesmo_produto_obra(proj_name, parse_project_name(rc)[1]):
 
                             members.append(rc)
 
@@ -2465,8 +2480,10 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
         needed_ids = {sub_cc.id for members in cc_groups.values() for sub_cc in members}
         for sl in slices:
             needed_ids.add(sl["cc"].id)
-            for (cid,) in db.query(CostCenter.id).filter(CostCenter.id_sienge.like(f"{sl['macro_prefix']}%")).all():
-                needed_ids.add(cid)
+            _, slice_proj = parse_project_name(sl["cc"])
+            for rc in db.query(CostCenter).filter(CostCenter.id_sienge.like(f"{sl['macro_prefix']}%")).all():
+                if _mesmo_produto_obra(slice_proj, parse_project_name(rc)[1]):
+                    needed_ids.add(rc.id)
         prefetched = _prefetch_tracking_actuals(db, needed_ids, include_forecast=False)
     except Exception as e:
         print(f"Error loading tracking summary: {e}")
@@ -2667,7 +2684,7 @@ def _get_tracking_details_logic(db, id: str, view_mode: str = 'consolidado'):
 
             if proj_name_filter:
 
-                ccs = [c for c in raw_ccs if parse_project_name(c)[1] == proj_name_filter]
+                ccs = [c for c in raw_ccs if _mesmo_produto_obra(proj_name_filter, parse_project_name(c)[1])]
 
             else:
 

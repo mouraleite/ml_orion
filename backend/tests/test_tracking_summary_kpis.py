@@ -146,3 +146,45 @@ def test_calculo_do_centro_le_venda_com_data():
     db.commit()
     act = _calc_actuals_for_cc(db, 7, cached_cat_to_group={})
     assert act["vgv_vendido"] == 1500.0
+
+
+def test_mesmo_produto_obra_inclui_sufixo_e_nao_mistura_ii():
+    from types import SimpleNamespace
+    from app.api.routes.tracking import _mesmo_produto_obra, parse_project_name
+
+    def nome(texto):
+        return parse_project_name(SimpleNamespace(nome=texto, custom_data={}))[1]
+
+    central = nome("AVARÉ - CENTRAL PARQUE II")
+    assert _mesmo_produto_obra(central, nome("AVARÉ - CENTRAL PARQUE II - OBRAS"))
+    assert _mesmo_produto_obra(central, nome("AVARÉ - CENTRAL PARQUE II - PARCERIA"))
+    assert _mesmo_produto_obra(central, nome("AVARÉ - CENTRAL PARQUE II - MARKETING"))
+    assert not _mesmo_produto_obra(central, nome("AVARÉ - RESERVA CENTRAL PARQUE II"))
+    assert not _mesmo_produto_obra(nome("AVARÉ - RESERVA CENTRAL PARQUE"), nome("AVARÉ - RESERVA CENTRAL PARQUE II"))
+
+
+def test_mesmo_produto_obra_separa_as_duas_obras_do_prefixo_143():
+    from types import SimpleNamespace
+    from app.api.routes.tracking import _mesmo_produto_obra, parse_project_name
+
+    def nome(texto):
+        return parse_project_name(SimpleNamespace(nome=texto, custom_data={}))[1]
+
+    morada = nome("BOITUVA - MORADA DOS IPÊS II")
+    reserva = nome("BOITUVA - RESERVA DOS IPÊS")
+    membros_morada = [
+        "BOITUVA - MORADA DOS IPÊS II",
+        "BOITUVA - MORADA DOS IPÊS II - OBRAS",
+    ]
+    membros_reserva = [
+        "BOITUVA - RESERVA DOS IPÊS",
+        "BOITUVA - RESERVA DOS IPÊS - OBRAS",
+        "BOITUVA - RESERVA DOS IPÊS - MLDU (ELLENCO & MLDU)",
+        "BOITUVA - RESERVA DOS IPÊS - MLDU (VERCELLINO)",
+    ]
+    for texto in membros_morada:
+        assert _mesmo_produto_obra(morada, nome(texto)), texto
+        assert not _mesmo_produto_obra(reserva, nome(texto)), texto
+    for texto in membros_reserva:
+        assert _mesmo_produto_obra(reserva, nome(texto)), texto
+        assert not _mesmo_produto_obra(morada, nome(texto)), texto
