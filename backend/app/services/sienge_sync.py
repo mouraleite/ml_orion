@@ -8,6 +8,7 @@ from app.models.cost_center import CostCenter
 from app.models.actual_transaction import ActualTransaction
 from app.models.unit import Unit
 from app.services.sienge_client import bulk_base_url, get_default_client
+from app.services.sienge_income_parse import rateio_previsto_do_cc
 
 SIENGE_BASE_URL = bulk_base_url()
 SIENGE_USER = settings.SIENGE_USER
@@ -725,17 +726,11 @@ def sync_receivables_forecast(db: Session, cc: CostCenter):
                         continue
 
                     fcs = item.get("receiptsCategories", item.get("financialCategories", []))
-                    cat_name = "Receita de Venda de Lotes"
-                    is_for_cc = len(fcs) == 0
-                    
-                    for fc in fcs:
-                        if str(fc.get("costCenterId")) == str(cc.id_sienge):
-                            is_for_cc = True
-                            cat_name = fc.get("financialCategoryName", cat_name)
-                            break
-                    
-                    if not is_for_cc:
+                    fatia = rateio_previsto_do_cc(fcs, cc.id_sienge, "Receita de Venda de Lotes")
+                    if not fatia:
                         continue
+                    ratio, cat_name = fatia
+                    amount = amount * ratio
 
                     source_id = f"FCST-INC-{bill_id}-{installment_id}"
                     
@@ -789,14 +784,11 @@ def sync_payables_forecast(db: Session, cc: CostCenter):
                     bill_id = item.get('billId', item.get('documentId'))
                     installment_id = item.get('installmentId', item.get('installmentNumber', count))
                 
-                    # Categoria financeira
-                    cat_name = "Obras"
-                    cats = item.get("paymentsCategories", [])
-                    if cats:
-                        for c in cats:
-                            if str(c.get("costCenterId")) == str(cc.id_sienge):
-                                cat_name = c.get("financialCategoryName", "Obras")
-                                break
+                    cats = item.get("paymentsCategories") or item.get("financialCategories") or []
+                    fatia = rateio_previsto_do_cc(cats, cc.id_sienge, "Obras")
+                    if not fatia:
+                        continue
+                    ratio, cat_name = fatia
 
                     # Dada de vencimento e valor em aberto
                     due_date_str = item.get('dueDate') or item.get('installmentBaseDate')
@@ -814,6 +806,7 @@ def sync_payables_forecast(db: Session, cc: CostCenter):
                     
                     if not due_date_str or amount <= 0:
                         continue
+                    amount = amount * ratio
                     
                     try:
                         dt = datetime.strptime(due_date_str[:10], "%Y-%m-%d").date()

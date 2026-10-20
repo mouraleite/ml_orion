@@ -1,6 +1,10 @@
 """Testes do parse Contas a Receber (Recebimento + bankMovement E/S)."""
 
-from app.services.sienge_income_parse import is_recebimento, iter_income_bank_lines
+from app.services.sienge_income_parse import (
+    is_recebimento,
+    iter_income_bank_lines,
+    rateio_previsto_do_cc,
+)
 
 
 def test_is_recebimento():
@@ -126,3 +130,17 @@ def test_iter_splits_receita_and_tarifa():
     assert by_cat["Despesas Bancárias"] == round(1.33 * 0.872, 4)
     assert outcome[0]["source_id"].startswith("OUT-TARIFA-")
     assert income[0]["source_id"].startswith("INC-")
+
+
+def test_rateio_previsto_nao_grava_titulo_cheio_no_outro_cc():
+    cats = [
+        {"costCenterId": 13700, "financialCategoryName": "Receita de Venda de Lotes", "financialCategoryRate": 60},
+        {"costCenterId": 13701, "financialCategoryName": "Receita de Venda de Lotes", "financialCategoryRate": 40},
+    ]
+    fatia_ml = rateio_previsto_do_cc(cats, "13700", "Receita de Venda de Lotes")
+    fatia_parc = rateio_previsto_do_cc(cats, "13701", "Receita de Venda de Lotes")
+    assert fatia_ml == (0.6, "Receita de Venda de Lotes")
+    assert fatia_parc == (0.4, "Receita de Venda de Lotes")
+    assert rateio_previsto_do_cc(cats, "13800", "Receita de Venda de Lotes") is None
+    assert rateio_previsto_do_cc([], "13700", "Receita de Venda de Lotes") is None
+    assert rateio_previsto_do_cc(None, "13700", "Receita de Venda de Lotes") is None

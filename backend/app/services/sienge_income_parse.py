@@ -44,6 +44,21 @@ def _matching_fc(categories: List[dict], cost_center_sienge_id: str) -> List[dic
     return [c for c in (categories or []) if str(c.get("costCenterId")) == cc_key]
 
 
+def rateio_previsto_do_cc(categories, cost_center_sienge_id, default_name: str):
+    """Fatia do título prevista que pertence a este CC.
+
+    Sem categorias ou sem este centro: None — não grava o valor cheio em todos os CCs.
+    """
+    matching = _matching_fc(categories or [], cost_center_sienge_id)
+    if not matching:
+        return None
+    ratio = sum(category_rate_ratio(c) for c in matching)
+    if ratio <= 0:
+        return None
+    name = matching[0].get("financialCategoryName") or default_name
+    return ratio, name
+
+
 def iter_income_bank_lines(
     item: dict,
     cost_center_sienge_id: str,

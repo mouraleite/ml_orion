@@ -147,7 +147,7 @@ def _prefetch_tracking_actuals(db, cc_ids, include_forecast: bool = True):
     for row in real_rows:
         real_by[row.cost_center_id].append(row)
 
-    # A lista do painel não precisa dos ~280k previstos; o detalhe continua carregando.
+    # Lista: previsto entra no lucro/TIR/caixa da vida do produto (agregado, não linha a linha).
     if include_forecast:
         fcst_rows = db.query(
             ActualTransaction.cost_center_id,
@@ -487,9 +487,7 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
         if transaction_type == "INCOME":
 
-            if is_real:
-
-                recebimentos += val
+            recebimentos += val
 
             if ano != "N/A":
 
@@ -615,49 +613,49 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
                 if "IMPOSTOS" in group or "RETEN" in group or any(k in cat for k in ["imposto", "tributo", "irpj", "csll", "pis", "cofins", "iss", "inss", "fgts", "recolhimento"]):
 
-                    if is_real: impostos += val
+                    impostos += val
 
                     if ano != "N/A": target_anual_cf[ano]["Tributos"] += val
 
                 elif "TERRENO" in group or "terreno" in cat:
 
-                    if is_real: terreno += val
+                    terreno += val
 
                     if ano != "N/A": target_anual_cf[ano]["Terreno"] += val
 
                 elif "PROJETOS" in group or "projeto" in cat or "aprova" in cat:
 
-                    if is_real: projetos += val
+                    projetos += val
 
                     if ano != "N/A": target_anual_cf[ano]["Projetos"] += val
 
                 elif "MARKETING" in group or any(k in cat for k in ["agência", "mídia", "ooh", "panflet", "decora", "evento", "maquete"]):
 
-                    if is_real: marketing += val
+                    marketing += val
 
                     if ano != "N/A": target_anual_cf[ano]["Marketing"] += val
 
                 elif "COMERCIAIS" in group or "VENDAS" in group or any(k in cat for k in ["comercial", "venda", "comiss", "stand", "corretagem"]):
 
-                    if is_real: comercial += val
+                    comercial += val
 
                     if ano != "N/A": target_anual_cf[ano]["Comercial"] += val
 
                 elif "ADMINISTRATIVA" in group or "PESSOAL" in group or any(k in cat for k in ["cobrança", "jurídica", "viagem", "refeição", "cartório"]):
 
-                    if is_real: administrativas += val
+                    administrativas += val
 
                     if ano != "N/A": target_anual_cf[ano]["Administrativas"] += val
 
                 elif "OBRA" in group or "CUSTO" in group or "REPASSES" in group or any(k in cat for k in ["construç", " obra", "obras", "(obra)", "material", "equipamento", "manutenç", "assistência"]):
 
-                    if is_real: obras += val
+                    obras += val
 
                     if ano != "N/A": target_anual_cf[ano]["Obras"] += val
 
                 else:
 
-                    if is_real: administrativas += val
+                    administrativas += val
 
                     if ano != "N/A": target_anual_cf[ano]["Administrativas"] += val
 
@@ -2484,7 +2482,7 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
             for rc in db.query(CostCenter).filter(CostCenter.id_sienge.like(f"{sl['macro_prefix']}%")).all():
                 if _mesmo_produto_obra(slice_proj, parse_project_name(rc)[1]):
                     needed_ids.add(rc.id)
-        prefetched = _prefetch_tracking_actuals(db, needed_ids, include_forecast=False)
+        prefetched = _prefetch_tracking_actuals(db, needed_ids, include_forecast=True)
     except Exception as e:
         print(f"Error loading tracking summary: {e}")
         prefetched = None

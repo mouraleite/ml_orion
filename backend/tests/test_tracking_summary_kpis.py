@@ -188,3 +188,44 @@ def test_mesmo_produto_obra_separa_as_duas_obras_do_prefixo_143():
     for texto in membros_reserva:
         assert _mesmo_produto_obra(reserva, nome(texto)), texto
         assert not _mesmo_produto_obra(morada, nome(texto)), texto
+
+
+def test_lucro_da_vida_soma_recebido_a_receber_e_despesas():
+    import importlib
+    import os
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from app.db.database import Base
+    from app.models.actual_transaction import ActualTransaction
+    from app.api.routes.tracking import _calc_actuals_for_cc, _kpis_do_consolidado
+
+    for name in os.listdir("app/models"):
+        if name.endswith(".py"):
+            importlib.import_module("app.models." + name[:-3])
+
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    db = sessionmaker(bind=engine)()
+    rows = [
+        ("INC-1", "INCOME", "Receita de Venda de Lotes", 1000.0, False),
+        ("FCST-INC-1", "INCOME", "Receita de Venda de Lotes", 400.0, True),
+        ("OUT-1", "OUTCOME", "Materiais Aplicados (Obra)", 300.0, False),
+        ("FCST-OUT-1", "OUTCOME", "Materiais Aplicados (Obra)", 100.0, True),
+    ]
+    for source_id, tipo, categoria, valor, previsto in rows:
+        db.add(ActualTransaction(
+            cost_center_id=7,
+            source_id=source_id,
+            transaction_type=tipo,
+            category=categoria,
+            transaction_date=date(2026, 8, 1),
+            value=valor,
+            is_forecast=previsto,
+        ))
+    db.commit()
+    act = _calc_actuals_for_cc(db, 7, cached_cat_to_group={})
+    assert act["lucro_liq_operacional"] == 1000.0
+    kpis = _kpis_do_consolidado([act])
+    assert kpis["lucro"] == 1000.0
