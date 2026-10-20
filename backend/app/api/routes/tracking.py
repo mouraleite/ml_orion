@@ -111,7 +111,7 @@ def _prefetch_tracking_actuals(db, cc_ids, include_forecast: bool = True):
     cc_by = {}
     fcst_totals = defaultdict(lambda: {"INCOME": 0.0, "OUTCOME": 0.0})
     if not cc_ids:
-        return {"sales": sales_by, "real": real_by, "fcst": fcst_by, "fcst_totals": {}, "units": units_by, "ccs": cc_by}
+        return {"sales": sales_by, "real": real_by, "fcst": fcst_by, "fcst_totals": {}, "fcst_monthly": {}, "units": units_by, "ccs": cc_by}
 
     sales = db.query(
         ActualTransaction.cost_center_id,
@@ -165,6 +165,30 @@ def _prefetch_tracking_actuals(db, cc_ids, include_forecast: bool = True):
         if transaction_type in ("INCOME", "OUTCOME"):
             fcst_totals[cost_center_id][transaction_type] = float(total_value or 0)
 
+    fcst_monthly = defaultdict(lambda: defaultdict(float))
+    month_rows = db.query(
+        ActualTransaction.cost_center_id,
+        _ano_mes_transacao().label("mes"),
+        ActualTransaction.transaction_type,
+        func.sum(ActualTransaction.value).label("total_value"),
+    ).filter(
+        ActualTransaction.cost_center_id.in_(cc_ids),
+        ActualTransaction.is_forecast == True,
+        ActualTransaction.transaction_type.in_(["INCOME", "OUTCOME"]),
+    ).group_by(
+        ActualTransaction.cost_center_id,
+        _ano_mes_transacao(),
+        ActualTransaction.transaction_type,
+    ).all()
+    for cost_center_id, mes, transaction_type, total_value in month_rows:
+        if not mes or mes == "N/A":
+            continue
+        valor = abs(float(total_value or 0))
+        if transaction_type == "INCOME":
+            fcst_monthly[cost_center_id][mes] += valor
+        elif transaction_type == "OUTCOME":
+            fcst_monthly[cost_center_id][mes] -= valor
+
     if include_forecast:
         fcst_rows = db.query(
             ActualTransaction.cost_center_id,
@@ -190,7 +214,15 @@ def _prefetch_tracking_actuals(db, cc_ids, include_forecast: bool = True):
         units_by[unit.cost_center_id].append(unit)
     for cc in db.query(CostCenter).filter(CostCenter.id.in_(cc_ids)).all():
         cc_by[cc.id] = cc
-    return {"sales": sales_by, "real": real_by, "fcst": fcst_by, "fcst_totals": dict(fcst_totals), "units": units_by, "ccs": cc_by}
+    return {
+        "sales": sales_by,
+        "real": real_by,
+        "fcst": fcst_by,
+        "fcst_totals": dict(fcst_totals),
+        "fcst_monthly": {cid: dict(meses) for cid, meses in fcst_monthly.items()},
+        "units": units_by,
+        "ccs": cc_by,
+    }
 
 
 def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mult_apportioned: float = 1.0, mult_default: float = 1.0, cached_cat_to_group: dict = None, prefetched=None, kpis_only: bool = False):
@@ -712,6 +744,9 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
             anual_cf_fcst["_vida"]["Entradas"] += extra_in
             anual_cf_fcst["_vida"]["Administrativas"] += extra_out
             anual_cf_fcst["_vida"]["Saidas"] += extra_out
+        for mes, val in ((prefetched.get("fcst_monthly") or {}).get(cc_id) or {}).items():
+            if mes and mes != "N/A":
+                monthly_net_cf_fcst[mes] += float(val or 0)
 
 
 
@@ -2551,7 +2586,7 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
             "itemType": "cost_center",
             "project_name": project_name,
             "category": cat,
-            "status": "Em comercialização" if main_cc.project_phase == "Em Andamento" else main_cc.project_phase,
+            "status": main_cc.project_phase or "Em Andamento",
             "city": city,
             "vgv_total": kpis.get("vgv_total", 0.0),
             "vendas_acumuladas": kpis.get("vendas_acumuladas", 0.0),
@@ -2591,7 +2626,7 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
             "itemType": "cost_center",
             "project_name": project_name,
             "category": cat,
-            "status": "Em comercialização" if c.project_phase == "Em Andamento" else c.project_phase,
+            "status": c.project_phase or "Em Andamento",
             "city": city,
             "vgv_total": kpis.get("vgv_total", 0.0),
             "vendas_acumuladas": kpis.get("vendas_acumuladas", 0.0),
@@ -2858,7 +2893,7 @@ def _get_tracking_details_logic(db, id: str, view_mode: str = 'consolidado'):
 
                 "category": "Em Andamento" if main_cc.project_phase != "Encerrado" else "Encerrado",
 
-                "status": "Em comercialização" if main_cc.project_phase == "Em Andamento" else main_cc.project_phase,
+                "status": main_cc.project_phase or "Em Andamento",
 
                 "city": city,
 

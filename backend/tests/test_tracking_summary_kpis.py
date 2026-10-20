@@ -247,3 +247,30 @@ def test_lista_soma_previsto_sem_ler_linha_a_linha():
     act = _calc_actuals_for_cc(None, 7, cached_cat_to_group={}, prefetched=prefetched, kpis_only=True)
     assert act["lucro_liq_operacional"] == 300.0
     assert _kpis_do_consolidado([act])["lucro"] == 300.0
+
+
+def test_lista_usa_previsto_mensal_no_payback():
+    from types import SimpleNamespace
+
+    from app.api.routes.tracking import _calc_actuals_for_cc, _kpis_do_consolidado
+
+    prefetched = {
+        "sales": {},
+        "real": {
+            7: [SimpleNamespace(
+                transaction_type="OUTCOME",
+                category="Materiais Aplicados (Obra)",
+                total_value=100.0,
+                mes="2026-01",
+            )],
+        },
+        "fcst": {},
+        "fcst_totals": {7: {"INCOME": 200.0, "OUTCOME": 0.0}},
+        "fcst_monthly": {7: {"2026-02": 200.0}},
+        "units": {},
+        "ccs": {},
+    }
+    act = _calc_actuals_for_cc(None, 7, cached_cat_to_group={}, prefetched=prefetched, kpis_only=True)
+    assert act["final_cf_dict"]["2026-01"] == -100.0
+    assert act["final_cf_dict"]["2026-02"] == 200.0
+    assert _kpis_do_consolidado([act])["payback"] == 2

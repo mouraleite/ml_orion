@@ -72,7 +72,7 @@ export default function TrackingPage() {
   const totalExposicao = filteredData.reduce((acc, curr) => acc + (curr.exposicao_max_caixa || 0), 0);
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-300" translate="no" lang="pt-BR">
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">ACOMPANHAMENTO DE EMPREENDIMENTOS</h1>
       </div>
@@ -102,11 +102,11 @@ export default function TrackingPage() {
         </Card>
         <Card className="p-4 flex flex-col items-center justify-center bg-white shadow-sm border border-slate-200">
           <span className="text-xs text-slate-500 uppercase font-semibold mb-1">VGV Total</span>
-          <span className="text-xl font-bold text-slate-900">{formatCurrencyMi(totalVGV)}</span>
+          <span className="text-xl font-bold text-slate-900" translate="no">{formatCurrencyMi(totalVGV)}</span>
         </Card>
         <Card className="p-4 flex flex-col items-center justify-center bg-white shadow-sm border border-slate-200">
           <span className="text-xs text-slate-500 uppercase font-semibold mb-1 text-center">Vendas (Acum.)</span>
-          <span className="text-xl font-bold text-slate-900">{formatCurrencyMi(totalVendas)}</span>
+          <span className="text-xl font-bold text-slate-900" translate="no">{formatCurrencyMi(totalVendas)}</span>
         </Card>
         <Card className="p-4 flex flex-col items-center justify-center bg-white shadow-sm border border-slate-200">
           <span className="text-xs text-slate-500 uppercase font-semibold mb-1 text-center">% Vendido (VGV)</span>
@@ -114,7 +114,7 @@ export default function TrackingPage() {
         </Card>
         <Card className="p-4 flex flex-col items-center justify-center bg-white shadow-sm border border-slate-200">
           <span className="text-xs text-slate-500 uppercase font-semibold mb-1 text-center">Lucro (Acum.)</span>
-          <span className="text-xl font-bold text-slate-900">{formatCurrencyMi(totalLucro)}</span>
+          <span className="text-xl font-bold text-slate-900" translate="no">{formatCurrencyMi(totalLucro)}</span>
         </Card>
         <Card className="p-4 flex flex-col items-center justify-center bg-white shadow-sm border border-slate-200">
           <span className="text-xs text-slate-500 uppercase font-semibold mb-1 text-center">TIR Média Anual</span>
@@ -126,7 +126,7 @@ export default function TrackingPage() {
         </Card>
         <Card className="p-4 flex flex-col items-center justify-center bg-white shadow-sm border border-slate-200">
           <span className="text-xs text-slate-500 uppercase font-semibold mb-1 text-center">Exp. Máx Caixa</span>
-          <span className="text-xl font-bold text-red-600">{formatCurrencyMi(totalExposicao)}</span>
+          <span className="text-xl font-bold text-red-600" translate="no">{formatCurrencyMi(totalExposicao)}</span>
         </Card>
       </div>
 
