@@ -86,17 +86,34 @@ def test_kpis_da_fatia_usam_os_campos_do_rateio():
 def test_lista_usa_venda_enxuta_sem_consultar_unidade():
     from datetime import date
 
-    from app.api.routes.tracking import _VendaLista, _calc_actuals_for_cc
+    from app.api.routes.tracking import _VendaLista, _calc_actuals_for_cc, _kpis_do_consolidado
 
     prefetched = {
-        "sales": {7: [_VendaLista(date(2026, 8, 1), 1500.0, "VGV Vendido", 12, 50.0)]},
+        "sales": {
+            7: [_VendaLista(date(2026, 8, 1), 1500.0, "VGV Vendido", 12, 50.0)],
+            8: [_VendaLista(date(2026, 7, 1), 500.0, "VGV Vendido", 6, 20.0)],
+        },
         "real": {},
         "fcst": {},
         "units": {},
         "ccs": {},
     }
-    act = _calc_actuals_for_cc(None, 7, cached_cat_to_group={}, prefetched=prefetched, kpis_only=True)
-    assert act["vgv_vendido"] == 1500.0
+    act7 = _calc_actuals_for_cc(None, 7, cached_cat_to_group={}, prefetched=prefetched, kpis_only=True)
+    act8 = _calc_actuals_for_cc(None, 8, cached_cat_to_group={}, prefetched=prefetched, kpis_only=True)
+    assert act7["vgv_vendido"] == 1500.0
+    assert act8["vgv_vendido"] == 500.0
+    kpis = _kpis_do_consolidado([act7, act8])
+    assert kpis["vendas_acumuladas"] == 2000.0
+    assert kpis["vgv_total"] == 2000.0
+
+
+def test_prefetch_da_lista_pode_omitir_previsto():
+    import inspect
+    from app.api.routes.tracking import _prefetch_tracking_actuals
+
+    sig = inspect.signature(_prefetch_tracking_actuals)
+    assert "include_forecast" in sig.parameters
+    assert sig.parameters["include_forecast"].default is True
 
 
 def test_calculo_do_centro_le_venda_com_data():

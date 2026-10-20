@@ -101,7 +101,7 @@ class _VendaLista:
         self.unit = _AreaLista(private_area) if private_area is not None else None
 
 
-def _prefetch_tracking_actuals(db, cc_ids):
+def _prefetch_tracking_actuals(db, cc_ids, include_forecast: bool = True):
     """Uma leitura para todos os centros da lista. As contas continuam em _calc_actuals_for_cc."""
     cc_ids = list({cid for cid in cc_ids if cid is not None})
     sales_by = defaultdict(list)
@@ -147,24 +147,26 @@ def _prefetch_tracking_actuals(db, cc_ids):
     for row in real_rows:
         real_by[row.cost_center_id].append(row)
 
-    fcst_rows = db.query(
-        ActualTransaction.cost_center_id,
-        _ano_mes_transacao().label("mes"),
-        ActualTransaction.category,
-        ActualTransaction.transaction_type,
-        func.sum(ActualTransaction.value).label("total_value"),
-        func.count(ActualTransaction.id).label("count"),
-    ).filter(
-        ActualTransaction.cost_center_id.in_(cc_ids),
-        ActualTransaction.is_forecast == True,
-    ).group_by(
-        ActualTransaction.cost_center_id,
-        _ano_mes_transacao(),
-        ActualTransaction.category,
-        ActualTransaction.transaction_type,
-    ).all()
-    for row in fcst_rows:
-        fcst_by[row.cost_center_id].append(row)
+    # A lista do painel não precisa dos ~280k previstos; o detalhe continua carregando.
+    if include_forecast:
+        fcst_rows = db.query(
+            ActualTransaction.cost_center_id,
+            _ano_mes_transacao().label("mes"),
+            ActualTransaction.category,
+            ActualTransaction.transaction_type,
+            func.sum(ActualTransaction.value).label("total_value"),
+            func.count(ActualTransaction.id).label("count"),
+        ).filter(
+            ActualTransaction.cost_center_id.in_(cc_ids),
+            ActualTransaction.is_forecast == True,
+        ).group_by(
+            ActualTransaction.cost_center_id,
+            _ano_mes_transacao(),
+            ActualTransaction.category,
+            ActualTransaction.transaction_type,
+        ).all()
+        for row in fcst_rows:
+            fcst_by[row.cost_center_id].append(row)
 
     estoque_status = ["D", "R", "C", "P", "G"]
     for unit in db.query(Unit).filter(Unit.cost_center_id.in_(cc_ids), Unit.status.in_(estoque_status)).all():
@@ -770,7 +772,9 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
     estoque_atual = len(available_units)
 
-    if estoque_atual > 0:
+    # Na lista do painel o VGV de estoque já entra no KPI; a projeção mês a mês
+    # fica para o detalhe (senão o summary não devolve nem o Land Bank).
+    if (not kpis_only) and estoque_atual > 0:
 
         # Filtrar meses que tiveram vendas reais (vendas > 0)
 
@@ -878,79 +882,90 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
         terreno += land_cost
 
-        
+        # Lista: terreno já entra no lucro. A curva mês a mês fica no detalhe.
+        if not kpis_only:
 
-        custom = cc_record.custom_data or {}
+            custom = cc_record.custom_data or {}
 
-        curve_id = custom.get("land_payment_curve_id")
+            curve_id = custom.get("land_payment_curve_id")
 
-        start_date_str = custom.get("land_payment_start_date")
+            start_date_str = custom.get("land_payment_start_date")
 
-        
+            
 
-        import datetime as dt
+            import datetime as dt
 
-        if start_date_str:
+            if start_date_str:
 
-            try:
+                try:
 
-                y_str, m_str = start_date_str.split('-')
+                    y_str, m_str = start_date_str.split('-')
 
-                start_month = int(m_str)
+                    start_month = int(m_str)
 
-                start_year = int(y_str)
+                    start_year = int(y_str)
 
-            except:
+                except:
+
+                    start_month = dt.datetime.now().month
+
+                    start_year = dt.datetime.now().year
+
+            else:
 
                 start_month = dt.datetime.now().month
 
                 start_year = dt.datetime.now().year
 
-        else:
+                
 
-            start_month = dt.datetime.now().month
+            if curve_id:
 
-            start_year = dt.datetime.now().year
+                from app.models.curves import StandardCurve
 
-            
+                curve = db.query(StandardCurve).filter(StandardCurve.id == curve_id).first()
 
-        if curve_id:
+                if curve and curve.valores_meses_json and "meses" in curve.valores_meses_json:
 
-            from app.models.curves import StandardCurve
+                    percentages = [float(p) for p in curve.valores_meses_json["meses"]]
 
-            curve = db.query(StandardCurve).filter(StandardCurve.id == curve_id).first()
+                    proj_m = start_month
 
-            if curve and curve.valores_meses_json and "meses" in curve.valores_meses_json:
+                    proj_y = start_year
 
-                percentages = [float(p) for p in curve.valores_meses_json["meses"]]
+                    for p in percentages:
 
-                proj_m = start_month
+                        val = (p / 100.0) * land_cost
 
-                proj_y = start_year
+                        if val > 0:
 
-                for p in percentages:
+                            a_str = str(proj_y)
 
-                    val = (p / 100.0) * land_cost
+                            m_str = f"{proj_y}-{proj_m:02d}"
 
-                    if val > 0:
+                            anual_cf_fcst[a_str]["Terreno"] += val
 
-                        a_str = str(proj_y)
+                            monthly_net_cf_fcst[m_str] -= val
 
-                        m_str = f"{proj_y}-{proj_m:02d}"
+                        
 
-                        anual_cf_fcst[a_str]["Terreno"] += val
+                        proj_m += 1
 
-                        monthly_net_cf_fcst[m_str] -= val
+                        if proj_m > 12:
 
-                    
+                            proj_m = 1
 
-                    proj_m += 1
+                            proj_y += 1
 
-                    if proj_m > 12:
+                else:
 
-                        proj_m = 1
+                    a_str = str(start_year)
 
-                        proj_y += 1
+                    m_str = f"{start_year}-{start_month:02d}"
+
+                    anual_cf_fcst[a_str]["Terreno"] += land_cost
+
+                    monthly_net_cf_fcst[m_str] -= land_cost
 
             else:
 
@@ -961,16 +976,6 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
                 anual_cf_fcst[a_str]["Terreno"] += land_cost
 
                 monthly_net_cf_fcst[m_str] -= land_cost
-
-        else:
-
-            a_str = str(start_year)
-
-            m_str = f"{start_year}-{start_month:02d}"
-
-            anual_cf_fcst[a_str]["Terreno"] += land_cost
-
-            monthly_net_cf_fcst[m_str] -= land_cost
 
     # ---------------------------------------------------------
 
@@ -2462,12 +2467,10 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
             needed_ids.add(sl["cc"].id)
             for (cid,) in db.query(CostCenter.id).filter(CostCenter.id_sienge.like(f"{sl['macro_prefix']}%")).all():
                 needed_ids.add(cid)
-        prefetched = _prefetch_tracking_actuals(db, needed_ids)
+        prefetched = _prefetch_tracking_actuals(db, needed_ids, include_forecast=False)
     except Exception as e:
         print(f"Error loading tracking summary: {e}")
         prefetched = None
-        cc_groups = {}
-        slices = []
 
     cached_actuals = {}
 

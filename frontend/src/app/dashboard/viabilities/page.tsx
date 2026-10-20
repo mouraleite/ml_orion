@@ -22,6 +22,7 @@ interface Viability {
 export default function ViabilitiesListPage() {
  const [viabilities, setViabilities] = useState<Viability[]>([]);
  const [isLoading, setIsLoading] = useState(true);
+ const [loadError, setLoadError] = useState("");
  const router = useRouter();
  const { user } = useAuth();
  
@@ -29,10 +30,12 @@ export default function ViabilitiesListPage() {
 
  const fetchViabilities = async () => {
  try {
+ setLoadError("");
  const { data } = await api.get("/viabilities/");
- setViabilities(data);
+ setViabilities(Array.isArray(data) ? data : []);
  } catch (error) {
  console.error("Erro ao buscar projetos", error);
+ setLoadError("Não foi possível carregar as viabilidades. Os cadastros continuam no sistema; tente de novo em instantes.");
  } finally {
  setIsLoading(false);
  }
@@ -94,6 +97,12 @@ export default function ViabilitiesListPage() {
 
  {isLoading ? (
  <AppLoadingState />
+ ) : loadError ? (
+ <Card className="flex flex-col items-center justify-center p-12 text-center border-dashed">
+ <h3 className="text-lg font-medium text-slate-900 mb-1">Não foi possível listar as viabilidades</h3>
+ <p className="text-slate-500 max-w-sm mb-6">{loadError}</p>
+ <Button onClick={fetchViabilities} variant="outline">Tentar de novo</Button>
+ </Card>
  ) : viabilities.length === 0 ? (
  <Card className="flex flex-col items-center justify-center p-12 text-center border-dashed">
  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4">

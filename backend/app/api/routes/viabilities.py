@@ -1,6 +1,6 @@
 from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api import deps
 from app.models.user import User
@@ -39,7 +39,9 @@ def read_viabilities(
     db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
-    query = db.query(Viability).filter(Viability.version_of_id == None)
+    query = db.query(Viability).options(joinedload(Viability.versions)).filter(
+        Viability.version_of_id == None
+    )
     if status:
         query = query.filter(Viability.status == status)
     return query.all()
