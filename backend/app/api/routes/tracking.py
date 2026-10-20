@@ -165,30 +165,6 @@ def _prefetch_tracking_actuals(db, cc_ids, include_forecast: bool = True):
         if transaction_type in ("INCOME", "OUTCOME"):
             fcst_totals[cost_center_id][transaction_type] = float(total_value or 0)
 
-    fcst_monthly = defaultdict(lambda: defaultdict(float))
-    month_rows = db.query(
-        ActualTransaction.cost_center_id,
-        _ano_mes_transacao().label("mes"),
-        ActualTransaction.transaction_type,
-        func.sum(ActualTransaction.value).label("total_value"),
-    ).filter(
-        ActualTransaction.cost_center_id.in_(cc_ids),
-        ActualTransaction.is_forecast == True,
-        ActualTransaction.transaction_type.in_(["INCOME", "OUTCOME"]),
-    ).group_by(
-        ActualTransaction.cost_center_id,
-        _ano_mes_transacao(),
-        ActualTransaction.transaction_type,
-    ).all()
-    for cost_center_id, mes, transaction_type, total_value in month_rows:
-        if not mes or mes == "N/A":
-            continue
-        valor = abs(float(total_value or 0))
-        if transaction_type == "INCOME":
-            fcst_monthly[cost_center_id][mes] += valor
-        elif transaction_type == "OUTCOME":
-            fcst_monthly[cost_center_id][mes] -= valor
-
     if include_forecast:
         fcst_rows = db.query(
             ActualTransaction.cost_center_id,
@@ -219,7 +195,7 @@ def _prefetch_tracking_actuals(db, cc_ids, include_forecast: bool = True):
         "real": real_by,
         "fcst": fcst_by,
         "fcst_totals": dict(fcst_totals),
-        "fcst_monthly": {cid: dict(meses) for cid, meses in fcst_monthly.items()},
+        "fcst_monthly": {},
         "units": units_by,
         "ccs": cc_by,
     }
