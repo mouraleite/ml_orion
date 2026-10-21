@@ -98,7 +98,7 @@ function CompLine({
   const hasKids = isCat && (row.planos?.length || 0) > 0;
   return (
     <tr className={isCat ? "bg-white hover:bg-slate-50" : "bg-slate-50/70"}>
-      <td className="sticky left-0 z-10 bg-inherit px-3 py-2 border-b border-slate-100 min-w-[280px]">
+      <td className={`sticky left-0 z-10 px-3 py-2 border-b border-slate-100 min-w-[280px] ${isCat ? "bg-white" : "bg-slate-50"}`}>
         <div className="flex items-center gap-1" style={{ paddingLeft: indent * 16 }}>
           {hasKids ? (
             <button type="button" onClick={onToggle} className="p-0.5 rounded hover:bg-slate-200">
@@ -234,8 +234,8 @@ export function DfcComparativoPanel({
   }, [data]);
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="flex flex-col flex-1 min-h-0 min-w-0 gap-4">
+      <div className="shrink-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-[200px] flex-1">
             <label className="block text-[10px] font-semibold uppercase tracking-wide text-slate-500 mb-1">Versão base</label>
@@ -279,7 +279,7 @@ export function DfcComparativoPanel({
       </div>
 
       {hero && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="shrink-0 grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
             <p className="text-[10px] font-semibold uppercase text-slate-400">Líquido · {labelA}</p>
             <p className="text-lg font-bold tabular-nums text-slate-800 mt-1"><Num v={hero.a} /></p>
@@ -299,8 +299,8 @@ export function DfcComparativoPanel({
         </div>
       )}
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-100">
+      <div className="flex-1 min-h-[40vh] min-w-0 flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-100">
           <h2 className="font-bold text-slate-700">
             {data?.visao?.nome || "Visão DFC"}
             <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">comparativo</span>
@@ -339,11 +339,11 @@ export function DfcComparativoPanel({
         ) : erro ? (
           <p className="p-8 text-center text-sm text-amber-800">{erro}</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className={`w-full text-sm ${porMes ? "min-w-[2200px]" : "min-w-[720px]"}`}>
-              <thead>
+          <div className="flex-1 min-h-0 overflow-auto">
+            <table className={`w-full text-sm ${porMes ? "min-w-[2800px]" : "min-w-[720px]"}`}>
+              <thead className="sticky top-0 z-20 bg-white">
                 <tr className="text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-200">
-                  <th className="sticky left-0 z-20 bg-white text-left px-3 py-2 font-semibold">Categoria</th>
+                  <th className="sticky left-0 z-40 bg-white text-left px-3 py-2 font-semibold">Categoria</th>
                   {!porMes && (
                     <>
                       <th className="px-2 py-2 text-right font-semibold border-l border-slate-200 max-w-[140px] truncate">{labelA}</th>
@@ -361,12 +361,12 @@ export function DfcComparativoPanel({
                 </tr>
                 {porMes && (
                   <tr className="text-[9px] uppercase tracking-wider text-slate-400 border-b border-slate-200">
-                    <th className="sticky left-0 z-20 bg-white" />
+                    <th className="sticky left-0 z-40 bg-white" />
                     {MESES_STR.map((m) => (
                       <React.Fragment key={m}>
-                        <th className="px-1 py-1 text-right font-semibold border-l border-slate-200">A</th>
-                        <th className="px-1 py-1 text-right font-semibold">B</th>
-                        <th className="px-1 py-1 text-right font-semibold">Δ</th>
+                        <th className="px-1 py-1 text-right font-semibold border-l border-slate-200 whitespace-nowrap min-w-[88px]" title={labelA}>{labelA}</th>
+                        <th className="px-1 py-1 text-right font-semibold whitespace-nowrap min-w-[88px]" title={labelB}>{labelB}</th>
+                        <th className="px-1 py-1 text-right font-semibold whitespace-nowrap min-w-[64px]">Var. R$</th>
                       </React.Fragment>
                     ))}
                   </tr>

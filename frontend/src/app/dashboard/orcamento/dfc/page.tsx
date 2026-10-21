@@ -287,7 +287,7 @@ export default function OrcamentoDfcPage() {
   const colSpanMes = active.length + (onAhAvMensal ? 2 : 0);
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 gap-4 overflow-hidden">
+    <div className="flex flex-col flex-1 min-h-0 min-w-0 gap-4 overflow-hidden">
       <div className="shrink-0 space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -344,7 +344,7 @@ export default function OrcamentoDfcPage() {
       </div>
 
       {modoComparar ? (
-        <div className="flex-1 min-h-0 overflow-auto">
+        <div className="flex-1 min-h-0 min-w-0 overflow-auto flex flex-col">
         <DfcComparativoPanel
           ano={ano}
           deptId={deptId}
