@@ -43,9 +43,14 @@ ANO_CARGA = 2027
 TIPO_CARGA = "DESPESAS"
 ABA_IMPORTACAO = "fimportacao"
 ABA_DESPESAS_XLSX = "despesas"
+ABA_RECEITAS_XLSX = "receitas"
+TIPO_RECEITAS = "RECEITAS"
 DEPT_CONTROLADORIA = "Controladoria"
 DESPESAS_XLSX_DEFAULT = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "..", "Despesas.xlsx")
+)
+RECEITAS_XLSX_DEFAULT = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "Receitas.xlsx")
 )
 
 # Pasta da Elaboração → nome do departamento no Apoio (fechado com o Marcelo).
@@ -286,6 +291,8 @@ def _validar_linhas(
     ccs: Dict[str, CostCenter],
     planos: Dict[str, FinancialPlan],
     dept_planos: set,
+    *,
+    natureza: str = "despesa",
 ) -> Tuple[List[Dict], List[Dict]]:
     erros: List[Dict] = []
     agregados: Dict[Tuple[int, int], Dict[str, Any]] = {}
@@ -344,7 +351,28 @@ def _validar_linhas(
 
         if cc and plano:
             db_id = str(plano.db_id or "")
-            if db_id.startswith("1"):
+            if natureza == "receita":
+                if not db_id.startswith("1"):
+                    erros.append(
+                        _erro(
+                            linha,
+                            "plano_financeiro",
+                            "V04",
+                            f"Plano '{plano_raw}' é de despesa; esta carga é só receitas.",
+                        )
+                    )
+                    linha_erros = True
+                elif (departamento_id, plano.id) not in dept_planos:
+                    erros.append(
+                        _erro(
+                            linha,
+                            "plano_financeiro",
+                            "V04",
+                            f"Plano '{plano_raw}' não está autorizado para o departamento/produto.",
+                        )
+                    )
+                    linha_erros = True
+            elif db_id.startswith("1"):
                 erros.append(
                     _erro(
                         linha,
@@ -640,13 +668,15 @@ def _celulas_da_aba(path: str, chave_aba: str) -> Tuple[Dict[int, Dict[int, Any]
     return rows, None
 
 
-def ler_aba_despesas_xlsx(path: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
-    """Lê a aba Despesas (CÓDIGO = id_sienge, DESCRIÇÃO CONTA = plano). Conta 1.xx é receita e é ignorada."""
-    rows, err = _celulas_da_aba(path, ABA_DESPESAS_XLSX)
+def _ler_aba_codigo_conta(
+    path: str, chave_aba: str, pular_prefixo: str
+) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    rotulo = chave_aba.capitalize()
+    rows, err = _celulas_da_aba(path, chave_aba)
     if err:
         return [], err
     if 1 not in rows:
-        return [], "Aba Despesas sem cabeçalho."
+        return [], f"Aba {rotulo} sem cabeçalho."
 
     header_row = rows[1]
     hmap = {_header_key(header_row.get(i)): i for i in header_row}
@@ -655,9 +685,9 @@ def ler_aba_despesas_xlsx(path: str) -> Tuple[List[Dict[str, Any]], Optional[str
     idx_conta = hmap.get("conta")
     idx_meses = [hmap.get(m) for m in MESES_STR]
     if not idx_emp or not idx_plano:
-        return [], "Aba Despesas sem colunas CÓDIGO e/ou DESCRIÇÃO CONTA."
+        return [], f"Aba {rotulo} sem colunas CÓDIGO e/ou DESCRIÇÃO CONTA."
     if any(ix is None for ix in idx_meses):
-        return [], "Aba Despesas sem as 12 colunas de mês (Jan–Dez)."
+        return [], f"Aba {rotulo} sem as 12 colunas de mês (Jan–Dez)."
 
     out: List[Dict[str, Any]] = []
     for ridx in sorted(k for k in rows if k > 1):
@@ -674,10 +704,20 @@ def ler_aba_despesas_xlsx(path: str) -> Tuple[List[Dict[str, Any]], Optional[str
                 meses[mes] = _to_float(raw)
         if not emp and not plano and not any(v for v in meses.values() if v):
             continue
-        if conta.startswith("1"):
+        if pular_prefixo and conta.startswith(pular_prefixo):
             continue
         out.append({"linha": ridx, "empreendimento": emp, "plano_financeiro": plano, **meses})
     return out, None
+
+
+def ler_aba_despesas_xlsx(path: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """Lê a aba Despesas (CÓDIGO = id_sienge, DESCRIÇÃO CONTA = plano). Conta 1.xx é receita e é ignorada."""
+    return _ler_aba_codigo_conta(path, ABA_DESPESAS_XLSX, "1")
+
+
+def ler_aba_receitas_xlsx(path: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """Lê a aba Receitas (CÓDIGO = id_sienge, DESCRIÇÃO CONTA = plano). Conta 2.xx é despesa e é ignorada."""
+    return _ler_aba_codigo_conta(path, ABA_RECEITAS_XLSX, "2")
 
 
 def _persistir_despesas_merge(
@@ -686,13 +726,15 @@ def _persistir_despesas_merge(
     linhas_validas: List[Dict],
     usuario_id: int,
     arquivo: str,
+    *,
+    tipo: str = TIPO_CARGA,
 ) -> Tuple[int, int, int]:
     """Acrescenta/soma no rascunho existente. Não apaga itens já gravados."""
     orc = (
         db.query(Orcamento)
         .filter(
             Orcamento.ano == ANO_CARGA,
-            Orcamento.tipo == TIPO_CARGA,
+            Orcamento.tipo == tipo,
             Orcamento.departamento_id == dept.id,
             Orcamento.status != "Substituído",
         )
@@ -707,7 +749,7 @@ def _persistir_despesas_merge(
         orc = Orcamento(
             descricao=DESCRICAO_DOCUMENTO_ORCAMENTO,
             ano=ANO_CARGA,
-            tipo=TIPO_CARGA,
+            tipo=tipo,
             status="Rascunho",
             departamento_id=dept.id,
             usuario_criador_id=usuario_id,
@@ -754,7 +796,7 @@ def _persistir_despesas_merge(
             valor_anterior=None,
             novo_valor=(
                 f"{n_novos} linha(s) novas e {n_somados} somada(s) via {arquivo} "
-                f"no rascunho Controladoria {ANO_CARGA}"
+                f"no rascunho Controladoria {tipo} {ANO_CARGA}"
             ),
             usuario_id=usuario_id,
         )
@@ -845,3 +887,96 @@ def importar_despesas_xlsx_controladoria(
         relatorio["mensagem"] = f"Falha ao gravar: {e}"
         relatorio["total_erros"] = 1
     return relatorio
+
+
+def importar_receitas_xlsx_controladoria(
+    db: Session,
+    usuario_id: int,
+    *,
+    gravar: bool = False,
+    path: Optional[str] = None,
+) -> Dict[str, Any]:
+    arquivo = path or RECEITAS_XLSX_DEFAULT
+    relatorio: Dict[str, Any] = {
+        "ano": ANO_CARGA,
+        "tipo": TIPO_RECEITAS,
+        "departamento": DEPT_CONTROLADORIA,
+        "arquivo": arquivo,
+        "gravado": False,
+        "orcamento_id": None,
+        "total_linhas": 0,
+        "total_validas": 0,
+        "total_erros": 0,
+        "novos": 0,
+        "somados": 0,
+        "erros": [],
+        "mensagem": None,
+    }
+    if not os.path.isfile(arquivo):
+        relatorio["mensagem"] = f"Arquivo não encontrado: {arquivo}"
+        relatorio["total_erros"] = 1
+        return relatorio
+
+    ccs, planos, depts, dept_planos = _indexar_cadastro(db)
+    dept = depts.get(DEPT_CONTROLADORIA.strip().lower())
+    if not dept:
+        relatorio["mensagem"] = f"Departamento '{DEPT_CONTROLADORIA}' não encontrado no cadastro."
+        relatorio["total_erros"] = 1
+        return relatorio
+    relatorio["departamento_id"] = dept.id
+
+    rows, err_aba = ler_aba_receitas_xlsx(arquivo)
+    if err_aba:
+        relatorio["mensagem"] = err_aba
+        relatorio["total_erros"] = 1
+        return relatorio
+
+    relatorio["total_linhas"] = len(rows)
+    erros, validas = _validar_linhas(
+        rows, dept.id, ccs, planos, dept_planos, natureza="receita"
+    )
+    relatorio["total_erros"] = len(erros)
+    relatorio["total_validas"] = len(validas)
+    relatorio["erros"] = erros[:50]
+    if erros:
+        relatorio["mensagem"] = (
+            "Importação recusada: a planilha contém erros. Nenhum dado deste arquivo foi alterado."
+        )
+        return relatorio
+    if not validas:
+        relatorio["mensagem"] = "Nenhuma linha de receita com valor para gravar."
+        return relatorio
+
+    if not gravar:
+        relatorio["mensagem"] = (
+            f"{len(validas)} linha(s) válidas para o rascunho de Receitas da Controladoria (simulação)."
+        )
+        return relatorio
+
+    try:
+        oid, n_novos, n_somados = _persistir_despesas_merge(
+            db,
+            dept,
+            validas,
+            usuario_id,
+            os.path.basename(arquivo),
+            tipo=TIPO_RECEITAS,
+        )
+        db.commit()
+        relatorio["gravado"] = True
+        relatorio["orcamento_id"] = oid
+        relatorio["novos"] = n_novos
+        relatorio["somados"] = n_somados
+        relatorio["mensagem"] = (
+            f"{n_novos} linha(s) nova(s) e {n_somados} somada(s) no rascunho de Receitas da Controladoria."
+        )
+    except PermissionError as e:
+        db.rollback()
+        relatorio["mensagem"] = str(e)
+        relatorio["total_erros"] = 1
+    except Exception as e:
+        db.rollback()
+        relatorio["mensagem"] = f"Falha ao gravar: {e}"
+        relatorio["total_erros"] = 1
+    return relatorio
+
