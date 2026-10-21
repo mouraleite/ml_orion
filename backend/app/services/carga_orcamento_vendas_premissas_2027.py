@@ -48,7 +48,7 @@ PRODUTO_PARA_SIENGE = {
     "fazenda cerrado": "15900",
     "novo horizonte (ita)": "16103",
     "reserva altavista i": "15300",
-    "jardim dos ipes iii": "15600",
+    "jardim dos ipes iii": "17701",
     "jardim dos ipes ii": "12800",
     "alto da bela vista": "13100",
     "novo horizonte (cc)": "13200",
@@ -469,6 +469,109 @@ def importar_vendas_premissas_2027(
         db.rollback()
         relatorio["mensagem"] = str(e)
         relatorio["total_erros"] = 1
+    except Exception as e:
+        db.rollback()
+        relatorio["mensagem"] = f"Falha ao gravar: {e}"
+        relatorio["total_erros"] = 1
+    return relatorio
+
+
+def remap_sienge_rascunho_vendas(
+    db: Session,
+    usuario_id: int,
+    *,
+    origem: str = "15600",
+    destino: str = "17701",
+    gravar: bool = False,
+) -> Dict[str, Any]:
+    """Troca o centro de custo das linhas de venda do rascunho 2027. Não mexe em ticket nem quantidade."""
+    relatorio: Dict[str, Any] = {
+        "ano": ANO_CARGA,
+        "tipo": TIPO_CARGA,
+        "origem": origem,
+        "destino": destino,
+        "gravado": False,
+        "itens": 0,
+        "unidades": 0,
+        "mensagem": None,
+        "erros": [],
+        "total_erros": 0,
+    }
+    dept = db.query(Departamento).filter(Departamento.nome == DEPT_VENDAS).first()
+    if not dept:
+        relatorio["mensagem"] = f"Departamento '{DEPT_VENDAS}' não encontrado no cadastro."
+        relatorio["total_erros"] = 1
+        return relatorio
+    orc = (
+        db.query(Orcamento)
+        .filter(
+            Orcamento.ano == ANO_CARGA,
+            Orcamento.tipo == TIPO_CARGA,
+            Orcamento.departamento_id == dept.id,
+            Orcamento.status != "Substituído",
+        )
+        .order_by(Orcamento.versao_numero.desc(), Orcamento.id.desc())
+        .first()
+    )
+    if not orc:
+        relatorio["mensagem"] = "Rascunho de Vendas 2027 não encontrado."
+        relatorio["total_erros"] = 1
+        return relatorio
+    if orc.status in STATUS_ORCAMENTO_BLOQUEADO:
+        relatorio["mensagem"] = (
+            "O orçamento deste departamento está em aprovação ou fechado. A correção foi recusada."
+        )
+        relatorio["total_erros"] = 1
+        return relatorio
+    cc_origem = db.query(CostCenter).filter(CostCenter.id_sienge == origem).first()
+    cc_destino = db.query(CostCenter).filter(CostCenter.id_sienge == destino).first()
+    if not cc_origem:
+        relatorio["mensagem"] = f"Centro de custo '{origem}' não encontrado."
+        relatorio["total_erros"] = 1
+        return relatorio
+    if not cc_destino:
+        relatorio["mensagem"] = f"Centro de custo '{destino}' não encontrado."
+        relatorio["total_erros"] = 1
+        return relatorio
+    itens = (
+        db.query(OrcamentoVendaItem)
+        .filter(
+            OrcamentoVendaItem.orcamento_id == orc.id,
+            OrcamentoVendaItem.produto_id == cc_origem.id,
+        )
+        .all()
+    )
+    relatorio["orcamento_id"] = orc.id
+    relatorio["itens"] = len(itens)
+    relatorio["unidades"] = sum(int(i.numero_vendas or 0) for i in itens)
+    if not itens:
+        relatorio["mensagem"] = f"Nenhuma linha de venda no {origem} para mover."
+        return relatorio
+    for item in itens:
+        item.produto_id = cc_destino.id
+    db.flush()
+    if not gravar:
+        relatorio["mensagem"] = (
+            f"{len(itens)} linha(s) do {origem} prontas para ir ao {destino} (simulação)."
+        )
+        return relatorio
+    try:
+        db.add(
+            Auditoria(
+                evento="Alteracao",
+                tabela_afetada="orcamento_venda_itens",
+                registro_id=orc.id,
+                campo="produto_id",
+                valor_anterior=origem,
+                novo_valor=destino,
+                usuario_id=usuario_id,
+            )
+        )
+        db.commit()
+        relatorio["gravado"] = True
+        relatorio["mensagem"] = (
+            f"{len(itens)} linha(s) movidas de {origem} para {destino}."
+        )
     except Exception as e:
         db.rollback()
         relatorio["mensagem"] = f"Falha ao gravar: {e}"

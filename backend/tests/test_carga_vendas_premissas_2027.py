@@ -9,6 +9,7 @@ from app.models.payment_plan import PaymentPlan
 from app.services.carga_orcamento_vendas_premissas_2027 import (
     importar_vendas_premissas_2027,
     ler_premissas_comerciais,
+    remap_sienge_rascunho_vendas,
 )
 
 MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
@@ -62,7 +63,7 @@ def _planilha(path: Path, produtos):
     wb.save(path)
 
 
-def _cadastro(db, sienge="15600", nome_cc="TAGUAI - JARDIM DOS IPÊS III"):
+def _cadastro(db, sienge="17701", nome_cc="TAGUAI - JARDIM DOS IPÊS III"):
     dept = Departamento(nome="Vendas")
     db.add(dept)
     cc = CostCenter(id_sienge=sienge, nome=nome_cc, status="Ativo")
@@ -149,6 +150,8 @@ def test_grava_rascunho_vendas_com_plano_36x(db_session, tmp_path):
     assert {i.mes: i.numero_vendas for i in itens} == {1: 2, 12: 1}
     assert all(i.plano_venda_id == plano.id for i in itens)
     assert all(i.ticket_medio == 63000 for i in itens)
+    cc = db_session.query(CostCenter).filter_by(id_sienge="17701").one()
+    assert all(i.produto_id == cc.id for i in itens)
 
 
 def test_produto_sem_depara_nao_grava(db_session, tmp_path):
@@ -185,3 +188,44 @@ def test_aba_sem_venda_2027_nao_gera_linha(tmp_path):
     rows, err = ler_premissas_comerciais(str(path))
     assert err is None
     assert rows == []
+
+
+def test_remap_sienge_move_linhas_sem_alterar_quantidade(db_session):
+    dept = Departamento(nome="Vendas")
+    db_session.add(dept)
+    origem = CostCenter(id_sienge="15600", nome="TAGUAI - JARDIM DOS IPÊS III A", status="Ativo")
+    destino = CostCenter(id_sienge="17701", nome="TAGUAI - JARDIM DOS IPÊS III B", status="Ativo")
+    plano = db_session.query(PaymentPlan).filter_by(id=1).one()
+    db_session.add_all([origem, destino])
+    db_session.commit()
+    orc = Orcamento(
+        descricao="Orçamento",
+        ano=2027,
+        tipo="VENDAS",
+        status="Rascunho",
+        departamento_id=dept.id,
+        usuario_criador_id=1,
+        versao_numero=1,
+    )
+    db_session.add(orc)
+    db_session.flush()
+    db_session.add(
+        OrcamentoVendaItem(
+            orcamento_id=orc.id,
+            produto_id=origem.id,
+            plano_venda_id=plano.id,
+            mes=1,
+            ano=2027,
+            numero_vendas=81,
+            ticket_medio=63000,
+            vgv=5103000,
+        )
+    )
+    db_session.commit()
+    rel = remap_sienge_rascunho_vendas(db_session, usuario_id=1, gravar=True)
+    assert rel["gravado"] is True
+    assert rel["itens"] == 1
+    item = db_session.query(OrcamentoVendaItem).one()
+    assert item.produto_id == destino.id
+    assert item.numero_vendas == 81
+    assert item.ticket_medio == 63000
