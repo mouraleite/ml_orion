@@ -42,6 +42,11 @@ SHAREPOINT_ORCAMENTO_DIR = (
 ANO_CARGA = 2027
 TIPO_CARGA = "DESPESAS"
 ABA_IMPORTACAO = "fimportacao"
+ABA_DESPESAS_XLSX = "despesas"
+DEPT_CONTROLADORIA = "Controladoria"
+DESPESAS_XLSX_DEFAULT = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "..", "..", "Despesas.xlsx")
+)
 
 # Pasta da Elaboração → nome do departamento no Apoio (fechado com o Marcelo).
 PASTA_PARA_DEPARTAMENTO = {
@@ -589,4 +594,254 @@ def importar_orcamentos_departamentos_2027(
         relatorio["departamentos"].append(bloco)
 
     relatorio["gravado"] = gravar and any(d.get("gravado") for d in relatorio["departamentos"])
+    return relatorio
+
+
+def _header_key(valor) -> str:
+    return _chave(valor).replace(" ", "_")
+
+
+def _celulas_da_aba(path: str, chave_aba: str) -> Tuple[Dict[int, Dict[int, Any]], Optional[str]]:
+    tmp_copy = None
+    rows: Dict[int, Dict[int, Any]] = {}
+    try:
+        fd, tmp_copy = tempfile.mkstemp(suffix=os.path.splitext(path)[1])
+        os.close(fd)
+        shutil.copyfile(path, tmp_copy)
+        with zipfile.ZipFile(tmp_copy) as z:
+            sst = _shared_strings(z)
+            target = None
+            for s in _list_sheets(z):
+                if _chave(s["name"]).replace(" ", "") == chave_aba.replace(" ", ""):
+                    target = s
+                    break
+            if target is None:
+                return {}, f"Aba '{chave_aba}' não encontrada."
+            if target["xml"] not in z.namelist():
+                return {}, f"XML da aba '{chave_aba}' ausente ({target['xml']})."
+            root = ET.fromstring(z.read(target["xml"]))
+            sheet_data = root.find("m:sheetData", NS)
+            for row in sheet_data.findall("m:row", NS):
+                ridx = int(row.attrib.get("r", "0"))
+                cells: Dict[int, Any] = {}
+                for c in row.findall("m:c", NS):
+                    col, _ = _col_row(c.attrib.get("r", ""))
+                    cells[col] = _cell_value(c, sst)
+                if cells:
+                    rows[ridx] = cells
+    except Exception as e:
+        return {}, f"Não foi possível abrir o arquivo: {e}"
+    finally:
+        if tmp_copy:
+            try:
+                os.remove(tmp_copy)
+            except OSError:
+                pass
+    return rows, None
+
+
+def ler_aba_despesas_xlsx(path: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """Lê a aba Despesas (CÓDIGO = id_sienge, DESCRIÇÃO CONTA = plano). Conta 1.xx é receita e é ignorada."""
+    rows, err = _celulas_da_aba(path, ABA_DESPESAS_XLSX)
+    if err:
+        return [], err
+    if 1 not in rows:
+        return [], "Aba Despesas sem cabeçalho."
+
+    header_row = rows[1]
+    hmap = {_header_key(header_row.get(i)): i for i in header_row}
+    idx_emp = hmap.get("codigo")
+    idx_plano = hmap.get("descricao_conta")
+    idx_conta = hmap.get("conta")
+    idx_meses = [hmap.get(m) for m in MESES_STR]
+    if not idx_emp or not idx_plano:
+        return [], "Aba Despesas sem colunas CÓDIGO e/ou DESCRIÇÃO CONTA."
+    if any(ix is None for ix in idx_meses):
+        return [], "Aba Despesas sem as 12 colunas de mês (Jan–Dez)."
+
+    out: List[Dict[str, Any]] = []
+    for ridx in sorted(k for k in rows if k > 1):
+        cells = rows[ridx]
+        emp = _norm_sienge(cells.get(idx_emp))
+        plano = str(cells.get(idx_plano) or "").strip()
+        conta = str(cells.get(idx_conta) or "").strip() if idx_conta else ""
+        meses = {}
+        for mes, ix in zip(MESES_STR, idx_meses):
+            raw = cells.get(ix)
+            if raw is None or str(raw).strip() == "":
+                meses[mes] = 0.0
+            else:
+                meses[mes] = _to_float(raw)
+        if not emp and not plano and not any(v for v in meses.values() if v):
+            continue
+        if conta.startswith("1"):
+            continue
+        out.append({"linha": ridx, "empreendimento": emp, "plano_financeiro": plano, **meses})
+    return out, None
+
+
+def _persistir_despesas_merge(
+    db: Session,
+    dept: Departamento,
+    linhas_validas: List[Dict],
+    usuario_id: int,
+    arquivo: str,
+) -> Tuple[int, int, int]:
+    """Acrescenta/soma no rascunho existente. Não apaga itens já gravados."""
+    orc = (
+        db.query(Orcamento)
+        .filter(
+            Orcamento.ano == ANO_CARGA,
+            Orcamento.tipo == TIPO_CARGA,
+            Orcamento.departamento_id == dept.id,
+            Orcamento.status != "Substituído",
+        )
+        .order_by(Orcamento.versao_numero.desc(), Orcamento.id.desc())
+        .first()
+    )
+    if orc and orc.status in STATUS_ORCAMENTO_BLOQUEADO:
+        raise PermissionError(
+            "O orçamento deste departamento está em aprovação ou fechado. A importação foi recusada."
+        )
+    if not orc:
+        orc = Orcamento(
+            descricao=DESCRICAO_DOCUMENTO_ORCAMENTO,
+            ano=ANO_CARGA,
+            tipo=TIPO_CARGA,
+            status="Rascunho",
+            departamento_id=dept.id,
+            usuario_criador_id=usuario_id,
+            versao_numero=1,
+        )
+        db.add(orc)
+        db.flush()
+
+    existentes = {
+        (it.produto_id, it.plano_financeiro_id): it
+        for it in db.query(OrcamentoItem).filter(OrcamentoItem.orcamento_id == orc.id).all()
+    }
+    _alinhar_sequencia_id(db, "orcamentos")
+    _alinhar_sequencia_id(db, "orcamento_itens")
+    _alinhar_sequencia_id(db, "auditoria")
+    n_novos = 0
+    n_somados = 0
+    for linha in linhas_validas:
+        chave = (linha["produto_id"], linha["plano_financeiro_id"])
+        item = existentes.get(chave)
+        if item:
+            for mes in MESES_STR:
+                atual = float(getattr(item, mes) or 0.0)
+                setattr(item, mes, atual + float(linha.get(mes) or 0.0))
+            item.total_anual = sum(float(getattr(item, mes) or 0.0) for mes in MESES_STR)
+            n_somados += 1
+        else:
+            novo = OrcamentoItem(
+                orcamento_id=orc.id,
+                produto_id=linha["produto_id"],
+                plano_financeiro_id=linha["plano_financeiro_id"],
+                **{m: linha.get(m, 0.0) for m in MESES_STR},
+                total_anual=linha.get("total_anual", 0.0),
+            )
+            db.add(novo)
+            existentes[chave] = novo
+            n_novos += 1
+    db.add(
+        Auditoria(
+            evento="Importacao",
+            tabela_afetada="orcamentos",
+            registro_id=orc.id,
+            campo=None,
+            valor_anterior=None,
+            novo_valor=(
+                f"{n_novos} linha(s) novas e {n_somados} somada(s) via {arquivo} "
+                f"no rascunho Controladoria {ANO_CARGA}"
+            ),
+            usuario_id=usuario_id,
+        )
+    )
+    return orc.id, n_novos, n_somados
+
+
+def importar_despesas_xlsx_controladoria(
+    db: Session,
+    usuario_id: int,
+    *,
+    gravar: bool = False,
+    path: Optional[str] = None,
+) -> Dict[str, Any]:
+    arquivo = path or DESPESAS_XLSX_DEFAULT
+    relatorio: Dict[str, Any] = {
+        "ano": ANO_CARGA,
+        "tipo": TIPO_CARGA,
+        "departamento": DEPT_CONTROLADORIA,
+        "arquivo": arquivo,
+        "gravado": False,
+        "orcamento_id": None,
+        "total_linhas": 0,
+        "total_validas": 0,
+        "total_erros": 0,
+        "novos": 0,
+        "somados": 0,
+        "erros": [],
+        "mensagem": None,
+    }
+    if not os.path.isfile(arquivo):
+        relatorio["mensagem"] = f"Arquivo não encontrado: {arquivo}"
+        relatorio["total_erros"] = 1
+        return relatorio
+
+    ccs, planos, depts, dept_planos = _indexar_cadastro(db)
+    dept = depts.get(DEPT_CONTROLADORIA.strip().lower())
+    if not dept:
+        relatorio["mensagem"] = f"Departamento '{DEPT_CONTROLADORIA}' não encontrado no cadastro."
+        relatorio["total_erros"] = 1
+        return relatorio
+    relatorio["departamento_id"] = dept.id
+
+    rows, err_aba = ler_aba_despesas_xlsx(arquivo)
+    if err_aba:
+        relatorio["mensagem"] = err_aba
+        relatorio["total_erros"] = 1
+        return relatorio
+
+    relatorio["total_linhas"] = len(rows)
+    erros, validas = _validar_linhas(rows, dept.id, ccs, planos, dept_planos)
+    relatorio["total_erros"] = len(erros)
+    relatorio["total_validas"] = len(validas)
+    relatorio["erros"] = erros[:50]
+    if erros:
+        relatorio["mensagem"] = (
+            "Importação recusada: a planilha contém erros. Nenhum dado deste arquivo foi alterado."
+        )
+        return relatorio
+    if not validas:
+        relatorio["mensagem"] = "Nenhuma linha de despesa com valor para gravar."
+        return relatorio
+
+    if not gravar:
+        relatorio["mensagem"] = (
+            f"{len(validas)} linha(s) válidas para somar no rascunho da Controladoria (simulação)."
+        )
+        return relatorio
+
+    try:
+        oid, n_novos, n_somados = _persistir_despesas_merge(
+            db, dept, validas, usuario_id, os.path.basename(arquivo)
+        )
+        db.commit()
+        relatorio["gravado"] = True
+        relatorio["orcamento_id"] = oid
+        relatorio["novos"] = n_novos
+        relatorio["somados"] = n_somados
+        relatorio["mensagem"] = (
+            f"{n_novos} linha(s) nova(s) e {n_somados} somada(s) no rascunho da Controladoria."
+        )
+    except PermissionError as e:
+        db.rollback()
+        relatorio["mensagem"] = str(e)
+        relatorio["total_erros"] = 1
+    except Exception as e:
+        db.rollback()
+        relatorio["mensagem"] = f"Falha ao gravar: {e}"
+        relatorio["total_erros"] = 1
     return relatorio
