@@ -20,7 +20,12 @@ from app.models.actual_transaction import ActualTransaction
 
 from app.models.unit import Unit
 
-from sqlalchemy import func, or_, cast, String
+from sqlalchemy import and_, func, or_, cast, String
+
+from app.services.realizado_sienge import (
+    SOURCE_ID_LIKES_REALIZADO_DESPESA,
+    categoria_excluida_receita_realizado,
+)
 
 from app.services.math_engine import calculate_viability_results
 
@@ -44,6 +49,28 @@ router = APIRouter()
 def _ano_mes_transacao():
     """Mês YYYY-MM. No Postgres a coluna é DATE e substr direto nela não existe."""
     return func.substr(cast(ActualTransaction.transaction_date, String), 1, 7)
+
+
+def _filtro_caixa_realizado_efetivo():
+    """Mesmo recorte de entrada/saída efetiva do orçamento; só o caixa do acompanhamento."""
+    saida = and_(
+        ActualTransaction.transaction_type == "OUTCOME",
+        or_(*[ActualTransaction.source_id.like(p) for p in SOURCE_ID_LIKES_REALIZADO_DESPESA]),
+    )
+    entrada = and_(
+        ActualTransaction.transaction_type == "INCOME",
+        or_(
+            ActualTransaction.source_id.like("INC-%"),
+            ActualTransaction.source_id.like("BM-%"),
+        ),
+    )
+    return or_(saida, entrada)
+
+
+def _receita_realizado_efetiva(transaction_type, category) -> bool:
+    if transaction_type == "INCOME" and categoria_excluida_receita_realizado(category):
+        return False
+    return True
 
 
 def _projetar_vgv_estoque_no_fluxo(anual_cf_fcst, monthly_net_cf_fcst, estoque_atual, avg_vendas_por_mes, avg_vgv_per_unit, weights_by_installments, proj_month, proj_year, max_months=600):
@@ -138,7 +165,7 @@ def _prefetch_tracking_actuals(db, cc_ids, include_forecast: bool = True):
     ).filter(
         ActualTransaction.cost_center_id.in_(cc_ids),
         ActualTransaction.is_forecast == False,
-        ActualTransaction.transaction_type != "SALE",
+        _filtro_caixa_realizado_efetivo(),
     ).group_by(
         ActualTransaction.cost_center_id,
         _ano_mes_transacao(),
@@ -146,6 +173,8 @@ def _prefetch_tracking_actuals(db, cc_ids, include_forecast: bool = True):
         ActualTransaction.transaction_type,
     ).all()
     for row in real_rows:
+        if not _receita_realizado_efetiva(row.transaction_type, row.category):
+            continue
         real_by[row.cost_center_id].append(row)
 
     # Lista: lucro da vida usa só a soma do previsto. Mês a mês (283k linhas) fica no detalhe.
@@ -253,7 +282,7 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
         ActualTransaction.is_forecast == False,
 
-        ActualTransaction.transaction_type != 'SALE'
+        _filtro_caixa_realizado_efetivo(),
 
     ).group_by(
 
@@ -699,6 +728,10 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
     # Processar linhas agregadas REALIZADAS
 
     for row in real_agg:
+
+        if not _receita_realizado_efetiva(row.transaction_type, row.category):
+
+            continue
 
         _process_aggregated(row.transaction_type, row.category, row.total_value, row.mes, anual_cf_real, monthly_net_cf_real, True, monthly_revenues_real)
 

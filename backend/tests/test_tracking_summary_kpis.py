@@ -211,7 +211,7 @@ def test_lucro_da_vida_soma_recebido_a_receber_e_despesas():
     rows = [
         ("INC-1", "INCOME", "Receita de Venda de Lotes", 1000.0, False),
         ("FCST-INC-1", "INCOME", "Receita de Venda de Lotes", 400.0, True),
-        ("OUT-1", "OUTCOME", "Materiais Aplicados (Obra)", 300.0, False),
+        ("OUT-1-OP1-PMT-1-DT-20260801-FC-1", "OUTCOME", "Materiais Aplicados (Obra)", 300.0, False),
         ("FCST-OUT-1", "OUTCOME", "Materiais Aplicados (Obra)", 100.0, True),
     ]
     for source_id, tipo, categoria, valor, previsto in rows:
@@ -247,6 +247,91 @@ def test_lista_soma_previsto_sem_ler_linha_a_linha():
     act = _calc_actuals_for_cc(None, 7, cached_cat_to_group={}, prefetched=prefetched, kpis_only=True)
     assert act["lucro_liq_operacional"] == 300.0
     assert _kpis_do_consolidado([act])["lucro"] == 300.0
+
+
+def _sqlite_tracking():
+    import importlib
+    import os
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from app.db.database import Base
+    from app.models.actual_transaction import ActualTransaction
+    from app.api.routes.tracking import _calc_actuals_for_cc, _prefetch_tracking_actuals
+
+    for name in os.listdir("app/models"):
+        if name.endswith(".py"):
+            importlib.import_module("app.models." + name[:-3])
+
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    return sessionmaker(bind=engine)(), ActualTransaction, _calc_actuals_for_cc, _prefetch_tracking_actuals
+
+
+def test_caixa_realizado_do_acompanhamento_segue_recorte_do_orcamento():
+    db, ActualTransaction, _calc_actuals_for_cc, _prefetch_tracking_actuals = _sqlite_tracking()
+    cc_id = 7
+    mes = date(2026, 3, 10)
+    db.add_all([
+        ActualTransaction(
+            cost_center_id=cc_id, source_id="OUT-108564-OP1-PMT-1-DT-20260310-FC-1",
+            transaction_type="OUTCOME", category="Obras", transaction_date=mes,
+            value=100.0, is_forecast=False,
+        ),
+        ActualTransaction(
+            cost_center_id=cc_id, source_id="OUT-108564-PMT-1",
+            transaction_type="OUTCOME", category="Obras", transaction_date=mes,
+            value=500.0, is_forecast=False,
+        ),
+        ActualTransaction(
+            cost_center_id=cc_id, source_id="SP-MIG-CC7-FP1-202603",
+            transaction_type="OUTCOME", category="Obras", transaction_date=mes,
+            value=80.0, is_forecast=False,
+        ),
+        ActualTransaction(
+            cost_center_id=cc_id, source_id="SIENGE-OUT-1-0",
+            transaction_type="OUTCOME", category="Obras", transaction_date=mes,
+            value=40.0, is_forecast=False,
+        ),
+        ActualTransaction(
+            cost_center_id=cc_id, source_id="INC-200-BM-1-FC-1",
+            transaction_type="INCOME", category="Receita de Venda de Lotes", transaction_date=mes,
+            value=70.0, is_forecast=False,
+        ),
+        ActualTransaction(
+            cost_center_id=cc_id, source_id="BM-1173300-FC-2010401",
+            transaction_type="INCOME", category="Rendimentos", transaction_date=mes,
+            value=10.0, is_forecast=False,
+        ),
+        ActualTransaction(
+            cost_center_id=cc_id, source_id="SP-MIG-CC7-FP2-202603",
+            transaction_type="INCOME", category="Receita de Venda de Lotes", transaction_date=mes,
+            value=70.0, is_forecast=False,
+        ),
+        ActualTransaction(
+            cost_center_id=cc_id, source_id="INC-13853-REC-1",
+            transaction_type="INCOME", category="AFAC", transaction_date=mes,
+            value=50.0, is_forecast=False,
+        ),
+        ActualTransaction(
+            cost_center_id=cc_id, source_id="SALE-1",
+            transaction_type="SALE", category="VGV Vendido", transaction_date=date(2026, 8, 1),
+            value=1500.0, is_forecast=False,
+        ),
+    ])
+    db.commit()
+
+    act = _calc_actuals_for_cc(db, cc_id, cached_cat_to_group={})
+    assert act["vgv_vendido"] == 1500.0
+    assert act["monthly_net_cf_real"]["2026-03"] == -20.0
+    assert act["monthly_revenues_real"]["2026-03"] == 80.0
+
+    prefetched = _prefetch_tracking_actuals(db, [cc_id], include_forecast=False)
+    lista = _calc_actuals_for_cc(db, cc_id, cached_cat_to_group={}, prefetched=prefetched, kpis_only=True)
+    assert lista["vgv_vendido"] == 1500.0
+    assert lista["monthly_net_cf_real"]["2026-03"] == -20.0
+    assert lista["monthly_revenues_real"]["2026-03"] == 80.0
 
 
 def test_lista_usa_previsto_mensal_no_payback():
