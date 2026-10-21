@@ -389,3 +389,74 @@ def test_lista_usa_previsto_mensal_no_payback():
     assert act["final_cf_dict"]["2026-01"] == -100.0
     assert act["final_cf_dict"]["2026-02"] == 200.0
     assert _kpis_do_consolidado([act])["payback"] == 2
+
+
+def test_lista_usa_previsto_agregado_mes_a_mes():
+    db, ActualTransaction, _calc_actuals_for_cc, _prefetch_tracking_actuals = _sqlite_tracking()
+    cc_id = 7
+    db.add_all([
+        ActualTransaction(
+            cost_center_id=cc_id, source_id="OUT-1-OP1-PMT-1-DT-20260110-FC-1",
+            transaction_type="OUTCOME", category="Obras", transaction_date=date(2026, 1, 10),
+            value=100.0, is_forecast=False,
+        ),
+        ActualTransaction(
+            cost_center_id=cc_id, source_id="FCST-INC-1-1",
+            transaction_type="INCOME", category="Receita de Venda de Lotes",
+            transaction_date=date(2026, 2, 10), value=200.0, is_forecast=True,
+        ),
+    ])
+    db.commit()
+    prefetched = _prefetch_tracking_actuals(db, [cc_id], include_forecast=True)
+    act = _calc_actuals_for_cc(db, cc_id, cached_cat_to_group={}, prefetched=prefetched, kpis_only=True)
+    from app.api.routes.tracking import _kpis_do_consolidado
+    kpis = _kpis_do_consolidado([act])
+    assert act["final_cf_dict"]["2026-01"] == -100.0
+    assert act["final_cf_dict"]["2026-02"] == 200.0
+    assert kpis["payback"] == 2
+    assert kpis["lucro"] == 100.0
+
+
+def test_previsto_de_entrada_igual_na_parceria_conta_uma_vez():
+    db, ActualTransaction, _calc_actuals_for_cc, _prefetch_tracking_actuals = _sqlite_tracking()
+    db.add_all([
+        ActualTransaction(
+            cost_center_id=7, source_id="INC-7-REC-1",
+            transaction_type="INCOME", category="Receita de Venda de Lotes",
+            transaction_date=date(2026, 3, 10), value=70.0, is_forecast=False,
+        ),
+        ActualTransaction(
+            cost_center_id=8, source_id="INC-8-REC-1",
+            transaction_type="INCOME", category="Receita de Venda de Lotes",
+            transaction_date=date(2026, 3, 10), value=30.0, is_forecast=False,
+        ),
+        ActualTransaction(
+            cost_center_id=7, source_id="FCST-INC-DUP-1",
+            transaction_type="INCOME", category="Receita de Venda de Lotes",
+            transaction_date=date(2026, 6, 10), value=1000.0, is_forecast=True,
+        ),
+        ActualTransaction(
+            cost_center_id=8, source_id="FCST-INC-DUP-1",
+            transaction_type="INCOME", category="Receita de Venda de Lotes",
+            transaction_date=date(2026, 6, 10), value=1000.0, is_forecast=True,
+        ),
+        ActualTransaction(
+            cost_center_id=7, source_id="FCST-OUT-7-1",
+            transaction_type="OUTCOME", category="Obras",
+            transaction_date=date(2026, 6, 10), value=40.0, is_forecast=True,
+        ),
+        ActualTransaction(
+            cost_center_id=8, source_id="FCST-OUT-8-1",
+            transaction_type="OUTCOME", category="Obras",
+            transaction_date=date(2026, 6, 10), value=10.0, is_forecast=True,
+        ),
+    ])
+    db.commit()
+    prefetched = _prefetch_tracking_actuals(db, [7, 8], include_forecast=True)
+    act7 = _calc_actuals_for_cc(db, 7, cached_cat_to_group={}, prefetched=prefetched, kpis_only=True)
+    act8 = _calc_actuals_for_cc(db, 8, cached_cat_to_group={}, prefetched=prefetched, kpis_only=True)
+    from app.api.routes.tracking import _kpis_do_consolidado
+    kpis = _kpis_do_consolidado([act7, act8])
+    assert act7["monthly_revenues_real"]["2026-03"] + act8["monthly_revenues_real"]["2026-03"] == 100.0
+    assert (act7["monthly_revenues_fcst"].get("2026-06", 0) + act8["monthly_revenues_fcst"].get("2026-06", 0)) == 1000.0
+    assert kpis["lucro"] == 1050.0

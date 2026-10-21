@@ -90,6 +90,45 @@ def _agregar_caixa_realizado_efetivo(db, cc_ids):
     return list(saidas) + list(entradas)
 
 
+def _agregar_caixa_previsto(db, cc_ids):
+    """A realizar mês a mês. Entrada prevista com o mesmo source_id conta uma vez (parceria)."""
+    cc_ids = list({cid for cid in cc_ids if cid is not None})
+    if not cc_ids:
+        return []
+    cols = (
+        ActualTransaction.cost_center_id,
+        _ano_mes_transacao().label("mes"),
+        ActualTransaction.category,
+        ActualTransaction.transaction_type,
+        func.sum(ActualTransaction.value).label("total_value"),
+        func.count(ActualTransaction.id).label("count"),
+    )
+    group = (
+        ActualTransaction.cost_center_id,
+        _ano_mes_transacao(),
+        ActualTransaction.category,
+        ActualTransaction.transaction_type,
+    )
+    saidas = db.query(*cols).filter(
+        ActualTransaction.cost_center_id.in_(cc_ids),
+        ActualTransaction.is_forecast == True,
+        ActualTransaction.transaction_type != "INCOME",
+    ).group_by(*group).all()
+    ids_entrada = (
+        db.query(func.min(ActualTransaction.id))
+        .filter(
+            ActualTransaction.cost_center_id.in_(cc_ids),
+            ActualTransaction.is_forecast == True,
+            ActualTransaction.transaction_type == "INCOME",
+        )
+        .group_by(ActualTransaction.source_id)
+    )
+    entradas = db.query(*cols).filter(
+        ActualTransaction.id.in_(ids_entrada),
+    ).group_by(*group).all()
+    return list(saidas) + list(entradas)
+
+
 def _receita_realizado_efetiva(transaction_type, category) -> bool:
     if transaction_type == "INCOME" and categoria_excluida_receita_realizado(category):
         return False
@@ -184,42 +223,27 @@ def _prefetch_tracking_actuals(db, cc_ids, include_forecast: bool = True):
             continue
         real_by[row.cost_center_id].append(row)
 
-    # Lista: lucro da vida usa só a soma do previsto. Mês a mês (283k linhas) fica no detalhe.
-    tot_rows = db.query(
-        ActualTransaction.cost_center_id,
-        ActualTransaction.transaction_type,
-        func.sum(ActualTransaction.value).label("total_value"),
-    ).filter(
-        ActualTransaction.cost_center_id.in_(cc_ids),
-        ActualTransaction.is_forecast == True,
-        ActualTransaction.transaction_type.in_(["INCOME", "OUTCOME"]),
-    ).group_by(
-        ActualTransaction.cost_center_id,
-        ActualTransaction.transaction_type,
-    ).all()
-    for cost_center_id, transaction_type, total_value in tot_rows:
-        if transaction_type in ("INCOME", "OUTCOME"):
-            fcst_totals[cost_center_id][transaction_type] = float(total_value or 0)
-
     if include_forecast:
-        fcst_rows = db.query(
+        for row in _agregar_caixa_previsto(db, cc_ids):
+            if not _receita_realizado_efetiva(row.transaction_type, row.category):
+                continue
+            fcst_by[row.cost_center_id].append(row)
+    else:
+        tot_rows = db.query(
             ActualTransaction.cost_center_id,
-            _ano_mes_transacao().label("mes"),
-            ActualTransaction.category,
             ActualTransaction.transaction_type,
             func.sum(ActualTransaction.value).label("total_value"),
-            func.count(ActualTransaction.id).label("count"),
         ).filter(
             ActualTransaction.cost_center_id.in_(cc_ids),
             ActualTransaction.is_forecast == True,
+            ActualTransaction.transaction_type.in_(["INCOME", "OUTCOME"]),
         ).group_by(
             ActualTransaction.cost_center_id,
-            _ano_mes_transacao(),
-            ActualTransaction.category,
             ActualTransaction.transaction_type,
         ).all()
-        for row in fcst_rows:
-            fcst_by[row.cost_center_id].append(row)
+        for cost_center_id, transaction_type, total_value in tot_rows:
+            if transaction_type in ("INCOME", "OUTCOME"):
+                fcst_totals[cost_center_id][transaction_type] = float(total_value or 0)
 
     estoque_status = ["D", "R", "C", "P", "G"]
     for unit in db.query(Unit).filter(Unit.cost_center_id.in_(cc_ids), Unit.status.in_(estoque_status)).all():
@@ -719,6 +743,10 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
     # Processar linhas agregadas PREVISTAS
 
     for row in fcst_agg:
+
+        if not _receita_realizado_efetiva(row.transaction_type, row.category):
+
+            continue
 
         _process_aggregated(row.transaction_type, row.category, row.total_value, row.mes, anual_cf_fcst, monthly_net_cf_fcst, False, monthly_revenues_fcst)
 
@@ -2435,8 +2463,6 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
 
     cc_groups = defaultdict(list)
 
-    slices = []
-
     
 
     # Pré-carregar o mapeamento de DRE
@@ -2471,55 +2497,29 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
 
         
 
-        # Verifica se este centro de custo é um "Slice" (Produto com rateio próprio)
+        city, proj_name = parse_project_name(c)
 
-        slice_pct = None
+        group_key = f"{macro_prefix}_{proj_name}"
 
-        if c.apportionment_rules:
+        if group_key not in cc_groups:
 
-            for rule in c.apportionment_rules:
+            members = []
 
-                if str(rule.get("project_prefix")) == str(c.id) or str(rule.get("project_prefix")) == str(getattr(c, "id_sienge", "")) or str(rule.get("viability_id")) == str(c.id):
+            if c.id_sienge and len(c.id_sienge) >= 3:
 
-                    slice_pct = float(rule.get("percentage") or 0) / 100.0
+                related_ccs = db.query(CostCenter).filter(CostCenter.id_sienge.like(f"{macro_prefix}%")).all()
 
-                    break
+                for rc in related_ccs:
 
-        
+                    if _mesmo_produto_obra(proj_name, parse_project_name(rc)[1]):
 
-        if slice_pct is not None:
+                        members.append(rc)
 
-            slices.append({"cc": c, "macro_prefix": macro_prefix, "pct": slice_pct})
+            if not any(rc.id == c.id for rc in members):
 
-        else:
+                members.append(c)
 
-            city, proj_name = parse_project_name(c)
-
-            group_key = f"{macro_prefix}_{proj_name}"
-
-            
-
-            if group_key not in cc_groups:
-
-                members = []
-
-                if c.id_sienge and len(c.id_sienge) >= 3:
-
-                    related_ccs = db.query(CostCenter).filter(CostCenter.id_sienge.like(f"{macro_prefix}%")).all()
-
-                    # Garante que só puxa centros de custo do mesmo projeto real
-
-                    for rc in related_ccs:
-
-                        if _mesmo_produto_obra(proj_name, parse_project_name(rc)[1]):
-
-                            members.append(rc)
-
-                if not any(rc.id == c.id for rc in members):
-
-                    members.append(c)
-
-                cc_groups[group_key] = members
+            cc_groups[group_key] = members
 
     
 
@@ -2529,13 +2529,7 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
 
     try:
         needed_ids = {sub_cc.id for members in cc_groups.values() for sub_cc in members}
-        for sl in slices:
-            needed_ids.add(sl["cc"].id)
-            _, slice_proj = parse_project_name(sl["cc"])
-            for rc in db.query(CostCenter).filter(CostCenter.id_sienge.like(f"{sl['macro_prefix']}%")).all():
-                if _mesmo_produto_obra(slice_proj, parse_project_name(rc)[1]):
-                    needed_ids.add(rc.id)
-        prefetched = _prefetch_tracking_actuals(db, needed_ids, include_forecast=False)
+        prefetched = _prefetch_tracking_actuals(db, needed_ids, include_forecast=True)
     except Exception as e:
         print(f"Error loading tracking summary: {e}")
         prefetched = None
@@ -2554,7 +2548,7 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
 
 
 
-    # Processa os grupos normais (Mesclados) e Slices reutilizando a lógica
+    # Processa os grupos (100% da obra: principal, parceria, obras, marketing...)
     for base_class, ccs in cc_groups.items():
         main_cc = sorted(ccs, key=lambda x: len(x.nome or ""))[0]
         city, project_name = parse_project_name(main_cc)
@@ -2575,46 +2569,6 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
             "project_name": project_name,
             "category": cat,
             "status": main_cc.project_phase or "Em Andamento",
-            "city": city,
-            "vgv_total": kpis.get("vgv_total", 0.0),
-            "vendas_acumuladas": kpis.get("vendas_acumuladas", 0.0),
-            "perc_vendido": kpis.get("perc_vendido", 0.0),
-            "lucro": kpis.get("lucro", 0.0) if "lucro" in kpis else kpis.get("lucro_operacional", 0.0),
-            "tir_anual": kpis.get("tir_anual", 0.0),
-            "mtir_anual": kpis.get("mtir_anual", 0.0),
-            "payback_anos": kpis.get("payback", 0.0),
-            "exposicao_max_caixa": kpis.get("exposicao_max_caixa", 0.0),
-            "exposicao_caixa_vgv": kpis.get("exposicao_caixa_vgv", 0.0),
-            "vso": kpis.get("vso", 0.0),
-            "distrato_venda": kpis.get("distrato_venda", 0.0)
-        })
-
-    # Processa os Slices
-    for sl in slices:
-        c = sl["cc"]
-        macro_prefix = sl["macro_prefix"]
-        pct = sl["pct"]
-        city, project_name = parse_project_name(c)
-        cat = "Em Andamento"
-        if c.project_phase in ["Encerrado", "Concluído"]: cat = "Encerrado"
-        
-        raw_id = f"cg-{macro_prefix}_slice_{c.id}"
-        kpis = {}
-        try:
-            slice_act = _calc_slice_actuals(
-                db, macro_prefix, c.id, pct, "consolidado", cached_cat_to_group,
-                cached_actuals, prefetched=prefetched, kpis_only=True,
-            )
-            kpis = _kpis_da_fatia(slice_act)
-        except Exception as e:
-            print(f"Error calculating details for slice {raw_id}: {e}")
-        results_list.append({
-            "id": raw_id,
-            "db_id": c.id,
-            "itemType": "cost_center",
-            "project_name": project_name,
-            "category": cat,
-            "status": c.project_phase or "Em Andamento",
             "city": city,
             "vgv_total": kpis.get("vgv_total", 0.0),
             "vendas_acumuladas": kpis.get("vendas_acumuladas", 0.0),
