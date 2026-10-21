@@ -23,6 +23,7 @@ export default function TrackingPage() {
   const router = useRouter();
   const [data, setData] = useState<any[]>([]);
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
+  const [realizadoCaixa, setRealizadoCaixa] = useState<{ fonte_despesas?: string; fonte_receitas?: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
   const [empreendimentoFilter, setEmpreendimentoFilter] = useState<string[]>([]);
@@ -39,6 +40,7 @@ export default function TrackingPage() {
       } else {
         setData(res.data.items || []);
         setLastSyncAt(res.data.last_sync_at || null);
+        setRealizadoCaixa(res.data.realizado_caixa || null);
       }
     } catch (e) {
       console.error(e);
@@ -165,6 +167,18 @@ export default function TrackingPage() {
 
           </div>
 
+            <div className="flex flex-wrap items-center gap-2 justify-end">
+             {realizadoCaixa?.fonte_despesas && realizadoCaixa?.fonte_receitas && (
+               <div
+                 className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-xs text-slate-600"
+                 title="Mesmo recorte de caixa efetivo do orçamento: contas a pagar (OP1/OP8/OP10/RET) e contas a receber (INC/BM)."
+               >
+                 <span className="whitespace-nowrap">
+                   Caixa realizado:{" "}
+                   <span className="font-semibold">contas a pagar / receber</span>
+                 </span>
+               </div>
+             )}
              {lastSyncAt && (() => {
                // Formatar: "2026-07-21T08:10:45" → "21/07/2026 às 08:10:45"
                const dt = new Date(lastSyncAt);
@@ -184,6 +198,7 @@ export default function TrackingPage() {
                  </div>
                );
              })()}
+            </div>
           </div>
         
         {isLoading ? (

@@ -20,9 +20,11 @@ from app.models.actual_transaction import ActualTransaction
 
 from app.models.unit import Unit
 
-from sqlalchemy import and_, func, or_, cast, String
+from sqlalchemy import func, or_, cast, String
 
 from app.services.realizado_sienge import (
+    FONTE_REALIZADO_DESPESAS,
+    FONTE_REALIZADO_RECEITAS,
     SOURCE_ID_LIKES_REALIZADO_DESPESA,
     categoria_excluida_receita_realizado,
 )
@@ -51,20 +53,41 @@ def _ano_mes_transacao():
     return func.substr(cast(ActualTransaction.transaction_date, String), 1, 7)
 
 
-def _filtro_caixa_realizado_efetivo():
-    """Mesmo recorte de entrada/saída efetiva do orçamento; só o caixa do acompanhamento."""
-    saida = and_(
-        ActualTransaction.transaction_type == "OUTCOME",
-        or_(*[ActualTransaction.source_id.like(p) for p in SOURCE_ID_LIKES_REALIZADO_DESPESA]),
+def _agregar_caixa_realizado_efetivo(db, cc_ids):
+    """Mesmas duas leituras do orçamento: contas a pagar (OP1/OP8/OP10/RET) e receber (INC/BM)."""
+    cc_ids = list({cid for cid in cc_ids if cid is not None})
+    if not cc_ids:
+        return []
+    cols = (
+        ActualTransaction.cost_center_id,
+        _ano_mes_transacao().label("mes"),
+        ActualTransaction.category,
+        ActualTransaction.transaction_type,
+        func.sum(ActualTransaction.value).label("total_value"),
+        func.count(ActualTransaction.id).label("count"),
     )
-    entrada = and_(
+    group = (
+        ActualTransaction.cost_center_id,
+        _ano_mes_transacao(),
+        ActualTransaction.category,
+        ActualTransaction.transaction_type,
+    )
+    saidas = db.query(*cols).filter(
+        ActualTransaction.transaction_type == "OUTCOME",
+        ActualTransaction.is_forecast == False,
+        or_(*[ActualTransaction.source_id.like(p) for p in SOURCE_ID_LIKES_REALIZADO_DESPESA]),
+        ActualTransaction.cost_center_id.in_(cc_ids),
+    ).group_by(*group).all()
+    entradas = db.query(*cols).filter(
         ActualTransaction.transaction_type == "INCOME",
+        ActualTransaction.is_forecast == False,
         or_(
             ActualTransaction.source_id.like("INC-%"),
             ActualTransaction.source_id.like("BM-%"),
         ),
-    )
-    return or_(saida, entrada)
+        ActualTransaction.cost_center_id.in_(cc_ids),
+    ).group_by(*group).all()
+    return list(saidas) + list(entradas)
 
 
 def _receita_realizado_efetiva(transaction_type, category) -> bool:
@@ -155,23 +178,7 @@ def _prefetch_tracking_actuals(db, cc_ids, include_forecast: bool = True):
     for cost_center_id, transaction_date, value, category, installments_number, private_area in sales:
         sales_by[cost_center_id].append(_VendaLista(transaction_date, value, category, installments_number, private_area))
 
-    real_rows = db.query(
-        ActualTransaction.cost_center_id,
-        _ano_mes_transacao().label("mes"),
-        ActualTransaction.category,
-        ActualTransaction.transaction_type,
-        func.sum(ActualTransaction.value).label("total_value"),
-        func.count(ActualTransaction.id).label("count"),
-    ).filter(
-        ActualTransaction.cost_center_id.in_(cc_ids),
-        ActualTransaction.is_forecast == False,
-        _filtro_caixa_realizado_efetivo(),
-    ).group_by(
-        ActualTransaction.cost_center_id,
-        _ano_mes_transacao(),
-        ActualTransaction.category,
-        ActualTransaction.transaction_type,
-    ).all()
+    real_rows = _agregar_caixa_realizado_efetivo(db, cc_ids)
     for row in real_rows:
         if not _receita_realizado_efetiva(row.transaction_type, row.category):
             continue
@@ -264,35 +271,7 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
     if prefetched is not None:
         real_agg = prefetched["real"].get(cc_id, [])
     else:
-        real_agg = db.query(
-
-        _ano_mes_transacao().label("mes"),
-
-        ActualTransaction.category,
-
-        ActualTransaction.transaction_type,
-
-        func.sum(ActualTransaction.value).label("total_value"),
-
-        func.count(ActualTransaction.id).label("count")
-
-    ).filter(
-
-        ActualTransaction.cost_center_id == cc_id,
-
-        ActualTransaction.is_forecast == False,
-
-        _filtro_caixa_realizado_efetivo(),
-
-    ).group_by(
-
-        _ano_mes_transacao(),
-
-        ActualTransaction.category,
-
-        ActualTransaction.transaction_type
-
-    ).all()
+        real_agg = _agregar_caixa_realizado_efetivo(db, [cc_id])
 
 
 
@@ -2671,7 +2650,14 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
 
 
 
-    return {"items": results_list, "last_sync_at": last_sync_at}
+    return {
+        "items": results_list,
+        "last_sync_at": last_sync_at,
+        "realizado_caixa": {
+            "fonte_despesas": FONTE_REALIZADO_DESPESAS,
+            "fonte_receitas": FONTE_REALIZADO_RECEITAS,
+        },
+    }
 
 
 

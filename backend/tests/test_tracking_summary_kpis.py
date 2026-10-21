@@ -334,6 +334,36 @@ def test_caixa_realizado_do_acompanhamento_segue_recorte_do_orcamento():
     assert lista["monthly_revenues_real"]["2026-03"] == 80.0
 
 
+def test_pmt_antigo_isolado_nao_entra_no_caixa_do_acompanhamento():
+    db, ActualTransaction, _calc_actuals_for_cc, _prefetch_tracking_actuals = _sqlite_tracking()
+    cc_id = 9
+    db.add(ActualTransaction(
+        cost_center_id=cc_id, source_id="OUT-108564-PMT-1",
+        transaction_type="OUTCOME", category="Obras", transaction_date=date(2026, 3, 10),
+        value=28400000.0, is_forecast=False,
+    ))
+    db.commit()
+
+    act = _calc_actuals_for_cc(db, cc_id, cached_cat_to_group={})
+    assert act["monthly_net_cf_real"].get("2026-03", 0) == 0
+
+    prefetched = _prefetch_tracking_actuals(db, [cc_id], include_forecast=False)
+    lista = _calc_actuals_for_cc(db, cc_id, cached_cat_to_group={}, prefetched=prefetched, kpis_only=True)
+    assert lista["monthly_net_cf_real"].get("2026-03", 0) == 0
+    assert prefetched["real"].get(cc_id, []) == []
+
+
+def test_summary_devolve_fonte_do_caixa_igual_ao_orcamento():
+    from app.api.routes.tracking import FONTE_REALIZADO_DESPESAS, FONTE_REALIZADO_RECEITAS
+    from app.services.realizado_sienge import (
+        FONTE_REALIZADO_DESPESAS as FONTE_DESP,
+        FONTE_REALIZADO_RECEITAS as FONTE_REC,
+    )
+
+    assert FONTE_REALIZADO_DESPESAS == FONTE_DESP == "sienge_contas_pagar"
+    assert FONTE_REALIZADO_RECEITAS == FONTE_REC == "sienge_contas_receber_e_caixa_bancos"
+
+
 def test_lista_usa_previsto_mensal_no_payback():
     from types import SimpleNamespace
 
