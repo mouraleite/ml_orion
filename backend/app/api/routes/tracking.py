@@ -114,13 +114,13 @@ def _agregar_caixa_previsto(db, cc_ids):
         ActualTransaction.is_forecast == True,
         ActualTransaction.transaction_type != "INCOME",
     ).group_by(*group).all()
-    # Uma linha por source_id (cópia de parceria some). Hash aggregate; o IN (min id) não fecha na lista.
+    # Uma linha por source_id (cópia de parceria some). Só source_id no GROUP BY: hash, sem sort em disco.
     por_parcela = (
         db.query(
             func.min(ActualTransaction.cost_center_id).label("cost_center_id"),
-            _ano_mes_transacao().label("mes"),
-            ActualTransaction.category,
-            ActualTransaction.transaction_type,
+            func.substr(cast(func.min(ActualTransaction.transaction_date), String), 1, 7).label("mes"),
+            func.min(ActualTransaction.category).label("category"),
+            func.min(ActualTransaction.transaction_type).label("transaction_type"),
             func.max(ActualTransaction.value).label("total_value"),
             func.count(ActualTransaction.id).label("count"),
         )
@@ -128,13 +128,9 @@ def _agregar_caixa_previsto(db, cc_ids):
             ActualTransaction.cost_center_id.in_(cc_ids),
             ActualTransaction.is_forecast == True,
             ActualTransaction.transaction_type == "INCOME",
+            ActualTransaction.source_id.like("FCST-INC-%"),
         )
-        .group_by(
-            ActualTransaction.source_id,
-            _ano_mes_transacao(),
-            ActualTransaction.category,
-            ActualTransaction.transaction_type,
-        )
+        .group_by(ActualTransaction.source_id)
         .subquery()
     )
     entradas = db.query(
@@ -1400,7 +1396,7 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
     
 
-    if cf_array:
+    if cf_array and not kpis_only:
 
         try:
 

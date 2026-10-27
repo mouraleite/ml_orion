@@ -25,6 +25,7 @@ export default function TrackingPage() {
   const [lastSyncAt, setLastSyncAt] = useState<string | null>(null);
   const [realizadoCaixa, setRealizadoCaixa] = useState<{ fonte_despesas?: string; fonte_receitas?: string } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   
   const [empreendimentoFilter, setEmpreendimentoFilter] = useState<string[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
@@ -32,6 +33,7 @@ export default function TrackingPage() {
 
   const loadData = async () => {
     setIsLoading(true);
+    setLoadError(false);
     try {
       const res = await api.get("/tracking/summary", { timeout: 180000 });
       // API returns {items: [...], last_sync_at: "..."} or legacy plain array
@@ -44,6 +46,7 @@ export default function TrackingPage() {
       }
     } catch (e) {
       console.error(e);
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
@@ -203,6 +206,10 @@ export default function TrackingPage() {
         
         {isLoading ? (
           <AppLoadingState />
+        ) : loadError ? (
+          <div className="p-12 text-center text-slate-500">
+            Não foi possível carregar o acompanhamento. Atualize a página.
+          </div>
         ) : filteredData.length === 0 ? (
           <div className="p-12 text-center text-slate-500">
             Nenhum projeto encontrado.
