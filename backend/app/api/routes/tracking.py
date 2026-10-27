@@ -114,18 +114,42 @@ def _agregar_caixa_previsto(db, cc_ids):
         ActualTransaction.is_forecast == True,
         ActualTransaction.transaction_type != "INCOME",
     ).group_by(*group).all()
-    ids_entrada = (
-        db.query(func.min(ActualTransaction.id))
+    # Uma linha por source_id (cópia de parceria some). Hash aggregate; o IN (min id) não fecha na lista.
+    por_parcela = (
+        db.query(
+            func.min(ActualTransaction.cost_center_id).label("cost_center_id"),
+            _ano_mes_transacao().label("mes"),
+            ActualTransaction.category,
+            ActualTransaction.transaction_type,
+            func.max(ActualTransaction.value).label("total_value"),
+            func.count(ActualTransaction.id).label("count"),
+        )
         .filter(
             ActualTransaction.cost_center_id.in_(cc_ids),
             ActualTransaction.is_forecast == True,
             ActualTransaction.transaction_type == "INCOME",
         )
-        .group_by(ActualTransaction.source_id)
+        .group_by(
+            ActualTransaction.source_id,
+            _ano_mes_transacao(),
+            ActualTransaction.category,
+            ActualTransaction.transaction_type,
+        )
+        .subquery()
     )
-    entradas = db.query(*cols).filter(
-        ActualTransaction.id.in_(ids_entrada),
-    ).group_by(*group).all()
+    entradas = db.query(
+        por_parcela.c.cost_center_id,
+        por_parcela.c.mes,
+        por_parcela.c.category,
+        por_parcela.c.transaction_type,
+        func.sum(por_parcela.c.total_value).label("total_value"),
+        func.sum(por_parcela.c.count).label("count"),
+    ).group_by(
+        por_parcela.c.cost_center_id,
+        por_parcela.c.mes,
+        por_parcela.c.category,
+        por_parcela.c.transaction_type,
+    ).all()
     return list(saidas) + list(entradas)
 
 

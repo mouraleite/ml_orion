@@ -460,3 +460,25 @@ def test_previsto_de_entrada_igual_na_parceria_conta_uma_vez():
     assert act7["monthly_revenues_real"]["2026-03"] + act8["monthly_revenues_real"]["2026-03"] == 100.0
     assert (act7["monthly_revenues_fcst"].get("2026-06", 0) + act8["monthly_revenues_fcst"].get("2026-06", 0)) == 1000.0
     assert kpis["lucro"] == 1050.0
+
+
+def test_previsto_de_parcelas_distintas_soma_no_mes():
+    db, ActualTransaction, _calc_actuals_for_cc, _prefetch_tracking_actuals = _sqlite_tracking()
+    db.add_all([
+        ActualTransaction(
+            cost_center_id=7, source_id="FCST-INC-A",
+            transaction_type="INCOME", category="Receita de Venda de Lotes",
+            transaction_date=date(2026, 6, 10), value=400.0, is_forecast=True,
+        ),
+        ActualTransaction(
+            cost_center_id=7, source_id="FCST-INC-B",
+            transaction_type="INCOME", category="Receita de Venda de Lotes",
+            transaction_date=date(2026, 6, 10), value=600.0, is_forecast=True,
+        ),
+    ])
+    db.commit()
+    prefetched = _prefetch_tracking_actuals(db, [7], include_forecast=True)
+    act = _calc_actuals_for_cc(db, 7, cached_cat_to_group={}, prefetched=prefetched, kpis_only=True)
+    from app.api.routes.tracking import _kpis_do_consolidado
+    assert act["monthly_revenues_fcst"]["2026-06"] == 1000.0
+    assert _kpis_do_consolidado([act])["lucro"] == 1000.0
