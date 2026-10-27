@@ -324,33 +324,50 @@ def test_caixa_realizado_do_acompanhamento_segue_recorte_do_orcamento():
 
     act = _calc_actuals_for_cc(db, cc_id, cached_cat_to_group={})
     assert act["vgv_vendido"] == 1500.0
-    assert act["monthly_net_cf_real"]["2026-03"] == -20.0
     assert act["monthly_revenues_real"]["2026-03"] == 80.0
+    assert act["lucro_liq_operacional"] == -520.0
+    assert act["monthly_net_cf_real"]["2026-03"] == -520.0
 
     prefetched = _prefetch_tracking_actuals(db, [cc_id], include_forecast=False)
     lista = _calc_actuals_for_cc(db, cc_id, cached_cat_to_group={}, prefetched=prefetched, kpis_only=True)
     assert lista["vgv_vendido"] == 1500.0
-    assert lista["monthly_net_cf_real"]["2026-03"] == -20.0
     assert lista["monthly_revenues_real"]["2026-03"] == 80.0
+    assert lista["lucro_liq_operacional"] == -520.0
+    assert lista["monthly_net_cf_real"]["2026-03"] == -520.0
 
 
-def test_pmt_antigo_isolado_nao_entra_no_caixa_do_acompanhamento():
+def test_pmt_antigo_entra_no_lucro_e_na_serie_de_tir():
     db, ActualTransaction, _calc_actuals_for_cc, _prefetch_tracking_actuals = _sqlite_tracking()
     cc_id = 9
-    db.add(ActualTransaction(
-        cost_center_id=cc_id, source_id="OUT-108564-PMT-1",
-        transaction_type="OUTCOME", category="Obras", transaction_date=date(2026, 3, 10),
-        value=28400000.0, is_forecast=False,
-    ))
+    db.add_all([
+        ActualTransaction(
+            cost_center_id=cc_id, source_id="OUT-108564-PMT-1",
+            transaction_type="OUTCOME", category="Obras", transaction_date=date(2026, 1, 10),
+            value=1000.0, is_forecast=False,
+        ),
+        ActualTransaction(
+            cost_center_id=cc_id, source_id="INC-9-BM-1-FC-1",
+            transaction_type="INCOME", category="Receita de Venda de Lotes",
+            transaction_date=date(2026, 2, 10), value=1500.0, is_forecast=False,
+        ),
+    ])
     db.commit()
 
     act = _calc_actuals_for_cc(db, cc_id, cached_cat_to_group={})
-    assert act["monthly_net_cf_real"].get("2026-03", 0) == 0
+    assert act["monthly_net_cf_real"]["2026-01"] == -1000.0
+    assert act["monthly_net_cf_real"]["2026-02"] == 1500.0
+    assert act["lucro_liq_operacional"] == 500.0
 
     prefetched = _prefetch_tracking_actuals(db, [cc_id], include_forecast=False)
     lista = _calc_actuals_for_cc(db, cc_id, cached_cat_to_group={}, prefetched=prefetched, kpis_only=True)
-    assert lista["monthly_net_cf_real"].get("2026-03", 0) == 0
-    assert prefetched["real"].get(cc_id, []) == []
+    from app.api.routes.tracking import _kpis_do_consolidado
+    kpis = _kpis_do_consolidado([lista])
+    assert lista["monthly_net_cf_real"]["2026-01"] == -1000.0
+    assert lista["lucro_liq_operacional"] == 500.0
+    assert kpis["lucro"] == 500.0
+    assert kpis["payback"] == 2
+    assert kpis["exposicao_max_caixa"] == -1000.0
+    assert prefetched["real"].get(cc_id)
 
 
 def test_summary_devolve_fonte_do_caixa_igual_ao_orcamento():

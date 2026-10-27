@@ -90,6 +90,31 @@ def _agregar_caixa_realizado_efetivo(db, cc_ids):
     return list(saidas) + list(entradas)
 
 
+def _agregar_pmt_historico_caixa(db, cc_ids):
+    """Pago no formato antigo OUT-{titulo}-PMT-*. Entra no acompanhamento; orçamento/forecast não lê isso."""
+    cc_ids = list({cid for cid in cc_ids if cid is not None})
+    if not cc_ids:
+        return []
+    return db.query(
+        ActualTransaction.cost_center_id,
+        _ano_mes_transacao().label("mes"),
+        ActualTransaction.category,
+        func.sum(ActualTransaction.value).label("total_value"),
+    ).filter(
+        ActualTransaction.cost_center_id.in_(cc_ids),
+        ActualTransaction.is_forecast == False,
+        ActualTransaction.transaction_type == "OUTCOME",
+        ActualTransaction.source_id.like("OUT-%-PMT-%"),
+        ~ActualTransaction.source_id.like("OUT-%-OP1-%"),
+        ~ActualTransaction.source_id.like("OUT-%-OP8-%"),
+        ~ActualTransaction.source_id.like("OUT-%-OP10-%"),
+    ).group_by(
+        ActualTransaction.cost_center_id,
+        _ano_mes_transacao(),
+        ActualTransaction.category,
+    ).all()
+
+
 def _agregar_caixa_previsto(db, cc_ids):
     """A realizar mês a mês. Entrada prevista com o mesmo source_id conta uma vez (parceria)."""
     cc_ids = list({cid for cid in cc_ids if cid is not None})
@@ -216,11 +241,12 @@ def _prefetch_tracking_actuals(db, cc_ids, include_forecast: bool = True):
     sales_by = defaultdict(list)
     real_by = defaultdict(list)
     fcst_by = defaultdict(list)
+    pmt_hist_by = defaultdict(list)
     units_by = defaultdict(list)
     cc_by = {}
     fcst_totals = defaultdict(lambda: {"INCOME": 0.0, "OUTCOME": 0.0})
     if not cc_ids:
-        return {"sales": sales_by, "real": real_by, "fcst": fcst_by, "fcst_totals": {}, "fcst_monthly": {}, "units": units_by, "ccs": cc_by}
+        return {"sales": sales_by, "real": real_by, "fcst": fcst_by, "fcst_totals": {}, "fcst_monthly": {}, "pmt_hist": {}, "units": units_by, "ccs": cc_by}
 
     sales = db.query(
         ActualTransaction.cost_center_id,
@@ -242,6 +268,9 @@ def _prefetch_tracking_actuals(db, cc_ids, include_forecast: bool = True):
         if not _receita_realizado_efetiva(row.transaction_type, row.category):
             continue
         real_by[row.cost_center_id].append(row)
+
+    for row in _agregar_pmt_historico_caixa(db, cc_ids):
+        pmt_hist_by[row.cost_center_id].append(row)
 
     if include_forecast:
         for row in _agregar_caixa_previsto(db, cc_ids):
@@ -276,6 +305,7 @@ def _prefetch_tracking_actuals(db, cc_ids, include_forecast: bool = True):
         "fcst": fcst_by,
         "fcst_totals": dict(fcst_totals),
         "fcst_monthly": {},
+        "pmt_hist": pmt_hist_by,
         "units": units_by,
         "ccs": cc_by,
     }
@@ -757,6 +787,16 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
             continue
 
         _process_aggregated(row.transaction_type, row.category, row.total_value, row.mes, anual_cf_real, monthly_net_cf_real, True, monthly_revenues_real)
+
+    if prefetched is not None:
+        pmt_hist = (prefetched.get("pmt_hist") or {}).get(cc_id, [])
+    else:
+        pmt_hist = _agregar_pmt_historico_caixa(db, [cc_id])
+    for row in pmt_hist:
+        _process_aggregated(
+            "OUTCOME", row.category, row.total_value, row.mes,
+            anual_cf_real, monthly_net_cf_real, True, monthly_revenues_real,
+        )
 
 
 
