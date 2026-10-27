@@ -4,7 +4,7 @@ from datetime import datetime
 from app.db.database import get_db
 from app.api import deps
 from app.schemas.user import UserResponse
-from app.services.sienge_sync import sync_all_sienge_data
+from app.services.sienge_sync import run_rewrite_pmt_historico_rateio_job, sync_all_sienge_data
 from app.core.config import settings
 from app.core.scheduler import daily_sienge_sync
 
@@ -64,4 +64,21 @@ def trigger_cron_sync(
     return {
         "message": "Sync diário iniciado em background.",
         "schedule_hint": "09:00 e 14:00 America/Sao_Paulo",
+    }
+
+
+@router.post("/pmt-historico-rateio")
+def trigger_pmt_historico_rateio(
+    background_tasks: BackgroundTasks,
+    current_user: UserResponse = Depends(deps.get_current_active_user),
+):
+    """Regrava PMT legado com financialCategoryRate. Só o acompanhamento lê esse source_id."""
+    from app.core.roles import is_admin_user
+
+    if not is_admin_user(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Apenas administrador.")
+    background_tasks.add_task(run_rewrite_pmt_historico_rateio_job)
+    return {
+        "message": "Regravação do PMT legado iniciada em background.",
+        "nota": "Não altera OP1 nem orçamento/forecast.",
     }

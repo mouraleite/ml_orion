@@ -97,6 +97,80 @@ def category_rate_ratio(cat: dict) -> float:
         return 1.0
 
 
+def is_legacy_pmt_source_id(source_id: str | None) -> bool:
+    """OUT-{titulo}-PMT-{n} antigo. Não inclui OP1/OP8/OP10 (orçamento lê esses)."""
+    sid = source_id or ""
+    if not sid.startswith("OUT-") or "-PMT-" not in sid:
+        return False
+    return "-OP" not in sid
+
+
+def rateio_pmt_historico_do_cc(categories, cost_center_sienge_id):
+    """Fatia 0–1 deste CC no título. None = CC não participa (não gravar título cheio).
+
+    Preferência: financialCategoryRate (mesmo critério do OP1). Se a API não
+    mandar essa coluna, usa value/soma dos value; percentage sozinho costuma
+    vir 100 em cada CC do rateio e não serve.
+    """
+    cats = list(categories or [])
+    cc_key = str(cost_center_sienge_id)
+    matching = [c for c in cats if str(c.get("costCenterId")) == cc_key]
+    if not cats:
+        return 1.0
+    if not matching:
+        return None
+    if any(c.get("financialCategoryRate") is not None for c in matching):
+        ratio = sum(category_rate_ratio(c) for c in matching)
+        return ratio if ratio > 0 else None
+    total_val = 0.0
+    match_val = 0.0
+    for c in cats:
+        try:
+            v = float(c.get("value") or 0)
+        except (TypeError, ValueError):
+            v = 0.0
+        total_val += v
+        if str(c.get("costCenterId")) == cc_key:
+            match_val += v
+    if total_val > 0:
+        return match_val / total_val if match_val > 0 else None
+    distinct = {str(c.get("costCenterId")) for c in cats if c.get("costCenterId") is not None}
+    if len(distinct) <= 1:
+        return 1.0
+    return 1.0 / len(distinct)
+
+
+def iter_pmt_historico_lines(item: dict, cost_center_sienge_id: str) -> Iterator[Dict[str, Any]]:
+    """Linhas no formato legado OUT-{bill}-PMT-{n} com rateio financialCategoryRate.
+
+    Não gera source_id OP1 — orçamento/forecast não lêem este formato.
+    Base do valor: netAmount (o que o PMT antigo gravava) × fatia do CC.
+    """
+    cats = item.get("paymentsCategories") or item.get("financialCategories") or []
+    ratio = rateio_pmt_historico_do_cc(cats, cost_center_sienge_id)
+    if ratio is None:
+        return
+    bill_id = item.get("billId", item.get("documentId"))
+    matching = [c for c in cats if str(c.get("costCenterId")) == str(cost_center_sienge_id)]
+    cat_name = (matching[0].get("financialCategoryName") if matching else None) or "Obras"
+    for pmt in item.get("payments") or []:
+        date_str = pmt.get("paymentDate")
+        if not date_str:
+            continue
+        pmt_id = pmt.get("sequencialNumber", pmt.get("id", "0"))
+        yield {
+            "bill_id": bill_id,
+            "pmt_id": pmt_id,
+            "payment_date": date_str,
+            "category_name": cat_name,
+            "value": payment_net_amount(pmt) * ratio,
+            "source_id": f"OUT-{bill_id}-PMT-{pmt_id}",
+            "creditor_name": item.get("creditorName", item.get("vendorName", "")),
+            "document_name": item.get("documentIdentificationName", item.get("title", "")),
+            "document_number": item.get("documentNumber", ""),
+        }
+
+
 def is_adiantamento_realizado(cat: dict) -> bool:
     """True se a categoria recebe Adiantamento (op 10) como realizado.
 

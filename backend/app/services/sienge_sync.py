@@ -333,6 +333,150 @@ def sync_outcomes(db: Session, cc: CostCenter, start_date: str, end_date: str):
     db.commit()
 
 
+def apply_pmt_historico_rateio_lines(db: Session, cc: CostCenter, lines, start_d, end_d) -> dict:
+    """Atualiza só OUT-{titulo}-PMT-{n} legado. Não cria/apaga OP1 (orçamento não lê PMT)."""
+    from datetime import datetime as dt_cls
+
+    from app.services.sienge_outcome_parse import is_legacy_pmt_source_id
+
+    existing = {
+        r.source_id: r
+        for r in db.query(ActualTransaction).filter(
+            ActualTransaction.cost_center_id == cc.id,
+            ActualTransaction.transaction_type == "OUTCOME",
+            ActualTransaction.is_forecast == False,
+            ActualTransaction.source_id.like("OUT-%-PMT-%"),
+            ~ActualTransaction.source_id.like("OUT-%-OP%"),
+        ).all()
+        if is_legacy_pmt_source_id(r.source_id)
+    }
+
+    seen: set[str] = set()
+    updated = inserted = 0
+    for line in lines:
+        source_id = line["source_id"]
+        if not is_legacy_pmt_source_id(source_id):
+            continue
+        date_str = line.get("payment_date") or ""
+        try:
+            dtx = dt_cls.strptime(str(date_str)[:10], "%Y-%m-%d").date()
+        except Exception:
+            continue
+        seen.add(source_id)
+        record = existing.get(source_id)
+        if not record:
+            record = ActualTransaction(
+                cost_center_id=cc.id,
+                source_id=source_id,
+                transaction_type="OUTCOME",
+            )
+            db.add(record)
+            existing[source_id] = record
+            inserted += 1
+        else:
+            updated += 1
+        record.transaction_date = dtx
+        record.value = line["value"]
+        record.category = line.get("category_name") or "Obras"
+        record.bill_id = str(line["bill_id"]) if line.get("bill_id") else None
+        record.creditor_name = line.get("creditor_name")
+        record.document_name = line.get("document_name")
+        record.document_number = line.get("document_number")
+        record.is_forecast = False
+
+    deleted = 0
+    if seen:
+        for sid, rec in list(existing.items()):
+            if sid in seen:
+                continue
+            if rec.transaction_date and start_d <= rec.transaction_date <= end_d:
+                db.delete(rec)
+                deleted += 1
+
+    db.commit()
+    return {"updated": updated, "inserted": inserted, "deleted": deleted}
+
+
+def rewrite_pmt_historico_rateio(db: Session, cc: CostCenter, start_date: str, end_date: str) -> dict:
+    """Busca o título na Sienge e regrava o PMT legado com financialCategoryRate.
+
+    Não chama sync_outcomes: aquele fluxo grava OP1, que o orçamento lê.
+    """
+    from datetime import datetime as dt_cls
+
+    from app.services.sienge_outcome_parse import iter_pmt_historico_lines
+
+    try:
+        start_d = dt_cls.strptime(start_date[:10], "%Y-%m-%d").date()
+        end_d = dt_cls.strptime(end_date[:10], "%Y-%m-%d").date()
+    except Exception:
+        return {"updated": 0, "inserted": 0, "deleted": 0}
+
+    url = outcome_contas_pagar_url(str(cc.id_sienge), start_date, end_date)
+    lines = []
+    for page in _fetch_paginated_bulk(url):
+        for item in page:
+            lines.extend(iter_pmt_historico_lines(item, str(cc.id_sienge)))
+    return apply_pmt_historico_rateio_lines(db, cc, lines, start_d, end_d)
+
+
+def rewrite_pmt_historico_todos_ccs(
+    db: Session, start_year: int = 2016, end_year: int = 2026
+) -> dict:
+    """Regrava PMT legado em todos os CCs que já têm esse source_id. Só acompanhamento."""
+    from sqlalchemy import distinct
+
+    ids = [
+        row[0]
+        for row in db.query(distinct(ActualTransaction.cost_center_id))
+        .filter(
+            ActualTransaction.transaction_type == "OUTCOME",
+            ActualTransaction.is_forecast == False,
+            ActualTransaction.source_id.like("OUT-%-PMT-%"),
+            ~ActualTransaction.source_id.like("OUT-%-OP%"),
+        )
+        .all()
+        if row[0] is not None
+    ]
+    ccs = (
+        db.query(CostCenter).filter(CostCenter.id.in_(ids)).order_by(CostCenter.id_sienge).all()
+        if ids
+        else []
+    )
+    tot = {"updated": 0, "inserted": 0, "deleted": 0, "ccs": 0, "fail": 0}
+    for cc in ccs:
+        if not cc.id_sienge:
+            continue
+        print(f"[PMT rateio] {cc.id_sienge} {(cc.nome or '')[:40]}")
+        try:
+            for year in range(start_year, end_year + 1):
+                stats = rewrite_pmt_historico_rateio(db, cc, f"{year}-01-01", f"{year}-12-31")
+                tot["updated"] += stats["updated"]
+                tot["inserted"] += stats["inserted"]
+                tot["deleted"] += stats["deleted"]
+            tot["ccs"] += 1
+        except Exception as exc:
+            db.rollback()
+            tot["fail"] += 1
+            print(f"[PMT rateio] Falha {cc.id_sienge}: {exc}")
+    print(f"[PMT rateio] fim {tot}")
+    return tot
+
+
+def run_rewrite_pmt_historico_rateio_job():
+    """Job em background: sessão própria (a do request HTTP fecha)."""
+    from app.db.database import SessionLocal
+
+    db = SessionLocal()
+    try:
+        rewrite_pmt_historico_todos_ccs(db)
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
+
+
 def mirror_afac_income_as_outcome(
     db: Session,
     cc: CostCenter,

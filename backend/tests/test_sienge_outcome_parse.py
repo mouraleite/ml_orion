@@ -442,3 +442,146 @@ def test_url_contas_pagar_pede_autorizacoes():
     assert "withAuthorizations=true" in url
     assert "withBankMovements=true" in url
     assert "selectionType=P" in url
+
+
+def _titulo_rateado_dois_produtos():
+    """Título 1.500 rateado 40/60; percentage=100 em cada CC (armadilha da API)."""
+    return {
+        "billId": 33401,
+        "creditorName": "Fornecedor",
+        "documentIdentificationName": "NF",
+        "documentNumber": "1",
+        "paymentsCategories": [
+            {
+                "costCenterId": 14301,
+                "financialCategoryId": 1,
+                "financialCategoryName": "Obras",
+                "financialCategoryRate": 40,
+                "percentage": 100,
+            },
+            {
+                "costCenterId": 14302,
+                "financialCategoryId": 1,
+                "financialCategoryName": "Obras",
+                "financialCategoryRate": 60,
+                "percentage": 100,
+            },
+        ],
+        "payments": [
+            {
+                "operationTypeId": 1,
+                "operationTypeName": "Pagamento",
+                "netAmount": 1500,
+                "grossAmount": 1500,
+                "paymentDate": "2020-05-10",
+                "sequencialNumber": 1,
+            },
+        ],
+    }
+
+
+def test_legacy_pmt_source_id_nao_pega_op1():
+    from app.services.sienge_outcome_parse import is_legacy_pmt_source_id
+
+    assert is_legacy_pmt_source_id("OUT-33401-PMT-1") is True
+    assert is_legacy_pmt_source_id("OUT-33401-OP1-PMT-1-DT-20260510-FC-1") is False
+    assert is_legacy_pmt_source_id("OUT-1-OP8-PMT-1-DT-20260101-FC-1") is False
+    assert is_legacy_pmt_source_id("INC-1-BM-1-FC-1") is False
+
+
+def test_rateio_pmt_historico_usa_financial_category_rate_e_nao_percentage():
+    from app.services.sienge_outcome_parse import rateio_pmt_historico_do_cc
+
+    cats = _titulo_rateado_dois_produtos()["paymentsCategories"]
+    assert rateio_pmt_historico_do_cc(cats, "14301") == 0.4
+    assert rateio_pmt_historico_do_cc(cats, "14302") == 0.6
+    assert rateio_pmt_historico_do_cc(cats, "14399") is None
+
+
+def test_iter_pmt_historico_fatia_o_titulo_e_nao_grava_op1():
+    from app.services.sienge_outcome_parse import iter_pmt_historico_lines
+
+    item = _titulo_rateado_dois_produtos()
+    morada = list(iter_pmt_historico_lines(item, "14301"))
+    reserva = list(iter_pmt_historico_lines(item, "14302"))
+    outro = list(iter_pmt_historico_lines(item, "14399"))
+
+    assert outro == []
+    assert len(morada) == 1 and len(reserva) == 1
+    assert morada[0]["source_id"] == "OUT-33401-PMT-1"
+    assert reserva[0]["source_id"] == "OUT-33401-PMT-1"
+    assert "-OP" not in morada[0]["source_id"]
+    assert morada[0]["value"] == 600.0
+    assert reserva[0]["value"] == 900.0
+
+
+def test_apply_pmt_historico_corrige_copia_do_titulo_cheio_e_nao_mexe_em_op1():
+    from datetime import date
+
+    from app.models.actual_transaction import ActualTransaction
+    from app.services.sienge_outcome_parse import iter_pmt_historico_lines
+    from app.services.sienge_sync import apply_pmt_historico_rateio_lines
+
+    db, _, _, _ = _sqlite_pmt_db()
+    item = _titulo_rateado_dois_produtos()
+    db.add_all([
+        ActualTransaction(
+            cost_center_id=1, source_id="OUT-33401-PMT-1",
+            transaction_type="OUTCOME", category="Obras",
+            transaction_date=date(2020, 5, 10), value=1500.0, is_forecast=False,
+        ),
+        ActualTransaction(
+            cost_center_id=2, source_id="OUT-33401-PMT-1",
+            transaction_type="OUTCOME", category="Obras",
+            transaction_date=date(2020, 5, 10), value=1500.0, is_forecast=False,
+        ),
+        ActualTransaction(
+            cost_center_id=1, source_id="OUT-33401-OP1-PMT-1-DT-20260510-FC-1",
+            transaction_type="OUTCOME", category="Obras",
+            transaction_date=date(2026, 5, 10), value=400.0, is_forecast=False,
+        ),
+    ])
+    db.commit()
+
+    class _CC:
+        def __init__(self, pk, sienge):
+            self.id = pk
+            self.id_sienge = sienge
+
+    apply_pmt_historico_rateio_lines(
+        db, _CC(1, "14301"),
+        list(iter_pmt_historico_lines(item, "14301")),
+        date(2020, 1, 1), date(2020, 12, 31),
+    )
+    apply_pmt_historico_rateio_lines(
+        db, _CC(2, "14302"),
+        list(iter_pmt_historico_lines(item, "14302")),
+        date(2020, 1, 1), date(2020, 12, 31),
+    )
+
+    v1 = db.query(ActualTransaction).filter_by(cost_center_id=1, source_id="OUT-33401-PMT-1").one().value
+    v2 = db.query(ActualTransaction).filter_by(cost_center_id=2, source_id="OUT-33401-PMT-1").one().value
+    op1 = db.query(ActualTransaction).filter_by(
+        source_id="OUT-33401-OP1-PMT-1-DT-20260510-FC-1",
+    ).one().value
+    assert v1 == 600.0
+    assert v2 == 900.0
+    assert op1 == 400.0
+
+
+def _sqlite_pmt_db():
+    import importlib
+    import os
+
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+
+    from app.db.database import Base
+
+    for name in os.listdir("app/models"):
+        if name.endswith(".py"):
+            importlib.import_module("app.models." + name[:-3])
+
+    engine = create_engine("sqlite://")
+    Base.metadata.create_all(engine)
+    return sessionmaker(bind=engine)(), None, None, None
