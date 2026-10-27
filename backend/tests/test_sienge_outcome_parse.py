@@ -569,6 +569,17 @@ def test_apply_pmt_historico_corrige_copia_do_titulo_cheio_e_nao_mexe_em_op1():
     assert op1 == 400.0
 
 
+def test_pmt_rateio_marca_e_reconhece_cc_feito():
+    from app.services.sienge_sync import _pmt_rateio_done_ids, _pmt_rateio_mark_done
+
+    db, _, _, _ = _sqlite_pmt_db()
+    assert _pmt_rateio_done_ids(db) == set()
+    _pmt_rateio_mark_done(db, "12800")
+    _pmt_rateio_mark_done(db, "13700")
+    _pmt_rateio_mark_done(db, "12800")
+    assert _pmt_rateio_done_ids(db) == {"12800", "13700"}
+
+
 def _sqlite_pmt_db():
     import importlib
     import os

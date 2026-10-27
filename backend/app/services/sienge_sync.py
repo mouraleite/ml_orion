@@ -420,10 +420,46 @@ def rewrite_pmt_historico_rateio(db: Session, cc: CostCenter, start_date: str, e
     return apply_pmt_historico_rateio_lines(db, cc, lines, start_d, end_d)
 
 
+_PMT_RATEIO_DONE_KEY = "pmt_historico_rateio_done"
+
+
+def _pmt_rateio_done_ids(db) -> set[str]:
+    from app.models.system_settings import SystemSettings
+
+    row = db.query(SystemSettings).filter_by(key=_PMT_RATEIO_DONE_KEY).first()
+    if not row or not isinstance(row.value, dict):
+        return set()
+    return {str(x) for x in (row.value.get("ids") or [])}
+
+
+def _pmt_rateio_mark_done(db, id_sienge: str) -> None:
+    from datetime import datetime as dt_cls
+
+    from app.models.system_settings import SystemSettings
+
+    row = db.query(SystemSettings).filter_by(key=_PMT_RATEIO_DONE_KEY).first()
+    ids = []
+    if row and isinstance(row.value, dict):
+        ids = [str(x) for x in (row.value.get("ids") or [])]
+    if id_sienge not in ids:
+        ids.append(id_sienge)
+    payload = {"ids": ids}
+    if not row:
+        db.add(SystemSettings(key=_PMT_RATEIO_DONE_KEY, value=payload))
+    else:
+        row.value = payload
+        row.updated_at = dt_cls.utcnow()
+    db.commit()
+
+
 def rewrite_pmt_historico_todos_ccs(
     db: Session, start_year: int = 2016, end_year: int = 2026
 ) -> dict:
-    """Regrava PMT legado em todos os CCs que já têm esse source_id. Só acompanhamento."""
+    """Regrava PMT legado em todos os CCs que já têm esse source_id. Só acompanhamento.
+
+    CCs já gravados em system_settings (pmt_historico_rateio_done) são pulados —
+    o plano free do Render mata o job; o próximo disparo continua de onde parou.
+    """
     from sqlalchemy import distinct
 
     ids = [
@@ -443,23 +479,37 @@ def rewrite_pmt_historico_todos_ccs(
         if ids
         else []
     )
-    tot = {"updated": 0, "inserted": 0, "deleted": 0, "ccs": 0, "fail": 0}
+    tot = {"updated": 0, "inserted": 0, "deleted": 0, "ccs": 0, "fail": 0, "skipped": 0}
+    already = _pmt_rateio_done_ids(db)
     for cc in ccs:
         if not cc.id_sienge:
             continue
-        print(f"[PMT rateio] {cc.id_sienge} {(cc.nome or '')[:40]}")
+        if cc.id_sienge in already:
+            tot["skipped"] += 1
+            continue
+        print(f"[PMT rateio] {cc.id_sienge} {(cc.nome or '')[:40]}", flush=True)
+        ok_cc = True
         try:
             for year in range(start_year, end_year + 1):
-                stats = rewrite_pmt_historico_rateio(db, cc, f"{year}-01-01", f"{year}-12-31")
-                tot["updated"] += stats["updated"]
-                tot["inserted"] += stats["inserted"]
-                tot["deleted"] += stats["deleted"]
-            tot["ccs"] += 1
+                try:
+                    stats = rewrite_pmt_historico_rateio(db, cc, f"{year}-01-01", f"{year}-12-31")
+                    tot["updated"] += stats["updated"]
+                    tot["inserted"] += stats["inserted"]
+                    tot["deleted"] += stats["deleted"]
+                except Exception as year_exc:
+                    db.rollback()
+                    ok_cc = False
+                    tot["fail"] += 1
+                    print(f"[PMT rateio] Falha {cc.id_sienge} {year}: {year_exc}", flush=True)
+            if ok_cc:
+                _pmt_rateio_mark_done(db, cc.id_sienge)
+                already.add(cc.id_sienge)
+                tot["ccs"] += 1
         except Exception as exc:
             db.rollback()
             tot["fail"] += 1
-            print(f"[PMT rateio] Falha {cc.id_sienge}: {exc}")
-    print(f"[PMT rateio] fim {tot}")
+            print(f"[PMT rateio] Falha {cc.id_sienge}: {exc}", flush=True)
+    print(f"[PMT rateio] fim {tot}", flush=True)
     return tot
 
 
