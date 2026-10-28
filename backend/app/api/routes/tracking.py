@@ -1839,7 +1839,7 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
 
 
-def _calculate_financial_indicators(cf_dict):
+def _calculate_financial_indicators(cf_dict, with_irr: bool = True):
 
     tir_anual = None
 
@@ -1895,39 +1895,42 @@ def _calculate_financial_indicators(cf_dict):
 
     if cf_array:
 
-        try:
+        # np.roots (npf.irr) em ~300 meses trava o worker free; a lista não usa TIR.
+        if with_irr:
 
-            tir_mensal = npf.irr(cf_array)
+            try:
 
-            if tir_mensal is not None and not pd.isna(tir_mensal) and tir_mensal > -1:
+                tir_mensal = npf.irr(cf_array)
 
-                tir_mensal_final = tir_mensal * 100
+                if tir_mensal is not None and not pd.isna(tir_mensal) and tir_mensal > -1:
 
-                tir_anual = ((1 + tir_mensal) ** 12 - 1) * 100
+                    tir_mensal_final = tir_mensal * 100
 
-        except Exception:
+                    tir_anual = ((1 + tir_mensal) ** 12 - 1) * 100
 
-            pass
+            except Exception:
+
+                pass
 
 
 
-        tma_anual = 0.12
+            tma_anual = 0.12
 
-        tma_mensal = (1 + tma_anual) ** (1/12) - 1
+            tma_mensal = (1 + tma_anual) ** (1/12) - 1
 
-        try:
+            try:
 
-            mtir_mensal_val = npf.mirr(cf_array, finance_rate=tma_mensal, reinvest_rate=tma_mensal)
+                mtir_mensal_val = npf.mirr(cf_array, finance_rate=tma_mensal, reinvest_rate=tma_mensal)
 
-            if mtir_mensal_val and not pd.isna(mtir_mensal_val):
+                if mtir_mensal_val and not pd.isna(mtir_mensal_val):
 
-                mtir_mensal_final = mtir_mensal_val * 100
+                    mtir_mensal_final = mtir_mensal_val * 100
 
-                mtir_anual = ((1 + mtir_mensal_val) ** 12 - 1) * 100
+                    mtir_anual = ((1 + mtir_mensal_val) ** 12 - 1) * 100
 
-        except Exception:
+            except Exception:
 
-            pass
+                pass
 
             
 
@@ -2367,7 +2370,7 @@ def _kpis_do_consolidado(acts):
         lucro += act.get("lucro_liq_operacional", 0.0) or 0.0
         for mes, val in (act.get("final_cf_dict") or {}).items():
             combined_cf[mes] += val
-    indicators = _calculate_financial_indicators(combined_cf or {0: 0.0})
+    indicators = _calculate_financial_indicators(combined_cf or {0: 0.0}, with_irr=False)
     vendas_ativas = vgv_vendido - distratos
     vgv_total = vendas_ativas + vgv_estoque
     exposicao = indicators.get("exposicao_maxima") or 0.0
