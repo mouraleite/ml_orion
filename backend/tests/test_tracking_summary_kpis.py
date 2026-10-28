@@ -499,3 +499,35 @@ def test_previsto_de_parcelas_distintas_soma_no_mes():
     from app.api.routes.tracking import _kpis_do_consolidado
     assert act["monthly_revenues_fcst"]["2026-06"] == 1000.0
     assert _kpis_do_consolidado([act])["lucro"] == 1000.0
+
+
+def test_lista_tir_newton_bate_com_fluxo_simples():
+    from app.api.routes.tracking import _calculate_financial_indicators, _irr_mensal_newton
+
+    cf = [-100.0, 110.0]
+    assert abs(_irr_mensal_newton(cf) - 0.1) < 1e-8
+    kpis = _kpis_do_consolidado([
+        {
+            "vgv_vendido": 100.0, "vgv_estoque": 0.0, "distratos": 0.0,
+            "lucro_liq_operacional": 10.0,
+            "final_cf_dict": {"2024-01": -100.0, "2024-02": 110.0},
+        },
+    ])
+    numpy_ind = _calculate_financial_indicators({"2024-01": -100.0, "2024-02": 110.0})
+    assert abs(kpis["tir_anual"] - numpy_ind["tir_anual"]) < 1e-6
+    assert kpis["tir_anual"] > 0
+
+
+def test_lista_tir_newton_nao_trava_em_fluxo_longo():
+    import time
+    from app.api.routes.tracking import _irr_mensal_newton
+
+    n = 293
+    cf = [0.0] * n
+    cf[0] = -1_000_000.0
+    for i in range(12, n):
+        cf[i] = 8_000.0
+    t0 = time.time()
+    r = _irr_mensal_newton(cf)
+    assert time.time() - t0 < 0.5
+    assert r is not None and r > -1

@@ -1839,7 +1839,49 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
 
 
-def _calculate_financial_indicators(cf_dict, with_irr: bool = True):
+def _irr_mensal_newton(cf_array):
+    """TIR mensal por Newton. np.roots em ~300 meses trava o worker free da lista."""
+    cf = [float(x or 0.0) for x in cf_array]
+    if not any(c > 0 for c in cf) or not any(c < 0 for c in cf):
+        return None
+
+    def npv_deriv(r):
+        if r <= -0.999999:
+            return None
+        npv = 0.0
+        deriv = 0.0
+        b = 1.0
+        one = 1.0 + r
+        for t, c in enumerate(cf):
+            if t == 0:
+                npv += c
+                continue
+            b *= one
+            if b == 0:
+                return None
+            npv += c / b
+            deriv -= t * c / (b * one)
+        return npv, deriv
+
+    for guess in (0.01, 0.05, 0.1, -0.01, 0.2, -0.05):
+        r = guess
+        for _ in range(80):
+            res = npv_deriv(r)
+            if res is None:
+                break
+            npv, deriv = res
+            if abs(deriv) < 1e-18:
+                break
+            step = npv / deriv
+            r -= step
+            if r <= -0.999999 or r > 10:
+                break
+            if abs(step) < 1e-8 and r > -1:
+                return r
+    return None
+
+
+def _calculate_financial_indicators(cf_dict, with_irr: bool = True, irr_method: str = "numpy"):
 
     tir_anual = None
 
@@ -1895,12 +1937,14 @@ def _calculate_financial_indicators(cf_dict, with_irr: bool = True):
 
     if cf_array:
 
-        # np.roots (npf.irr) em ~300 meses trava o worker free; a lista não usa TIR.
         if with_irr:
 
             try:
 
-                tir_mensal = npf.irr(cf_array)
+                if irr_method == "newton":
+                    tir_mensal = _irr_mensal_newton(cf_array)
+                else:
+                    tir_mensal = npf.irr(cf_array)
 
                 if tir_mensal is not None and not pd.isna(tir_mensal) and tir_mensal > -1:
 
@@ -2370,7 +2414,7 @@ def _kpis_do_consolidado(acts):
         lucro += act.get("lucro_liq_operacional", 0.0) or 0.0
         for mes, val in (act.get("final_cf_dict") or {}).items():
             combined_cf[mes] += val
-    indicators = _calculate_financial_indicators(combined_cf or {0: 0.0}, with_irr=False)
+    indicators = _calculate_financial_indicators(combined_cf or {0: 0.0}, irr_method="newton")
     vendas_ativas = vgv_vendido - distratos
     vgv_total = vendas_ativas + vgv_estoque
     exposicao = indicators.get("exposicao_maxima") or 0.0
