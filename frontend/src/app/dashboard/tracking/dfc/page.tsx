@@ -2,12 +2,13 @@
 
 import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, FileSpreadsheet } from "lucide-react";
 import { api } from "@/lib/api";
-import { Card } from "@/components/ui/Card";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
+import { MultiSelect } from "@/components/ui/MultiSelect";
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
 import { CollapsibleFilterPanel } from "@/components/shared/CollapsibleFilterPanel";
+import { formatMoedaCompact, formatMoedaK, MESES_STR } from "@/lib/orcamentoDesvioUi";
 
 type Centro = { id: number; id_sienge?: string | null; nome?: string | null };
 type Empreendimento = {
@@ -50,49 +51,74 @@ type DfcPayload = {
   conferencia: Conferencia;
 };
 
-const MESES_CURTO = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+const MESES_LABEL = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
-const formatMi = (val: number) =>
-  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(val);
-
-function formatCelula(val: number) {
-  if (Math.abs(val) < 0.5) return "—";
-  const abs = Math.abs(val);
-  const sign = val < 0 ? "-" : "";
-  if (abs >= 1_000_000) return `${sign}R$ ${(abs / 1_000_000).toFixed(1)} mi`;
-  if (abs >= 1_000) return `${sign}R$ ${(abs / 1_000).toFixed(0)} mil`;
-  return formatMi(val);
+function moneyClass(v: number) {
+  if (v < 0) return "text-red-600";
+  if (v > 0) return "text-slate-800";
+  return "text-slate-400";
 }
 
-function corValor(val: number) {
-  if (Math.abs(val) < 0.5) return "text-slate-300";
-  if (val < 0) return "text-red-600";
-  return "text-slate-800";
-}
-
-function labelMes(ym: string) {
-  const [ano, mes] = ym.split("-");
-  const idx = Number(mes) - 1;
-  if (!ano || idx < 0 || idx > 11) return ym;
-  return `${MESES_CURTO[idx]}/${ano.slice(2)}`;
+function Num({ v }: { v: number }) {
+  return <span className={`tabular-nums ${moneyClass(v)}`}>{formatMoedaCompact(v)}</span>;
 }
 
 function mesesDoAno(ano: string) {
-  return MESES_CURTO.map((_, i) => `${ano}-${String(i + 1).padStart(2, "0")}`);
+  return MESES_STR.map((_, i) => `${ano}-${String(i + 1).padStart(2, "0")}`);
 }
 
-function valorDaColuna(row: { valores?: Record<string, number>; valores_mes?: Record<string, number> }, col: string, view: "ano" | "mes") {
+function valorDaColuna(
+  row: { valores?: Record<string, number>; valores_mes?: Record<string, number> },
+  col: string,
+  view: "ano" | "mes",
+) {
   if (view === "mes") return row.valores_mes?.[col] || 0;
   return row.valores?.[col] || 0;
 }
 
-function buildDfcUrl(id: string, view: "ano" | "mes", anoMes: string) {
+function parseAnosUrl(search: { get(name: string): string | null }) {
+  const csv = (search.get("anos") || "").split(",").map((s) => s.trim()).filter(Boolean);
+  if (csv.length) return csv;
+  const legado = search.get("ano");
+  return legado ? [legado] : [];
+}
+
+function buildDfcUrl(id: string, view: "ano" | "mes", anosSel: string[] = []) {
   const params = new URLSearchParams();
   if (id) params.set("id", id);
   if (view === "mes") params.set("view", "mes");
-  if (view === "mes" && anoMes) params.set("ano", anoMes);
+  if (view === "mes" && anosSel.length > 0) params.set("anos", anosSel.join(","));
   const qs = params.toString();
   return qs ? `/dashboard/tracking/dfc?${qs}` : "/dashboard/tracking/dfc";
+}
+
+async function exportarExcel(
+  linhas: LinhaDfc[],
+  colunas: string[],
+  view: "ano" | "mes",
+  labels: string[],
+  nome: string,
+) {
+  const XLSX = await import("xlsx");
+  const headers = ["Código", "Descrição", "Tipo", ...labels, "Vida"];
+  const rows: (string | number)[][] = [];
+  const push = (row: { codigo: string; descricao: string; valores?: Record<string, number>; valores_mes?: Record<string, number>; total: number }, tipo: string) => {
+    rows.push([
+      row.codigo || "",
+      row.descricao || "",
+      tipo,
+      ...colunas.map((col) => valorDaColuna(row, col, view)),
+      row.total || 0,
+    ]);
+  };
+  for (const linha of linhas) {
+    push(linha, "Categoria");
+    for (const plano of linha.planos || []) push(plano, "Plano");
+  }
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "DFC");
+  XLSX.writeFile(wb, `DFC_empreendimentos_${nome || "vida"}.xlsx`);
 }
 
 function TrackingDfcInner() {
@@ -100,7 +126,7 @@ function TrackingDfcInner() {
   const searchParams = useSearchParams();
   const idParam = searchParams.get("id") || "";
   const view = searchParams.get("view") === "mes" ? "mes" : "ano";
-  const anoParam = searchParams.get("ano") || "";
+  const anosParam = parseAnosUrl(searchParams);
 
   const [empreendimentos, setEmpreendimentos] = useState<Empreendimento[]>([]);
   const [data, setData] = useState<DfcPayload | null>(null);
@@ -121,7 +147,7 @@ function TrackingDfcInner() {
         const qs = new URLSearchParams(window.location.search);
         if (!qs.get("id") && items.length > 0) {
           const currentView = qs.get("view") === "mes" ? "mes" : "ano";
-          router.replace(buildDfcUrl(items[0].id, currentView, qs.get("ano") || ""));
+          router.replace(buildDfcUrl(items[0].id, currentView, parseAnosUrl(qs)));
         }
       })
       .catch(() => {
@@ -164,17 +190,38 @@ function TrackingDfcInner() {
   }, [idParam]);
 
   const anos = data?.anos || [];
-  const anoMes = anoParam && anos.includes(anoParam) ? anoParam : anos[anos.length - 1] || "";
-
+  const anosFiltro = anos.filter((ano) => anosParam.includes(ano));
+  const anosVisiveis = view === "mes" && anosFiltro.length > 0 ? anosFiltro : anos;
   const colunas = useMemo(() => {
-    if (view === "mes") return anoMes ? mesesDoAno(anoMes) : [];
+    if (view === "mes") return anosVisiveis.flatMap((ano) => mesesDoAno(ano));
     return anos;
-  }, [view, anoMes, anos]);
+  }, [view, anosVisiveis, anos]);
+  const colunaLabels = useMemo(() => {
+    if (view === "mes") {
+      return colunas.map((ym) => {
+        const mes = Number(ym.slice(5, 7));
+        return MESES_LABEL[mes - 1] || ym;
+      });
+    }
+    return colunas;
+  }, [view, colunas]);
+  const excelLabels = useMemo(() => {
+    if (view === "mes") {
+      return colunas.map((ym) => {
+        const ano = ym.slice(0, 4);
+        const mes = Number(ym.slice(5, 7));
+        return `${MESES_LABEL[mes - 1] || ym} ${ano}`;
+      });
+    }
+    return colunas;
+  }, [view, colunas]);
 
   const conferencia = data?.conferencia;
   const centros = data?.empreendimento?.centros || [];
   const visaoNome = data?.visao?.nome || "Visão DFC";
-  const linhasComPlano = (data?.linhas || []).filter((l) => (l.planos || []).length > 0);
+  const linhas = data?.linhas || [];
+  const linhasComPlano = linhas.filter((l) => (l.planos || []).length > 0);
+  const loading = loadingList || loadingDfc;
 
   const labelEmpreendimento = useMemo(() => {
     const item = empreendimentos.find((e) => e.id === idParam) || data?.empreendimento;
@@ -182,8 +229,9 @@ function TrackingDfcInner() {
     return `${item.city} — ${item.project_name}`;
   }, [empreendimentos, idParam, data]);
 
-  const irPara = (id: string, nextView: "ano" | "mes", nextAno: string) => {
-    router.replace(buildDfcUrl(id, nextView, nextAno));
+  const irPara = (id: string, nextView: "ano" | "mes", nextAnos: string[] = []) => {
+    const subset = nextView === "mes" && nextAnos.length > 0 && nextAnos.length < anos.length ? nextAnos : [];
+    router.replace(buildDfcUrl(id, nextView, subset));
   };
 
   const toggleLinha = (id: number) => {
@@ -195,238 +243,295 @@ function TrackingDfcInner() {
     });
   };
 
-  return (
-    <div className="space-y-6 animate-in fade-in duration-300" translate="no" lang="pt-BR">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">DFC DE EMPREENDIMENTOS</h1>
-        <p className="text-sm text-slate-500 mt-1">
-          Vida do projeto no padrão DFC. Mesmo caixa do acompanhamento — não usa orçamento nem forecast.
-        </p>
-      </div>
+  const limparFiltros = () => router.replace("/dashboard/tracking/dfc");
 
-      <CollapsibleFilterPanel
-        activeFilterCount={(idParam ? 1 : 0) + (view === "mes" ? 1 : 0)}
-        defaultOpen
-        onClear={() => router.replace("/dashboard/tracking/dfc")}
-      >
-        <div className="flex-1 min-w-[280px]">
-          <label className="text-xs text-slate-500 font-medium mb-1 block">Empreendimento</label>
-          <SearchableSelect
-            options={empreendimentos.map((item) => ({
-              id: item.id,
-              label: `${item.city} — ${item.project_name}`,
-            }))}
-            value={idParam}
-            onChange={(next) => {
-              if (!next) {
-                router.replace("/dashboard/tracking/dfc");
-                return;
-              }
-              irPara(String(next), view, anoMes);
-            }}
-            placeholder="Todos"
-            disabled={loadingList || empreendimentos.length === 0}
-          />
+  return (
+    <div className="flex flex-col flex-1 min-h-0 min-w-0 gap-4 overflow-hidden" translate="no" lang="pt-BR">
+      <div className="shrink-0 space-y-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">DFC de empreendimentos</h1>
+          <p className="text-slate-500 text-sm mt-1">
+            Demonstrativo da vida do projeto pela {visaoNome} — mesmo caixa do acompanhamento. Saídas negativas.
+          </p>
         </div>
-        <div className="min-w-[160px]">
-          <label className="text-xs text-slate-500 font-medium mb-1 block">Período</label>
-          <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-0.5">
-            <button
-              type="button"
-              onClick={() => irPara(idParam, "ano", anoMes)}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
-                view === "ano" ? "bg-slate-800 text-white" : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              Ano
-            </button>
-            <button
-              type="button"
-              onClick={() => irPara(idParam, "mes", anoMes || anos[anos.length - 1] || "")}
-              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
-                view === "mes" ? "bg-slate-800 text-white" : "text-slate-600 hover:bg-slate-50"
-              }`}
-            >
-              Mês
-            </button>
-          </div>
-        </div>
-        {view === "mes" ? (
-          <div className="min-w-[140px]">
-            <label className="text-xs text-slate-500 font-medium mb-1 block">Ano</label>
+
+        <CollapsibleFilterPanel
+          activeFilterCount={(idParam ? 1 : 0) + (view === "mes" ? 1 : 0) + (anosFiltro.length > 0 ? 1 : 0)}
+          defaultOpen
+          onClear={limparFiltros}
+        >
+          <div className="flex-1 min-w-[200px]">
+            <label className="text-xs text-slate-500 font-medium mb-1 block">Empreendimento</label>
             <SearchableSelect
-              options={anos.map((ano) => ({ id: ano, label: ano }))}
-              value={anoMes}
-              onChange={(next) => irPara(idParam, "mes", String(next || ""))}
+              options={empreendimentos.map((item) => ({
+                id: item.id,
+                label: `${item.city} — ${item.project_name}`,
+              }))}
+              value={idParam}
+              onChange={(next) => {
+                if (!next) {
+                  limparFiltros();
+                  return;
+                }
+                irPara(String(next), view, anosFiltro);
+              }}
               placeholder="Todos"
-              disabled={!anos.length}
-              clearable={false}
+              disabled={loadingList || empreendimentos.length === 0}
             />
           </div>
-        ) : null}
-      </CollapsibleFilterPanel>
-      {centros.length > 0 && (
-        <p className="text-xs text-slate-500 -mt-2">
-          Centros somados: {centros.map((c) => c.id_sienge || c.nome).filter(Boolean).join(" · ")}
-        </p>
-      )}
-
-      {conferencia && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <Card className="p-4 border border-slate-200 shadow-sm">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Lucro DFC (vida)</p>
-            <p className={`text-xl font-bold tabular-nums ${corValor(conferencia.lucro_dfc)}`}>
-              {formatCelula(conferencia.lucro_dfc)}
-            </p>
-          </Card>
-          <Card className="p-4 border border-slate-200 shadow-sm">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Lucro da lista</p>
-            <p className={`text-xl font-bold tabular-nums ${corValor(conferencia.lucro_lista)}`}>
-              {formatCelula(conferencia.lucro_lista)}
-            </p>
-          </Card>
-          <Card className="p-4 border border-slate-200 shadow-sm">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Desvio</p>
-            <p className={`text-xl font-bold tabular-nums ${corValor(conferencia.desvio)}`}>
-              {formatCelula(conferencia.desvio)}
-            </p>
-          </Card>
-          <Card
-            className={`p-4 border shadow-sm ${
-              conferencia.ok ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"
-            }`}
-          >
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Conferência</p>
-            <p className={`text-sm font-bold ${conferencia.ok ? "text-emerald-700" : "text-amber-800"}`}>
-              {conferencia.ok ? "Lucro do DFC bate com a lista" : "Lucro do DFC diverge da lista"}
-            </p>
-            <p className="text-xs text-slate-500 mt-1">{labelEmpreendimento}</p>
-          </Card>
-        </div>
-      )}
-
-      {erro && (
-        <Card className="p-4 border border-red-200 bg-red-50 text-sm text-red-700">{erro}</Card>
-      )}
-
-      {(loadingList || loadingDfc) && (
-        <AppLoadingState title="Montando o DFC da vida do projeto…" hint="Usa o mesmo caixa do acompanhamento." />
-      )}
-
-      {!loadingDfc && data && (
-        <Card className="p-0 border border-slate-200 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
-            <h2 className="font-bold text-slate-700">
-              {visaoNome}
-              {data.visao?.is_padrao ? (
-                <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">padrão</span>
-              ) : null}
-            </h2>
-            <div className="flex items-center gap-3">
-              {linhasComPlano.length > 0 ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => setAbertos(new Set(linhasComPlano.map((l) => l.id)))}
-                    className="text-xs font-semibold text-ml-green hover:underline"
-                  >
-                    Expandir planos
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAbertos(new Set())}
-                    className="text-xs font-semibold text-slate-500 hover:underline"
-                  >
-                    Recolher
-                  </button>
-                </>
-              ) : null}
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Total da vida</span>
+          <div className="min-w-[160px]">
+            <label className="text-xs text-slate-500 font-medium mb-1 block">Período</label>
+            <div className="flex items-center gap-1 rounded-lg border border-slate-300 bg-white p-0.5 h-[34px]">
+              <button
+                type="button"
+                onClick={() => irPara(idParam, "ano")}
+                className={`px-3 h-full rounded-md text-xs font-semibold transition-colors ${
+                  view === "ano" ? "bg-ml-green text-white" : "text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                Ano
+              </button>
+              <button
+                type="button"
+                onClick={() => irPara(idParam, "mes")}
+                className={`px-3 h-full rounded-md text-xs font-semibold transition-colors ${
+                  view === "mes" ? "bg-ml-green text-white" : "text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                Mês
+              </button>
             </div>
           </div>
-          <div className="overflow-auto max-h-[70vh]">
-            <table className="min-w-full text-sm">
-              <thead className="sticky top-0 z-10 bg-slate-50 text-[10px] uppercase tracking-wider text-slate-500">
-                <tr>
-                  <th className="text-left font-semibold px-4 py-2 sticky left-0 bg-slate-50 min-w-[300px] shadow-[1px_0_0_0_#e2e8f0]">
-                    Grupo DFC
-                  </th>
-                  {colunas.map((col) => (
-                    <th key={col} className="text-right font-semibold px-3 py-2 min-w-[88px] tabular-nums">
-                      {view === "mes" ? labelMes(col) : col}
+          {view === "mes" ? (
+            <div className="w-full md:w-56 z-10">
+              <label className="text-xs text-slate-500 font-medium mb-1 block">Ano</label>
+              <MultiSelect
+                options={anos}
+                value={anosFiltro}
+                onChange={(vals) => irPara(idParam, "mes", vals)}
+                placeholder="Todos"
+                className="bg-white"
+              />
+            </div>
+          ) : null}
+        </CollapsibleFilterPanel>
+      </div>
+
+      {erro ? (
+        <div className="shrink-0 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{erro}</div>
+      ) : null}
+
+      {conferencia && !loadingDfc ? (
+        <div className="shrink-0 rounded-xl border border-slate-200 bg-white overflow-hidden">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] divide-y md:divide-y-0 md:divide-x divide-slate-100">
+            <div className="px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Lucro da lista</p>
+              <p className="text-xl font-bold text-slate-900 tabular-nums">{formatMoedaK(conferencia.lucro_lista)}</p>
+              <p className="text-[11px] text-slate-500">Acompanhamento de empreendimentos</p>
+            </div>
+            <div
+              className={`px-5 py-3 flex flex-col items-center justify-center text-center min-w-[168px] ${
+                conferencia.ok ? "bg-emerald-50/80 text-emerald-800" : "bg-orange-50/80 text-orange-950"
+              }`}
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70 mb-0.5">Desvio</p>
+              <p className="text-xl font-bold tabular-nums">
+                {conferencia.desvio > 0 ? "+" : ""}
+                {formatMoedaK(conferencia.desvio)}
+              </p>
+            </div>
+            <div className="px-4 py-3 md:text-right">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-0.5">Lucro DFC</p>
+              <p className="text-xl font-bold text-slate-900 tabular-nums">{formatMoedaK(conferencia.lucro_dfc)}</p>
+            </div>
+          </div>
+          <div className="px-4 py-1.5 border-t border-slate-100 bg-slate-50/50 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[11px] text-slate-500">
+              {labelEmpreendimento}
+              {centros.length > 0
+                ? ` · centros ${centros.map((c) => c.id_sienge || c.nome).filter(Boolean).join(", ")}`
+                : ""}
+            </span>
+            <span
+              className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                conferencia.ok ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"
+              }`}
+            >
+              {conferencia.ok ? "Confere" : "Diverge"}
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-100 bg-white">
+          <h2 className="font-bold text-slate-700">
+            {visaoNome}
+            {data?.visao?.is_padrao ? (
+              <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">padrão</span>
+            ) : null}
+          </h2>
+          <div className="flex flex-wrap items-center gap-2">
+            {linhasComPlano.length > 0 ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setAbertos(new Set(linhasComPlano.map((l) => l.id)))}
+                  className="text-xs font-semibold text-ml-green hover:underline"
+                >
+                  Expandir planos
+                </button>
+                <button type="button" onClick={() => setAbertos(new Set())} className="text-xs font-semibold text-slate-500 hover:underline">
+                  Recolher
+                </button>
+              </>
+            ) : null}
+            <button
+              type="button"
+              onClick={() =>
+                exportarExcel(
+                  linhas,
+                  colunas,
+                  view,
+                  excelLabels,
+                  data?.empreendimento?.project_name || "vida",
+                )
+              }
+              disabled={loading || linhas.length === 0}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition shadow-sm disabled:opacity-50"
+            >
+              <FileSpreadsheet className="w-4 h-4 text-brand-green" /> Excel
+            </button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="p-6">
+            <AppLoadingState title="Montando o DFC da vida do projeto…" hint="Usa o mesmo caixa do acompanhamento." />
+          </div>
+        ) : (
+          <div className="flex-1 min-h-0 overflow-auto">
+            <table className="w-full text-sm min-w-[1100px]">
+              <thead className="sticky top-0 z-20 bg-white">
+                {view === "mes" ? (
+                  <>
+                    <tr className="text-[10px] uppercase tracking-wider text-slate-400">
+                      <th
+                        rowSpan={2}
+                        className="sticky left-0 z-40 bg-white text-left px-3 py-2 font-semibold border-b border-slate-200 align-bottom"
+                      >
+                        Categoria
+                      </th>
+                      {anosVisiveis.map((ano) => (
+                        <th
+                          key={ano}
+                          colSpan={12}
+                          className="px-1.5 py-1 text-center font-semibold whitespace-nowrap border-b border-l border-slate-200"
+                        >
+                          {ano}
+                        </th>
+                      ))}
+                      <th
+                        rowSpan={2}
+                        className="px-2 py-2 text-right font-semibold whitespace-nowrap border-b border-l border-slate-200 bg-slate-50 align-bottom"
+                      >
+                        Vida
+                      </th>
+                    </tr>
+                    <tr className="text-[10px] uppercase tracking-wider text-slate-400">
+                      {anosVisiveis.map((ano) =>
+                        MESES_LABEL.map((mes, i) => (
+                          <th
+                            key={`${ano}-${i}`}
+                            className={`px-1.5 py-1 text-right font-semibold whitespace-nowrap border-b border-slate-200 ${i === 0 ? "border-l" : ""}`}
+                          >
+                            {mes}
+                          </th>
+                        )),
+                      )}
+                    </tr>
+                  </>
+                ) : (
+                  <tr className="text-[10px] uppercase tracking-wider text-slate-400">
+                    <th className="sticky left-0 z-40 bg-white text-left px-3 py-2 font-semibold border-b border-slate-200">
+                      Categoria
                     </th>
-                  ))}
-                  <th className="text-right font-semibold px-4 py-2 min-w-[120px] bg-slate-100">Vida</th>
-                </tr>
+                    {colunaLabels.map((label, i) => (
+                      <th
+                        key={colunas[i] || label}
+                        className="px-1.5 py-2 text-right font-semibold whitespace-nowrap border-b border-l border-slate-200"
+                      >
+                        {label}
+                      </th>
+                    ))}
+                    <th className="px-2 py-2 text-right font-semibold whitespace-nowrap border-b border-l border-slate-200 bg-slate-50">
+                      Vida
+                    </th>
+                  </tr>
+                )}
               </thead>
               <tbody>
-                {(data.linhas || []).map((linha) => {
-                  const topo = linha.nivel === 0;
+                {linhas.map((linha) => {
                   const temPlanos = (linha.planos || []).length > 0;
                   const aberto = abertos.has(linha.id);
+                  const indent = linha.nivel;
                   return (
                     <Fragment key={linha.id}>
-                      <tr className={topo ? "bg-slate-50/80 font-semibold" : "hover:bg-slate-50/60"}>
-                        <td
-                          className={`px-4 py-1.5 sticky left-0 ${topo ? "bg-slate-50" : "bg-white"} shadow-[1px_0_0_0_#e2e8f0]`}
-                          style={{ paddingLeft: `${16 + linha.nivel * 14}px` }}
-                        >
-                          {temPlanos ? (
-                            <button
-                              type="button"
-                              onClick={() => toggleLinha(linha.id)}
-                              className="inline-flex items-center gap-1 text-left"
-                              aria-expanded={aberto}
-                            >
-                              {aberto ? (
-                                <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                              ) : (
-                                <ChevronRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                              )}
-                              <span className="text-[10px] text-slate-400 mr-1 tabular-nums">{linha.codigo}</span>
-                              {linha.descricao}
-                            </button>
-                          ) : (
-                            <>
-                              <span className="text-[10px] text-slate-400 mr-2 tabular-nums">{linha.codigo}</span>
-                              {linha.descricao}
-                            </>
-                          )}
+                      <tr className="bg-white hover:bg-slate-50">
+                        <td className="sticky left-0 z-10 px-3 py-2 border-b border-slate-100 min-w-[280px] bg-white">
+                          <div className="flex items-center gap-1" style={{ paddingLeft: indent * 16 }}>
+                            {temPlanos ? (
+                              <button
+                                type="button"
+                                onClick={() => toggleLinha(linha.id)}
+                                className="p-0.5 rounded hover:bg-slate-200"
+                                aria-expanded={aberto}
+                              >
+                                {aberto ? (
+                                  <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                                ) : (
+                                  <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
+                                )}
+                              </button>
+                            ) : (
+                              <span className="w-4" />
+                            )}
+                            <span className="font-mono text-xs text-slate-400 w-14 shrink-0">{linha.codigo}</span>
+                            <span className="text-sm truncate font-semibold text-slate-800">{linha.descricao}</span>
+                          </div>
                         </td>
-                        {colunas.map((col) => {
-                          const valor = valorDaColuna(linha, col, view);
-                          return (
-                            <td key={col} className={`px-3 py-1.5 text-right tabular-nums ${corValor(valor)}`}>
-                              {formatCelula(valor)}
-                            </td>
-                          );
-                        })}
-                        <td className={`px-4 py-1.5 text-right tabular-nums bg-slate-50 ${corValor(linha.total || 0)}`}>
-                          {formatCelula(linha.total || 0)}
+                        {colunas.map((col) => (
+                          <td
+                            key={col}
+                            className="px-1.5 py-2 border-b border-l border-slate-100 text-right text-[11px] whitespace-nowrap font-semibold"
+                          >
+                            <Num v={valorDaColuna(linha, col, view)} />
+                          </td>
+                        ))}
+                        <td className="px-2 py-2 border-b border-l border-slate-100 text-right text-[11px] font-semibold whitespace-nowrap bg-slate-50/80">
+                          <Num v={linha.total || 0} />
                         </td>
                       </tr>
                       {aberto &&
                         (linha.planos || []).map((plano) => (
-                          <tr key={`${linha.id}-${plano.id}`} className="hover:bg-slate-50/40 text-[13px]">
-                            <td
-                              className="px-4 py-1 sticky left-0 bg-white shadow-[1px_0_0_0_#e2e8f0] text-slate-600"
-                              style={{ paddingLeft: `${32 + linha.nivel * 14}px` }}
-                            >
-                              {plano.codigo ? (
-                                <span className="text-[10px] text-slate-400 mr-2 tabular-nums">{plano.codigo}</span>
-                              ) : null}
-                              {plano.descricao}
+                          <tr key={`${linha.id}-${plano.id}`} className="bg-slate-50/70">
+                            <td className="sticky left-0 z-10 px-3 py-2 border-b border-slate-100 min-w-[280px] bg-slate-50">
+                              <div className="flex items-center gap-1" style={{ paddingLeft: (indent + 1) * 16 }}>
+                                <span className="w-4" />
+                                <span className="font-mono text-xs text-slate-400 w-14 shrink-0 opacity-80">{plano.codigo}</span>
+                                <span className="text-sm truncate text-slate-600">{plano.descricao}</span>
+                              </div>
                             </td>
-                            {colunas.map((col) => {
-                              const valor = valorDaColuna(plano, col, view);
-                              return (
-                                <td key={col} className={`px-3 py-1 text-right tabular-nums ${corValor(valor)}`}>
-                                  {formatCelula(valor)}
-                                </td>
-                              );
-                            })}
-                            <td className={`px-4 py-1 text-right tabular-nums bg-slate-50 ${corValor(plano.total || 0)}`}>
-                              {formatCelula(plano.total || 0)}
+                            {colunas.map((col) => (
+                              <td
+                                key={col}
+                                className="px-1.5 py-2 border-b border-l border-slate-100 text-right text-[11px] whitespace-nowrap"
+                              >
+                                <Num v={valorDaColuna(plano, col, view)} />
+                              </td>
+                            ))}
+                            <td className="px-2 py-2 border-b border-l border-slate-100 text-right text-[11px] font-semibold whitespace-nowrap bg-slate-50/80">
+                              <Num v={plano.total || 0} />
                             </td>
                           </tr>
                         ))}
@@ -436,8 +541,13 @@ function TrackingDfcInner() {
               </tbody>
             </table>
           </div>
-        </Card>
-      )}
+        )}
+      </div>
+
+      <p className="shrink-0 text-xs text-slate-400">
+        Fonte: mesmo caixa do acompanhamento de empreendimentos, agrupado pela visão do Apoio. Planos fora da visão caem em receita de vendas ou administrativas.
+        A coluna Vida é o total do projeto. No recorte mensal, Ano em branco (Todos) mostra a vida inteira.
+      </p>
     </div>
   );
 }
