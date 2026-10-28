@@ -25,8 +25,8 @@ type RefModo = "orcado" | "forecast";
 const SERIES: { key: SerieKey; label: string; short: string; locked?: boolean }[] = [
   { key: "real", label: "Real cheio", short: "Real", locked: true },
   { key: "real_mldu", label: "Real MLDU", short: "MLDU" },
-  { key: "n1", label: "Ano anterior cheio", short: "N-1" },
-  { key: "n1_mldu", label: "Ano anterior MLDU", short: "N-1 MLDU" },
+  { key: "n1", label: "Ano anterior cheio", short: "Ano anterior" },
+  { key: "n1_mldu", label: "Ano anterior MLDU", short: "Ano anterior MLDU" },
   { key: "ref", label: "Orçado cheio", short: "Orç" },
   { key: "ref_mldu", label: "Orçado MLDU", short: "Orç MLDU" },
 ];
