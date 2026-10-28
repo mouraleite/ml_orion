@@ -68,6 +68,7 @@ export function ensureWriteFlags(perms: PermissionsMap, profileName: string): Pe
 export const PERMISSION_ALIASES: Record<string, Record<string, string[]>> = {
   "Rentabilidade de Produtos": {
     Viabilidades: ["Lista de Produtos"],
+    "DFC de Empreendimentos": ["Acompanhamento de Empreendimentos"],
   },
   "Modelagem Financeira": {
     "Modelagem Mestre": ["Modelos"],

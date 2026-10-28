@@ -192,7 +192,8 @@ function DashboardLayoutInner({
     <div className="px-4 pb-2 pt-1 space-y-1 bg-ml-dark/50">
       {mod.items.map((item) => {
         const hasSubItems = item.subItems && item.subItems.length > 0;
-        const isActive = !hasSubItems && (pathname === item.href || (item.href !=="/dashboard" && item.href !=="#" && pathname.startsWith(item.href +"/")));
+        const menuHit = matchMenuPath(pathname, searchParams);
+        const isActive = !hasSubItems && menuHit?.pathname === item.href;
 
         return (
           <div key={item.name} className="flex flex-col gap-1 relative">

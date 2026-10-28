@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings, cors_allow_origins
-from app.api.routes import auth, users, governance, viabilities, curves, snapshots, actuals, documents, dashboard, apoio, analysis, market_indices, tracking, sync, partnership, system, matriz_permissoes, tax_regimes, orcamentos, fechamento, forecasts, auditoria, integracao, migration, acompanhamento, sienge, access_profiles, holding
+from app.api.routes import auth, users, governance, viabilities, curves, snapshots, actuals, documents, dashboard, apoio, analysis, market_indices, tracking, tracking_dfc, sync, partnership, system, matriz_permissoes, tax_regimes, orcamentos, fechamento, forecasts, auditoria, integracao, migration, acompanhamento, sienge, access_profiles, holding
 from app.api.module_write_middleware import ModuleWriteMiddleware
 from app.db.database import init_db
 
@@ -57,6 +57,7 @@ app.include_router(holding.router, prefix="/api/v1/holding", tags=["holding"])
 app.include_router(tax_regimes.router, prefix=f"{settings.API_V1_STR}/apoio/impostos", tags=["tax-regimes"])
 app.include_router(analysis.router, prefix=f"{settings.API_V1_STR}/analysis", tags=["Analysis"])
 app.include_router(market_indices.router, prefix=f"{settings.API_V1_STR}/market-indices", tags=["Market Indices"])
+app.include_router(tracking_dfc.router, prefix=f"{settings.API_V1_STR}/tracking", tags=["Tracking"])
 app.include_router(tracking.router, prefix=f"{settings.API_V1_STR}/tracking", tags=["Tracking"])
 app.include_router(sync.router, prefix=f"{settings.API_V1_STR}/sync", tags=["sync"])
 app.include_router(partnership.router, prefix=f"{settings.API_V1_STR}/partnership", tags=["partnership"])

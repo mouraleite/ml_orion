@@ -76,6 +76,7 @@ const RAW_MENU: MenuModuleDef[] = [
     items: [
       { name: "Viabilidades", icon: FolderKanban, href: "/dashboard/viabilities" },
       { name: "Acompanhamento de Empreendimentos", icon: LayoutDashboard, href: "/dashboard/tracking" },
+      { name: "DFC de Empreendimentos", icon: FileText, href: "/dashboard/tracking/dfc" },
       { name: "Relatórios", icon: FileBarChart, href: "/dashboard/reports" },
     ],
   },

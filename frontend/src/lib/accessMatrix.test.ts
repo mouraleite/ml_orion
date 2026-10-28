@@ -50,6 +50,25 @@ describe("accessMatrix", () => {
     );
   });
 
+  it("coloca DFC de Empreendimentos abaixo do acompanhamento e acima dos relatórios", () => {
+    const rent = MENU_MODULES.find((m) => m.id === "viabilidades");
+    const names = rent?.items.map((i) => i.name) || [];
+    assert.deepEqual(
+      names.slice(names.indexOf("Acompanhamento de Empreendimentos"), names.indexOf("Relatórios") + 1),
+      ["Acompanhamento de Empreendimentos", "DFC de Empreendimentos", "Relatórios"],
+    );
+    assert.equal(matchMenuPath("/dashboard/tracking/dfc")?.permKey, "DFC de Empreendimentos");
+    assert.equal(matchMenuPath("/dashboard/tracking")?.permKey, "Acompanhamento de Empreendimentos");
+    assert.equal(
+      isPathAllowed(
+        { "Rentabilidade de Produtos": { "Acompanhamento de Empreendimentos": true } },
+        "/dashboard/tracking/dfc",
+      ),
+      true,
+    );
+    assert.equal(isPathAllowed({}, "/dashboard/tracking/dfc"), false);
+  });
+
   it("mapeia a tela DFC como item do Orçamento, fora do dashboard", () => {
     const orc = MENU_MODULES.find((m) => m.id === "orcamento");
     assert.ok(orc?.items.some((i) => i.name === "DFC" && i.href === "/dashboard/orcamento/dfc"));
