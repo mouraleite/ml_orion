@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings, cors_allow_origins
-from app.api.routes import auth, users, governance, viabilities, curves, snapshots, actuals, documents, dashboard, apoio, analysis, market_indices, tracking, tracking_dfc, sync, partnership, system, matriz_permissoes, tax_regimes, orcamentos, fechamento, forecasts, auditoria, integracao, migration, acompanhamento, sienge, access_profiles, holding
+from app.api.routes import auth, users, governance, viabilities, curves, snapshots, actuals, documents, dashboard, orcamento_dfc_gerencial, apoio, analysis, market_indices, tracking, tracking_dfc, sync, partnership, system, matriz_permissoes, tax_regimes, orcamentos, fechamento, forecasts, auditoria, integracao, migration, acompanhamento, sienge, access_profiles, holding
 from app.api.module_write_middleware import ModuleWriteMiddleware
 from app.db.database import init_db
 
@@ -72,6 +72,7 @@ app.include_router(integracao.router, prefix=f"{settings.API_V1_STR}/integracao"
 app.include_router(migration.router, prefix=f"{settings.API_V1_STR}/migration", tags=["migration"])
 app.include_router(access_profiles.router, prefix=f"{settings.API_V1_STR}/perfis-acesso", tags=["perfis-acesso"])
 
+app.include_router(orcamento_dfc_gerencial.router, prefix=f"{settings.API_V1_STR}/dashboard", tags=["dashboard"])
 app.include_router(dashboard.router, prefix=f"{settings.API_V1_STR}/dashboard", tags=["dashboard"])
 app.include_router(sienge.router, prefix=f"{settings.API_V1_STR}/sienge", tags=["sienge"])
 @app.get("/")

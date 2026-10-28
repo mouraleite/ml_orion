@@ -81,6 +81,19 @@ describe("accessMatrix", () => {
     assert.equal(isPathAllowed({ Orçamento: { DFC: true } }, "/dashboard/orcamento/dfc"), true);
   });
 
+  it("coloca DFC gerencial abaixo do DFC e acima dos relatórios, com alias da permissão DFC", () => {
+    const orc = MENU_MODULES.find((m) => m.id === "orcamento");
+    const names = orc?.items.map((i) => i.name) || [];
+    assert.deepEqual(
+      names.slice(names.indexOf("DFC"), names.indexOf("Relatórios") + 1),
+      ["DFC", "DFC gerencial", "Relatórios"],
+    );
+    assert.equal(matchMenuPath("/dashboard/orcamento/dfc-gerencial")?.permKey, "DFC gerencial");
+    assert.equal(matchMenuPath("/dashboard/orcamento/dfc")?.permKey, "DFC");
+    assert.equal(isPathAllowed({ Orçamento: { DFC: true } }, "/dashboard/orcamento/dfc-gerencial"), true);
+    assert.equal(isPathAllowed({}, "/dashboard/orcamento/dfc-gerencial"), false);
+  });
+
   it("não confunde realizado com realizado-despesas", () => {
     assert.equal(matchMenuPath("/dashboard/orcamento/realizado")?.permKey, "Orçado x Realizado");
     assert.equal(matchMenuPath("/dashboard/orcamento/realizado-despesas")?.permKey, "Realizado CP (detalhe)");
