@@ -69,6 +69,25 @@ def test_paginate_v1_collect():
     assert rows[0]["departmentName"] == "Fin"
 
 
+def test_paginate_v1_aceita_lista_sem_envelope():
+    client = SiengeClient(subdomain="mouraleite", user="u", password="p")
+    payload = [{"id": 2030409, "name": "Conceituação", "tpConta": "R"}]
+
+    def fake_urlopen(req, timeout=30):
+        resp = MagicMock()
+        resp.status = 200
+        resp.read.return_value = json.dumps(payload).encode()
+        resp.__enter__ = lambda s: s
+        resp.__exit__ = MagicMock(return_value=False)
+        return resp
+
+    with patch("urllib.request.urlopen", side_effect=fake_urlopen):
+        pages = list(client.paginate_v1_pages("https://example.com/payment-categories"))
+
+    assert len(pages) == 1
+    assert pages[0][0]["id"] == 2030409
+
+
 def test_get_json_404_returns_none_when_allowed():
     client = SiengeClient(subdomain="mouraleite", user="u", password="p")
 

@@ -228,6 +228,16 @@ class SiengeClient:
             if not data:
                 break
 
+            # Alguns recursos (payment-categories) devolvem lista; o restante usa {results}.
+            if isinstance(data, list):
+                if not data:
+                    break
+                yield data
+                if len(data) != limit:
+                    break
+                offset += limit
+                continue
+
             results = data.get("results", [])
             if not results:
                 break
