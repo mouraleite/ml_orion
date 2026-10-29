@@ -57,10 +57,11 @@ def run_sync_empresas(db: Session):
     sienge_empresas = erp_service.fetch_empresas()
     
     for emp in sienge_empresas:
-        db_company = db.query(Company).filter(Company.id_sienge == emp["id"]).first()
+        sienge_id = str(emp["id"])
+        db_company = db.query(Company).filter(Company.id_sienge == sienge_id).first()
         if not db_company:
             db_company = Company(
-                id_sienge=emp["id"],
+                id_sienge=sienge_id,
                 cnpj=emp["cnpj"],
                 razao_social=emp["razaoSocial"],
                 nome_fantasia=emp["nomeFantasia"],

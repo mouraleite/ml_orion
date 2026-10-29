@@ -50,7 +50,7 @@ class SiengeErpService:
                 continue
             nome = (item.get("name") or "").strip() or "N/A"
             out.append({
-                "id": cid,
+                "id": str(cid),
                 "cnpj": item.get("cnpj") or "N/A",
                 "razaoSocial": nome,
                 "nomeFantasia": (item.get("tradeName") or nome),

@@ -47,6 +47,13 @@ def test_dummy_continua_vazio():
     assert dummy.fetch_planos_financeiros() == []
 
 
+def test_sienge_mapeia_empresas_id_como_texto():
+    svc = SiengeErpService(client=_FakeSiengeClient())
+    empresas = svc.fetch_empresas()
+    assert empresas[0]["id"] == "2"
+    assert empresas[0]["nomeFantasia"] == "MLDU"
+
+
 def test_sienge_mapeia_centros_e_obras():
     svc = SiengeErpService(client=_FakeSiengeClient())
     centros = svc.fetch_centros_custo()

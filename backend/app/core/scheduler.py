@@ -54,25 +54,34 @@ def daily_sienge_sync():
         return
     db = SessionLocal()
     try:
-        run_sync_empresas(db)
-        logger.info("Sincronização de Empresas concluída.")
+        def _etapa(nome: str, fn) -> None:
+            try:
+                fn()
+                logger.info("%s concluída.", nome)
+            except Exception:
+                logger.exception("Falha em %s; seguindo as demais etapas.", nome)
+                db.rollback()
 
-        run_sync_centros_custo(db)
-        logger.info("Sincronização de Centros de Custo concluída.")
+        _etapa("Sincronização de Empresas", lambda: run_sync_empresas(db))
+        _etapa("Sincronização de Centros de Custo", lambda: run_sync_centros_custo(db))
 
-        n_planos = run_sync_planos_financeiros(db)
-        logger.info("Sincronização de Planos Financeiros concluída (%s).", n_planos)
+        def _planos():
+            n = run_sync_planos_financeiros(db)
+            logger.info("Planos financeiros: %s registro(s) do Sienge.", n)
 
-        logger.info("Iniciando sincronização Financeira (Bulk Data Sienge)...")
-        sync_all_sienge_data(db, full_load=False)
-        logger.info("Sincronização Financeira Sienge concluída.")
+        _etapa("Sincronização de Planos Financeiros", _planos)
+        _etapa(
+            "Sincronização Financeira Sienge",
+            lambda: sync_all_sienge_data(db, full_load=False),
+        )
 
-        logger.info("Iniciando Integração Formal (RealizadoSienge)...")
-        hoje = datetime.now(TZ_BRASILIA)
-        start_date = (hoje - timedelta(days=3)).strftime("%Y-%m-%d")
-        end_date = hoje.strftime("%Y-%m-%d")
-        run_integracao_sienge(db, start_date, end_date)
-        logger.info("Integração Formal concluída.")
+        def _integracao():
+            hoje = datetime.now(TZ_BRASILIA)
+            start_date = (hoje - timedelta(days=3)).strftime("%Y-%m-%d")
+            end_date = hoje.strftime("%Y-%m-%d")
+            run_integracao_sienge(db, start_date, end_date)
+
+        _etapa("Integração Formal", _integracao)
     except Exception:
         logger.exception("Erro durante a sincronização diária do Sienge")
         raise
