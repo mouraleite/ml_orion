@@ -41,9 +41,14 @@ export default function PlanosFinanceirosPage() {
  const handleSync = async () => {
  setIsSyncing(true);
  try {
- await apoioService.syncPlanosFinanceiros();
+ const res = await apoioService.syncPlanosFinanceiros();
  await loadPlanos();
- setSyncMessage("Sincronização concluída");
+ const total = res?.total;
+ setSyncMessage(
+  typeof total === "number"
+   ? `Sincronização concluída (${total} planos no Sienge)`
+   : "Sincronização concluída"
+ );
  setTimeout(() => setSyncMessage(""), 3000);
  } catch (error) {
  console.error("Erro na sincronização:", error);

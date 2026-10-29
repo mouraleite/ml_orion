@@ -1,0 +1,42 @@
+# Acorda a API no plano free nos horários do sync (09:00 e 14:00 Brasília).
+# Sem o Cron Job pago do Render, o relógio interno só dispara se o serviço estiver ligado.
+name: Sienge daily sync
+
+on:
+  schedule:
+    - cron: "0 12,17 * * *"
+  workflow_dispatch:
+
+jobs:
+  wake-and-sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Acorda a API e dispara o job
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          URL="https://erp-ml-api-b04m.onrender.com"
+          echo "Acordando a API..."
+          for i in 1 2 3 4 5 6 8 10; do
+            if curl -sf --max-time 60 "$URL/health"; then
+              echo "API no ar."
+              break
+            fi
+            echo "Ainda subindo ($i)..."
+            sleep 20
+          done
+          if [ -n "$CRON_SECRET" ]; then
+            echo "Disparando POST /api/v1/sync/cron"
+            curl -sf --max-time 120 -X POST "$URL/api/v1/sync/cron" \
+              -H "X-Cron-Secret: $CRON_SECRET"
+            echo
+          else
+            echo "Secret CRON_SECRET ausente no GitHub: a API foi acordada; o job sobe pela janela do scheduler."
+          fi
+          echo "Mantendo a API acordada ~12 min (cadastros + início do financeiro)."
+          for i in $(seq 1 12); do
+            sleep 60
+            curl -sf --max-time 30 "$URL/health" >/dev/null || true
+          done

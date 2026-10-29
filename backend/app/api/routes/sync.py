@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, BackgroundTasks, Header, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime
-from app.db.database import get_db
+from app.db.database import SessionLocal, get_db
 from app.api import deps
 from app.schemas.user import UserResponse
 from app.services.sienge_sync import run_rewrite_pmt_historico_rateio_job, sync_all_sienge_data
@@ -23,19 +23,26 @@ def get_sync_status(db: Session = Depends(get_db)):
         pass
     return {"last_sync_at": None}
 
+def _run_sienge_sync_job(full_load: bool) -> None:
+    """Abre sessão própria: a do request já fecha antes do background task."""
+    db = SessionLocal()
+    try:
+        sync_all_sienge_data(db, full_load)
+    finally:
+        db.close()
+
+
 @router.post("/sienge")
 def trigger_sienge_sync(
     background_tasks: BackgroundTasks,
     full_load: bool = False,
-    db: Session = Depends(get_db),
     current_user: UserResponse = Depends(deps.get_current_active_user) # Apenas admin
 ):
     """
     Dispara o sincronismo manual com as APIs do Sienge (Vendas, Entradas, Saídas).
     """
-    # Executa em background para não prender a requisição
-    background_tasks.add_task(sync_all_sienge_data, db, full_load)
-    
+    background_tasks.add_task(_run_sienge_sync_job, full_load)
+
     return {"message": "Sincronismo com Sienge iniciado em background.", "full_load": full_load}
 
 

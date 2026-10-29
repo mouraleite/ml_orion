@@ -6,6 +6,7 @@ from sqlalchemy import desc, not_, and_, or_
 from pydantic import BaseModel
 
 from app.api.deps import get_db, get_current_active_admin
+from app.db.database import SessionLocal
 from app.models.integracao import RealizadoSienge, IntegracaoLog
 from app.models.cost_center import CostCenter
 from app.models.financial_plan import FinancialPlan
@@ -48,7 +49,6 @@ class PendenciaResponse(BaseModel):
 def reprocessar_integracao(
     req: ReprocessRequest,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
     current_user = Depends(get_current_active_admin)
 ):
     try:
@@ -58,8 +58,14 @@ def reprocessar_integracao(
     except ValueError:
         raise HTTPException(status_code=400, detail="Formato de data inválido. Use YYYY-MM-DD")
 
-    # Inicia a tarefa em background
-    background_tasks.add_task(run_integracao_sienge, db, req.start_date, req.end_date)
+    def _run():
+        session = SessionLocal()
+        try:
+            run_integracao_sienge(session, req.start_date, req.end_date)
+        finally:
+            session.close()
+
+    background_tasks.add_task(_run)
     return {"message": "Reprocessamento iniciado em background."}
 
 @router.get("/logs", response_model=dict)

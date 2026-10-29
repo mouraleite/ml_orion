@@ -2,6 +2,10 @@ const TTL_MS = 30_000;
 const store = new Map<string, { at: number; data: unknown }>();
 const inflight = new Map<string, Promise<unknown>>();
 
+export function invalidateRead(key: string) {
+  store.delete(key);
+}
+
 /** Cache curto de GET (navegação entre telas de orçamento/forecast). Não altera o payload. */
 export async function cachedRead<T>(key: string, fn: () => Promise<T>, ttlMs = TTL_MS): Promise<T> {
   const hit = store.get(key);

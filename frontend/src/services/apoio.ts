@@ -65,7 +65,7 @@ const mockPlanos: PlanoFinanceiro[] = [
 ];
 
 import { api } from '@/lib/api';
-import { cachedRead } from '@/lib/readCache';
+import { cachedRead, invalidateRead } from '@/lib/readCache';
 
 // Funções do Serviço
 export const apoioService = {
@@ -83,6 +83,7 @@ export const apoioService = {
 
   syncEmpresas: async (): Promise<any> => {
     const response = await api.post('/apoio/empresas/sync');
+    invalidateRead("apoio:empresas");
     return response.data;
   },
 

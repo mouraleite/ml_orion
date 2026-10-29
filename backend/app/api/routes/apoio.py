@@ -466,36 +466,38 @@ def get_planos_financeiros(current_user: UserResponse = Depends(get_current_user
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao buscar planos financeiros locais: {str(e)}")
 
+def run_sync_planos_financeiros(db: Session) -> int:
+    """Upsert dos planos financeiros a partir da API Sienge. Retorna quantos vieram."""
+    sienge_planos = erp_service.fetch_planos_financeiros()
+    for item in sienge_planos:
+        db_plano = db.query(FinancialPlan).filter(FinancialPlan.db_id == str(item["id"])).first()
+        if not db_plano:
+            db.add(FinancialPlan(
+                db_id=str(item["id"]),
+                name=item["name"],
+                tp_conta=item["tpConta"],
+                fl_redutora=item["flRedutora"],
+                fl_ativa=item["flAtiva"],
+                fl_adiantamento=item["flAdiantamento"],
+                fl_imposto=item["flImposto"],
+            ))
+        else:
+            db_plano.name = item["name"]
+            db_plano.tp_conta = item["tpConta"]
+            db_plano.fl_redutora = item["flRedutora"]
+            db_plano.fl_ativa = item["flAtiva"]
+            db_plano.fl_adiantamento = item["flAdiantamento"]
+            db_plano.fl_imposto = item["flImposto"]
+    db.commit()
+    return len(sienge_planos)
+
+
 @router.post("/planos-financeiros/sync")
 def sync_planos_financeiros(current_user: UserResponse = Depends(get_current_user), db: Session = Depends(get_db)):
     """Sincroniza Planos Financeiros com a API do Sienge."""
     try:
-        sienge_planos = erp_service.fetch_planos_financeiros()
-        
-        for item in sienge_planos:
-            db_plano = db.query(FinancialPlan).filter(FinancialPlan.db_id == item["id"]).first()
-            
-            if not db_plano:
-                db_plano = FinancialPlan(
-                    db_id=item["id"],
-                    name=item["name"],
-                    tp_conta=item["tpConta"],
-                    fl_redutora=item["flRedutora"],
-                    fl_ativa=item["flAtiva"],
-                    fl_adiantamento=item["flAdiantamento"],
-                    fl_imposto=item["flImposto"]
-                )
-                db.add(db_plano)
-            else:
-                db_plano.name = item["name"]
-                db_plano.tp_conta = item["tpConta"]
-                db_plano.fl_redutora = item["flRedutora"]
-                db_plano.fl_ativa = item["flAtiva"]
-                db_plano.fl_adiantamento = item["flAdiantamento"]
-                db_plano.fl_imposto = item["flImposto"]
-                
-        db.commit()
-        return {"message": "Sincronização concluída com sucesso", "total": len(sienge_planos)}
+        total = run_sync_planos_financeiros(db)
+        return {"message": "Sincronização concluída com sucesso", "total": total}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao sincronizar planos financeiros: {str(e)}")
 

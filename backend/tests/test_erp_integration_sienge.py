@@ -24,6 +24,18 @@ class _FakeSiengeClient:
             ]
         elif url.endswith("/companies"):
             yield [{"id": 2, "name": "Moura Leite", "tradeName": "MLDU", "cnpj": "00"}]
+        elif url.endswith("/payment-categories"):
+            yield [
+                {
+                    "id": 2030409,
+                    "name": "Conceituação e Inteligência de Produto",
+                    "tpConta": "R",
+                    "flRedutora": "N",
+                    "flAtiva": "S",
+                    "flAdiantamento": "N",
+                    "flImposto": "N",
+                }
+            ]
         else:
             yield []
 
@@ -32,6 +44,7 @@ def test_dummy_continua_vazio():
     dummy = DummyErpService()
     assert dummy.fetch_centros_custo() == []
     assert dummy.fetch_enterprises() == []
+    assert dummy.fetch_planos_financeiros() == []
 
 
 def test_sienge_mapeia_centros_e_obras():
@@ -49,6 +62,22 @@ def test_sienge_mapeia_centros_e_obras():
     assert obras[0]["tipo"] == "1"
 
 
+def test_sienge_mapeia_planos_financeiros():
+    svc = SiengeErpService(client=_FakeSiengeClient())
+    planos = svc.fetch_planos_financeiros()
+    assert planos == [
+        {
+            "id": "2030409",
+            "name": "Conceituação e Inteligência de Produto",
+            "tpConta": "R",
+            "flRedutora": "N",
+            "flAtiva": "S",
+            "flAdiantamento": "N",
+            "flImposto": "N",
+        }
+    ]
+
+
 def test_sem_senha_nao_consulta():
     class _SemSenha(_FakeSiengeClient):
         password = ""
@@ -56,3 +85,4 @@ def test_sem_senha_nao_consulta():
     svc = SiengeErpService(client=_SemSenha())
     assert svc.fetch_centros_custo() == []
     assert svc.fetch_enterprises() == []
+    assert svc.fetch_planos_financeiros() == []

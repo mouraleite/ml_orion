@@ -99,7 +99,23 @@ class SiengeErpService:
         return out
 
     def fetch_planos_financeiros(self) -> List[Dict[str, Any]]:
-        return []
+        """Categorias de pagamento (planos financeiros) da API v1."""
+        out: List[Dict[str, Any]] = []
+        for item in self._coletar("/payment-categories"):
+            pid = item.get("id")
+            nome = (item.get("name") or "").strip()
+            if pid is None or not nome:
+                continue
+            out.append({
+                "id": str(pid),
+                "name": nome,
+                "tpConta": item.get("tpConta") or "",
+                "flRedutora": item.get("flRedutora") or "N",
+                "flAtiva": item.get("flAtiva") or "S",
+                "flAdiantamento": item.get("flAdiantamento") or "N",
+                "flImposto": item.get("flImposto") or "N",
+            })
+        return out
 
 
 erp_service = SiengeErpService()

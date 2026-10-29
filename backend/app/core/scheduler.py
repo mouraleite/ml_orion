@@ -1,19 +1,18 @@
 import logging
+import threading
 from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from sqlalchemy import text
 
 from app.db.database import SessionLocal, engine
-from app.api.routes.apoio import run_sync_empresas, run_sync_centros_custo
+from app.api.routes.apoio import run_sync_centros_custo, run_sync_empresas, run_sync_planos_financeiros
+from app.core.sienge_sync_schedule import TZ_BRASILIA, na_janela_do_sync
 from app.services.sienge_sync import sync_all_sienge_data
 from app.services.integracao_sienge import run_integracao_sienge
 
 logger = logging.getLogger(__name__)
-
-TZ_BRASILIA = ZoneInfo("America/Sao_Paulo")
 
 
 _SYNC_LOCK_KEY = 867530901
@@ -61,6 +60,9 @@ def daily_sienge_sync():
         run_sync_centros_custo(db)
         logger.info("Sincronização de Centros de Custo concluída.")
 
+        n_planos = run_sync_planos_financeiros(db)
+        logger.info("Sincronização de Planos Financeiros concluída (%s).", n_planos)
+
         logger.info("Iniciando sincronização Financeira (Bulk Data Sienge)...")
         sync_all_sienge_data(db, full_load=False)
         logger.info("Sincronização Financeira Sienge concluída.")
@@ -94,11 +96,22 @@ def start_scheduler():
             trigger=CronTrigger(hour="9,14", minute="0", timezone=TZ_BRASILIA),
             id="daily_sienge_sync_job",
             replace_existing=True,
+            coalesce=True,
+            misfire_grace_time=2 * 60 * 60,
         )
         scheduler.start()
     logger.info(
         "APScheduler iniciado. Sync Sienge diário às 09:00 e 14:00 (America/Sao_Paulo)."
     )
+    # Plano free dorme: se um ping acordar a API nessa janela, o relógio interno
+    # já perdeu o minuto 0. O lock evita corrida com o Cron Job pago.
+    if na_janela_do_sync():
+        logger.info("API subiu na janela do sync. Disparando job em thread.")
+        threading.Thread(
+            target=daily_sienge_sync,
+            name="sienge-sync-startup",
+            daemon=True,
+        ).start()
 
 
 def stop_scheduler():

@@ -41,14 +41,14 @@ services:
         sync: false
 
   # O web no plano free dorme e o relógio interno não dispara.
-  # 12:00 e 17:00 UTC = 09:00 e 14:00 em Brasília.
+  # Cron Job no Render exige plano pago (não existe free). 12:00 e 17:00 UTC = 09:00 e 14:00 Brasília.
   - type: cron
     name: erp-ml-sienge-sync
     runtime: python
     schedule: "0 12,17 * * *"
     rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: python -c "from app.core.scheduler import daily_sienge_sync; daily_sienge_sync()"
+    startCommand: python scripts/run_daily_sienge_sync.py
     envVars:
       - key: ENVIRONMENT
         value: production
