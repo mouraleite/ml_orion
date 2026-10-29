@@ -170,6 +170,60 @@ def test_vigencia_trava_meses_anteriores(db_session):
     assert out["itens"][0]["total_anual"] == 180.0
 
 
+def test_cc_parceria_zera_mldu_mesmo_com_participacao(db_session):
+    _, cc_ell = _seed(db_session)
+    cc = db_session.get(CostCenter, cc_ell)
+    cc.nome = "ARAÇARIGUAMA - RESERVA DO ARAÇARI - PARCERIA GAP"
+    data = dict(cc.custom_data or {})
+    data["Participação"] = 44
+    cc.custom_data = data
+    db_session.commit()
+
+    ctx = HoldingContext(db_session)
+    assert ctx.factor_for_produto(cc_ell) == 0.0
+
+    payload = {
+        "itens": [
+            {"produto_id": cc_ell, "plano_financeiro_id": 1, "jan": 115492.34, "total_anual": 115492.34},
+        ]
+    }
+    out = apply_holding_mldu_read_layer(db_session, payload, item_kind="monthly")
+    assert out["itens"][0]["jan"] == 0.0
+
+
+def test_cc_obra_nao_parceria_continua_empresa_vezes_participacao(db_session):
+    _, cc_ell = _seed(db_session)
+    cc = db_session.get(CostCenter, cc_ell)
+    cc.nome = "ARAÇARIGUAMA - RESERVA DO ARAÇARI"
+    data = dict(cc.custom_data or {})
+    data["Participação"] = 56
+    cc.custom_data = data
+    db_session.commit()
+
+    ctx = HoldingContext(db_session)
+    assert abs(ctx.factor_for_produto(cc_ell) - 0.28) < 0.0001  # 50% empresa × 56% CC
+
+
+def test_cc_parceria_zera_mldu_com_vigencia(db_session):
+    _, cc_ell = _seed(db_session)
+    cc = db_session.get(CostCenter, cc_ell)
+    cc.nome = "ARAÇARIGUAMA - IGAVETÁ - PARCERIA"
+    db_session.commit()
+
+    ellenco = db_session.query(Company).filter(Company.id_sienge == "12").first()
+    link = (
+        db_session.query(CompanyOwnershipLink)
+        .filter(CompanyOwnershipLink.child_company_id == ellenco.id)
+        .first()
+    )
+    record_percentage_change(db_session, link, 40.0, "2026-04")
+    db_session.commit()
+
+    ctx = HoldingContext(db_session)
+    assert ctx.factor_for_produto_mes(cc_ell, 2026, 1) == 0.0
+    assert ctx.factor_for_produto_mes(cc_ell, 2026, 4) == 0.0
+
+
 def test_mudanca_percentual_exige_mes(db_session):
     _seed(db_session)
     ellenco = db_session.query(Company).filter(Company.id_sienge == "12").first()

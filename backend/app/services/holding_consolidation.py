@@ -17,6 +17,13 @@ from app.services.periodos import MESES_STR
 MONTHLY_KEYS = list(MESES_STR) + ["total_anual", "total"]
 
 
+def _cc_is_parceria(nome: str | None) -> bool:
+    """CC de parceria (ex.: '... - PARCERIA GAP'): caixa 100% do parceiro, MLDU = 0."""
+    if not nome:
+        return False
+    return "PARCERIA" in str(nome).upper()
+
+
 def _participacao_cc_factor(custom: dict | None) -> float:
     """Fator 0..1 da coluna Participação do CC. Vazio/inválido = 1.0 (não muda o consolidado)."""
     if not custom:
@@ -53,6 +60,10 @@ def build_produto_participacao_map(db: Session) -> dict[int, float]:
     return {cc.id: _participacao_cc_factor(cc.custom_data) for cc in db.query(CostCenter).all()}
 
 
+def build_produto_parceria_map(db: Session) -> dict[int, bool]:
+    return {cc.id: _cc_is_parceria(cc.nome) for cc in db.query(CostCenter).all()}
+
+
 def build_empresa_factor_map(db: Session) -> dict[str, float]:
     """Multiplicador 0..1 indexado por id_sienge (e fallback str(db_id))."""
     factors: dict[str, float] = {}
@@ -69,6 +80,7 @@ class HoldingContext:
         self.db = db
         self.produto_empresa = build_produto_empresa_map(db)
         self.produto_participacao = build_produto_participacao_map(db)
+        self.produto_parceria = build_produto_parceria_map(db)
         self.empresa_factors = build_empresa_factor_map(db)
         self.warnings: list[str] = []
         self.fatores_por_produto: dict[int, float] = {}
@@ -109,6 +121,8 @@ class HoldingContext:
         return False
 
     def factor_for_produto_mes(self, produto_id: int | None, ano: int, mes: int) -> float:
+        if produto_id and self.produto_parceria.get(produto_id):
+            return 0.0
         if not self.produto_is_temporal(produto_id):
             return self.factor_for_produto(produto_id)
         company = self._company_for_emp(self.produto_empresa.get(produto_id or 0, ""))
@@ -125,6 +139,9 @@ class HoldingContext:
             return 0.0
         if produto_id in self.fatores_por_produto:
             return self.fatores_por_produto[produto_id]
+        if self.produto_parceria.get(produto_id):
+            self.fatores_por_produto[produto_id] = 0.0
+            return 0.0
 
         emp_id = self.produto_empresa.get(produto_id, "")
         if not emp_id:
