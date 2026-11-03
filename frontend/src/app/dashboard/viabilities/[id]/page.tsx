@@ -20,6 +20,7 @@ import { DocumentsTab } from"@/components/viabilities/DocumentsTab";
 import PhysicalDataTab from"@/components/viabilities/PhysicalDataTab";
 import { DatesTab } from "@/components/viabilities/DatesTab";
 import { ComparisonTab } from "@/components/viabilities/ComparisonTab";
+import { ObraAcompanhamentoField } from "@/components/viabilities/ObraAcompanhamentoField";
 import { useAuth } from"@/contexts/AuthContext";
 import { canWriteModule } from "@/lib/roles";
 import { useUnsavedChanges } from "@/contexts/UnsavedChangesContext";
@@ -258,6 +259,16 @@ export default function ViabilityDetailsPage() {
  Nova Versão
  </span>
  )}
+ </div>
+ <div className="mt-2">
+   <ObraAcompanhamentoField
+     value={project.obra_cost_center_id}
+     readonly={isReadonly}
+     onChange={(id) => {
+       setProject({ ...project, obra_cost_center_id: id });
+       updateGlobalField("obra_cost_center_id", id);
+     }}
+   />
  </div>
  </div>
  </div>

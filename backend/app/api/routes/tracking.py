@@ -30,6 +30,7 @@ from app.services.realizado_sienge import (
 )
 
 from app.services.math_engine import calculate_viability_results
+from app.services.viabilidade_obra import ids_centros_produtos_acompanhados, land_bank_oculto_por_obra
 
 from app.models.vision import Vision, FinancialPlanVisionLink
 
@@ -2486,7 +2487,10 @@ def listar_empreendimentos_seletor(db: Session):
         Viability.version_of_id == None,
         Viability.status.notin_(["Em Andamento", "Em Aprovação"]),
     ).all()
+    ids_obra = ids_centros_produtos_acompanhados(db)
     for v in viabilities:
+        if land_bank_oculto_por_obra(v, ids_obra):
+            continue
         items.append({"id": f"v-{v.id}", "project_name": v.project_name or ""})
 
     tracked = db.query(CostCenter).filter(CostCenter.track_in_dashboard == True).all()
@@ -2552,11 +2556,18 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
 
     viab_dict = {v.id: v for v in viabilities}
 
+    ids_obra = ids_centros_produtos_acompanhados(db)
+
     
 
     # Processar Viabilidades Puras (ex: Land Bank)
 
     for v in viabilities:
+
+        if land_bank_oculto_por_obra(v, ids_obra):
+
+            continue
+
 
         phase = v.phases[0] if v.phases else None
 

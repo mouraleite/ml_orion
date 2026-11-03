@@ -20,6 +20,7 @@ class ViabilityBase(BaseModel):
     taxa_desconto_vpl: Optional[float] = 12.0
     parecer_executivo: Optional[str] = None
     parecer_original_ia: Optional[str] = None
+    obra_cost_center_id: Optional[int] = None
 
 class ViabilityCreate(ViabilityBase):
     pass
@@ -28,6 +29,7 @@ class ViabilityUpdate(BaseModel):
     project_name: Optional[str] = None
     city: Optional[str] = None
     status: Optional[str] = None
+    obra_cost_center_id: Optional[int] = None
     tem_multiplas_fases: Optional[bool] = None
     aplicar_ipca_receitas: Optional[bool] = None
     ipca_projetado_valor: Optional[float] = None

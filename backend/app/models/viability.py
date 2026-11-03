@@ -33,6 +33,9 @@ class Viability(Base):
     parecer_executivo = Column(Text, nullable=True)
     parecer_original_ia = Column(Text, nullable=True)
 
+    # Centro de custo da obra no acompanhamento. Land Bank some quando essa obra já é rastreada.
+    obra_cost_center_id = Column(Integer, ForeignKey("cost_centers.id", ondelete="SET NULL"), nullable=True)
+
     # Relacionamento 1:N com as Fases
     phases = relationship("Phase", back_populates="viability", cascade="all, delete-orphan")
     

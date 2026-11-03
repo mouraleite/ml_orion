@@ -270,3 +270,14 @@ def apply_schema_patches(engine: Engine) -> None:
                     """
                 )
             )
+
+        if _has_table(engine, "viabilities") and not _has_column(engine, "viabilities", "obra_cost_center_id"):
+            if dialect == "sqlite":
+                conn.execute(text("ALTER TABLE viabilities ADD COLUMN obra_cost_center_id INTEGER"))
+            else:
+                conn.execute(
+                    text(
+                        "ALTER TABLE viabilities ADD COLUMN obra_cost_center_id INTEGER REFERENCES cost_centers(id) ON DELETE SET NULL"
+                    )
+                )
+            logger.info("schema_patches: viabilities.obra_cost_center_id adicionada")

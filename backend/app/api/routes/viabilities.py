@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.api import deps
 from app.models.user import User
+from app.models.cost_center import CostCenter
 from app.models.viability import Viability
 from app.models.phase import Phase
 from app.models.revenue import ViabilityRevenue
@@ -70,6 +71,10 @@ def update_viability(
         raise HTTPException(status_code=404, detail="Viabilidade não encontrada.")
     
     update_data = viability_in.model_dump(exclude_unset=True)
+    if "obra_cost_center_id" in update_data and update_data["obra_cost_center_id"] is not None:
+        cc = db.query(CostCenter).filter(CostCenter.id == update_data["obra_cost_center_id"]).first()
+        if not cc:
+            raise HTTPException(status_code=400, detail="Centro de custo da obra não encontrado.")
     for field, value in update_data.items():
         setattr(viability, field, value)
         
