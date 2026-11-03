@@ -9,7 +9,9 @@ import {
   TEXTO_FORA,
   TEXTO_SEM_PRODUTO,
   TEXTO_VGV_ESTOQUE,
+  TITULO_CRONOGRAMA_OBRA,
   TITULO_PAINEL,
+  TITULO_VENDAS_ESTOQUE,
   formatarMi,
   textoTir,
 } from "@/lib/comoLemosAcompanhamento";
@@ -86,13 +88,14 @@ export function ComoLemosAcompanhamentoPanel({ open, onClose, fatos }: Props) {
           {fatos ? (
             <div className="grid grid-cols-3 gap-2">
               <Tile rotulo="Pago (obra)" valor={formatarMi(fatos.obrasPagas)} />
-              <Tile rotulo="Ainda não titulado" valor={formatarMi(fatos.obrasPrevistas)} />
+              <Tile rotulo="Cronograma de obra" valor={formatarMi(fatos.obrasPrevistas)} />
               <Tile rotulo="Terreno" valor={formatarMi(fatos.terreno)} />
             </div>
           ) : null}
 
           <div className="overflow-hidden rounded-lg border border-slate-200">
-            <Camada cor="bg-amber-500" titulo="Ainda não titulado" texto={TEXTO_CAMADAS.projetado} />
+            <Camada cor="bg-amber-500" titulo={TITULO_CRONOGRAMA_OBRA} texto={TEXTO_CAMADAS.obras} />
+            <Camada cor="bg-sky-600" titulo={TITULO_VENDAS_ESTOQUE} texto={TEXTO_CAMADAS.estoque} />
             <Camada cor="bg-teal-700" titulo="Comprometido" texto={TEXTO_CAMADAS.comprometido} />
             <Camada cor="bg-brand-dark-green" titulo="Pago" texto={TEXTO_CAMADAS.pago} />
           </div>

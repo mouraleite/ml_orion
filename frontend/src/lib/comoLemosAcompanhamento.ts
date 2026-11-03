@@ -2,11 +2,14 @@
 
 export const TITULO_PAINEL = "Como lemos estes números";
 
+export const TITULO_CRONOGRAMA_OBRA = "Cronograma de desembolso de obra";
+export const TITULO_VENDAS_ESTOQUE = "Vendas de lotes em estoque";
+
 export const TEXTO_CAMADAS = {
   pago: "Baixa no Sienge. Não se altera aqui.",
   comprometido: "Títulos em aberto. Não mexe no realizado.",
-  projetado:
-    "Cronograma de engenharia só o saldo, a partir do mês que vem. Estoque: média dos últimos 6 meses com venda, a partir do mês que vem.",
+  obras: "Só o saldo, a partir do mês que vem.",
+  estoque: "Média dos últimos 6 meses com venda, a partir do mês que vem.",
 } as const;
 
 export const TEXTO_VGV_ESTOQUE =

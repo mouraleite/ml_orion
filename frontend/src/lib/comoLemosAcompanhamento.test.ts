@@ -1,12 +1,25 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  TEXTO_CAMADAS,
+  TITULO_CRONOGRAMA_OBRA,
+  TITULO_VENDAS_ESTOQUE,
   estoqueDaDre,
   fatosDoDetalhe,
   somaFluxo,
   textoTir,
   tirClassicaAusente,
 } from "./comoLemosAcompanhamento";
+
+describe("camadas do método", () => {
+  it("separa engenharia de vendas de estoque", () => {
+    assert.equal(TITULO_CRONOGRAMA_OBRA, "Cronograma de desembolso de obra");
+    assert.equal(TITULO_VENDAS_ESTOQUE, "Vendas de lotes em estoque");
+    assert.equal(TEXTO_CAMADAS.obras.includes("Estoque"), false);
+    assert.match(TEXTO_CAMADAS.obras, /saldo/);
+    assert.match(TEXTO_CAMADAS.estoque, /6 meses/);
+  });
+});
 
 describe("estoqueDaDre", () => {
   it("lê unidades e valor da linha de estoque", () => {
