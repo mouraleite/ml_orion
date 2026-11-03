@@ -84,6 +84,14 @@ def sincronizar_depara(db: Any, sienge_depts: list[dict]) -> list:
     )
 
 
+def run_sync_departamentos_sienge(db: Any) -> int:
+    """Puxa /departments no job das 09:00 e 14:00. Não sobrescreve definido_manual."""
+    from app.services.sienge_api import get_departamentos
+
+    rows = sincronizar_depara(db, get_departamentos())
+    return len(rows)
+
+
 def depara_payload(row: Any) -> dict:
     dept = getattr(row, "departamento", None)
     return {

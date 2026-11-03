@@ -9,6 +9,7 @@ from sqlalchemy import text
 from app.db.database import SessionLocal, engine
 from app.api.routes.apoio import run_sync_centros_custo, run_sync_empresas, run_sync_planos_financeiros
 from app.core.sienge_sync_schedule import TZ_BRASILIA, na_janela_do_sync
+from app.services.depara_autorizacao import run_sync_departamentos_sienge
 from app.services.sienge_sync import sync_all_sienge_data
 from app.services.integracao_sienge import run_integracao_sienge
 
@@ -70,6 +71,12 @@ def daily_sienge_sync():
             logger.info("Planos financeiros: %s registro(s) do Sienge.", n)
 
         _etapa("Sincronização de Planos Financeiros", _planos)
+
+        def _departamentos():
+            n = run_sync_departamentos_sienge(db)
+            logger.info("Departamentos Sienge (de-para): %s registro(s).", n)
+
+        _etapa("Sincronização de Departamentos Sienge", _departamentos)
         _etapa(
             "Sincronização Financeira Sienge",
             lambda: sync_all_sienge_data(db, full_load=False),

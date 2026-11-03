@@ -8,7 +8,11 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.models.departamento import Departamento, DeparaAutorizacaoDepartamento
-from app.services.depara_autorizacao import sugerir_departamento_id, sincronizar_depara
+from app.services.depara_autorizacao import (
+    run_sync_departamentos_sienge,
+    sincronizar_depara,
+    sugerir_departamento_id,
+)
 
 
 DEPTS = [
@@ -104,6 +108,18 @@ class TestSincronizarDepara:
         row = db_session.query(DeparaAutorizacaoDepartamento).filter_by(nome_sienge="Engenharia Obras").one()
         assert row.departamento_id == 5
         assert row.definido_manual is False
+
+    def test_job_diario_puxa_departments(self, db_session, monkeypatch):
+        _seed_depts(db_session)
+        monkeypatch.setattr(
+            "app.services.sienge_api.get_departamentos",
+            lambda: [{"id": 10, "name": "Tesouraria"}],
+        )
+        n = run_sync_departamentos_sienge(db_session)
+        assert n == 1
+        row = db_session.query(DeparaAutorizacaoDepartamento).one()
+        assert row.nome_sienge == "Tesouraria"
+        assert row.departamento_id == 6
 
 
 class TestDeparaApi:
