@@ -685,14 +685,17 @@ def ordenar_e_dedupar_labels_versao(versoes: list[dict]) -> list[dict]:
     return ordered
 
 
-def _filter_monthly_item_by_tipo(db: Session, item, tipo: str) -> bool:
+def _filter_monthly_item_by_tipo(db: Session, item, tipo: str, planos: dict | None = None) -> bool:
     if tipo == "DESPESAS":
         prefix = "2"
     elif tipo == "RECEITAS":
         prefix = "1"
     else:
         return True
-    plano = db.query(FinancialPlan).filter(FinancialPlan.id == item.plano_financeiro_id).first()
+    if planos is not None:
+        plano = planos.get(item.plano_financeiro_id)
+    else:
+        plano = db.query(FinancialPlan).filter(FinancialPlan.id == item.plano_financeiro_id).first()
     if not plano:
         return False
     return str(plano.db_id or "").startswith(prefix)
@@ -875,9 +878,20 @@ def carregar_meses_dfc_comparativo(
     return assinar_itens_mensais_dfc(linhas, planos, tipo)
 
 
-def _enrich_monthly_visualizacao_row(db: Session, row: dict) -> dict:
-    plano = db.query(FinancialPlan).filter(FinancialPlan.id == row["plano_financeiro_id"]).first()
-    produto = db.query(CostCenter).filter(CostCenter.id == row["produto_id"]).first()
+def _enrich_monthly_visualizacao_row(
+    db: Session,
+    row: dict,
+    planos: dict | None = None,
+    produtos: dict | None = None,
+) -> dict:
+    if planos is not None:
+        plano = planos.get(row["plano_financeiro_id"])
+    else:
+        plano = db.query(FinancialPlan).filter(FinancialPlan.id == row["plano_financeiro_id"]).first()
+    if produtos is not None:
+        produto = produtos.get(row["produto_id"])
+    else:
+        produto = db.query(CostCenter).filter(CostCenter.id == row["produto_id"]).first()
     is_redutora = False
     if plano:
         is_redutora = (
@@ -975,11 +989,21 @@ def extract_visualizacao_itens(
 
         itens: list[dict] = []
         buckets: dict[tuple, dict] = {}
+        plano_ids = {item.plano_financeiro_id for item in linhas_db if item.plano_financeiro_id}
+        produto_ids = {item.produto_id for item in linhas_db if item.produto_id}
+        planos = {
+            p.id: p
+            for p in db.query(FinancialPlan).filter(FinancialPlan.id.in_(plano_ids)).all()
+        } if plano_ids else {}
+        produtos = {
+            p.id: p
+            for p in db.query(CostCenter).filter(CostCenter.id.in_(produto_ids)).all()
+        } if produto_ids else {}
         for item in linhas_db:
-            if not _filter_monthly_item_by_tipo(db, item, tipo):
+            if not _filter_monthly_item_by_tipo(db, item, tipo, planos):
                 continue
             row = serialize_monthly_item_row(item, include_id=False)
-            enriched = _enrich_monthly_visualizacao_row(db, row)
+            enriched = _enrich_monthly_visualizacao_row(db, row, planos, produtos)
             key = (enriched["produto_id"], enriched["plano_financeiro_id"])
             prev = buckets.get(key)
             if prev is None:

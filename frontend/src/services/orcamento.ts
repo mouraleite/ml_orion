@@ -208,7 +208,10 @@ export const orcamentoService = {
     const params = new URLSearchParams({ tipo, consolidado: String(consolidado) });
     if (versao_id) params.append("versao_id", versao_id);
     if (holdingMldu) params.set("holding_mldu", "true");
-    const { data } = await api.get(`/orcamentos/visualizacao/${ano}?${params.toString()}`, deptHeader(departamento_id));
+    const { data } = await api.get(
+      `/orcamentos/visualizacao/${ano}?${params.toString()}`,
+      { ...deptHeader(departamento_id), timeout: 120000 },
+    );
     return data;
   },
 
