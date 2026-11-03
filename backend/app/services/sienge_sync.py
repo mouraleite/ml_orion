@@ -65,11 +65,19 @@ def sync_all_sienge_data(db: Session, full_load: bool = False):
         if not cc.id_sienge:
             continue
         try:
-            sync_single_cc_sienge_data(db, cc, start_date, end_date)
+            sync_single_cc_sienge_data(db, cc, start_date, end_date, include_engineering=False)
         except Exception as exc:
             db.rollback()
             falhas.append(f"{cc.id_sienge}: {exc}")
             print(f"[Sienge Sync] Falha no CC {cc.id_sienge} ({cc.nome}): {exc}")
+
+    print("Sincronizando cronograma de engenharia (TRK-ENG, só acompanhamento)...")
+    try:
+        from app.services.tracking_engineering import sync_engineering_disbursements
+        eng = sync_engineering_disbursements(db)
+        print(f"[Sienge Sync] TRK-ENG buildings: {eng}")
+    except Exception as e:
+        print(f"[Sienge Sync] Aviso: cronograma de engenharia não aplicado: {e}")
 
     # Caixa e Bancos — uma passagem para todos os CCs do sync
     print("Sincronizando Caixa e Bancos (BM-*)...")
@@ -101,7 +109,7 @@ def sync_all_sienge_data(db: Session, full_load: bool = False):
         print(f"[Sienge Sync] Aviso: não foi possível gravar timestamp: {e}")
 
 
-def sync_single_cc_sienge_data(db: Session, cc: CostCenter, start_date: str = "2001-01-01", end_date: str = "2050-12-31"):
+def sync_single_cc_sienge_data(db: Session, cc: CostCenter, start_date: str = "2001-01-01", end_date: str = "2050-12-31", include_engineering: bool = True):
     if not cc.id_sienge:
         return
         
@@ -132,6 +140,15 @@ def sync_single_cc_sienge_data(db: Session, cc: CostCenter, start_date: str = "2
 
     # 6. Títulos vencidos em aberto — só o DFC de empreendimentos (não é forecast)
     sync_overdue_open_tracking(db, cc)
+
+    # 7. Cronograma da engenharia — só acompanhamento, nunca FCST/OP1
+    if include_engineering:
+        try:
+            from app.services.tracking_engineering import sync_engineering_disbursement_for_cc
+            n = sync_engineering_disbursement_for_cc(db, cc)
+            print(f"[Sienge Sync] TRK-ENG {cc.id_sienge}: {n} linhas")
+        except Exception as e:
+            print(f"[Sienge Sync] Aviso TRK-ENG {cc.id_sienge}: {e}")
 
 def sync_units(db: Session, cc: CostCenter):
     """Sincroniza as unidades (Lotes/Apartamentos) do Centro de Custo"""

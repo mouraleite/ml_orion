@@ -11,6 +11,11 @@ import { CollapsibleFilterPanel } from "@/components/shared/CollapsibleFilterPan
 import { FilterSearchField } from "@/components/shared/FilterSearchField";
 import toast from "react-hot-toast";
 import { confirmDialog } from "@/components/ui/confirmDialog";
+import {
+  centroEhSateliteDeProduto,
+  mostraFlagAcompanharEmpreendimento,
+  tipoEfetivoCentro,
+} from "@/lib/acompanharEmpreendimento";
 
 const FIELD_CLASS =
   "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-ml-green/20 focus:border-ml-green text-slate-800 bg-white";
@@ -237,10 +242,18 @@ export default function CentroDeCustoPage() {
         __tipo_override: editFormData.__tipo_override || null,
       };
 
+      const podeEnviarFlag = mostraFlagAcompanharEmpreendimento({
+        tipo: tipoEfetivoCentro({
+          tipo_sienge: editingCC.tipo_sienge,
+          custom_data: { ...editingCC.custom_data, ...editFormData },
+        }),
+        nome: editingCC.nome,
+        jaAcompanhado: Boolean(editingCC.track_in_dashboard),
+      });
       await apoioService.updateCentroCusto(editingCC.db_id, { 
         custom_data: updatedCustomData,
         status: editStatus,
-        track_in_dashboard: editTrackInDashboard,
+        ...(podeEnviarFlag ? { track_in_dashboard: editTrackInDashboard } : {}),
         project_phase: editProjectPhase,
         manual_land_cost: editManualLandCost,
         land_payment_curve_id: editLandCurveId === "" ? null : Number(editLandCurveId),
@@ -721,7 +734,15 @@ export default function CentroDeCustoPage() {
    Se editar, vale só neste centro de custo.
  </p>
  </div>
-        {/* Acompanhamento no Painel */}
+        {/* Acompanhamento no Painel: só cabeçalho da obra (e satélite já marcado, para desmarcar). */}
+        {mostraFlagAcompanharEmpreendimento({
+          tipo: tipoEfetivoCentro({
+            tipo_sienge: editingCC.tipo_sienge,
+            custom_data: { ...editingCC.custom_data, ...editFormData },
+          }),
+          nome: editingCC.nome,
+          jaAcompanhado: Boolean(editingCC.track_in_dashboard),
+        }) && (
         <div className="space-y-4 border-b border-slate-100 pb-4">
           <label className="flex items-center gap-2 cursor-pointer mt-2">
             <input 
@@ -732,6 +753,11 @@ export default function CentroDeCustoPage() {
             />
             <span className="text-sm font-semibold text-slate-700 block">Acompanhar Empreendimento no Painel de Produtos?</span>
           </label>
+          {centroEhSateliteDeProduto(editingCC.nome) ? (
+            <p className="text-xs text-amber-700">Este centro não é o cabeçalho da obra. Desmarque para não criar um card extra; obras, marketing e parceria já entram pelo produto.</p>
+          ) : (
+            <p className="text-xs text-slate-500">Marcar aqui já puxa obras, marketing, comercial e parceria do mesmo produto.</p>
+          )}
           
           {editTrackInDashboard && (
             <div className="space-y-4 pl-6 border-l-2 border-ml-green/20 mt-3">
@@ -887,6 +913,7 @@ export default function CentroDeCustoPage() {
             </div>
           )}
         </div>
+        )}
 
  {colunas.length === 0 ? (
  <div className="text-center py-6 text-slate-500">
