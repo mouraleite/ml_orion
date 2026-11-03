@@ -5,6 +5,8 @@ import { api } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import { Building2, TrendingUp, PackageCheck, Search, Filter, Clock, Eraser } from "lucide-react";
+import { BotaoComoLemos, ComoLemosAcompanhamentoPanel } from "@/components/tracking/ComoLemosAcompanhamentoPanel";
+import { fatosDaLista } from "@/lib/comoLemosAcompanhamento";
 import { MultiSelect } from "@/components/ui/MultiSelect";
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
 
@@ -30,6 +32,7 @@ export default function TrackingPage() {
   const [empreendimentoFilter, setEmpreendimentoFilter] = useState<string[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string[]>([]);
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [painelMetodoAberto, setPainelMetodoAberto] = useState(false);
 
   const loadData = async () => {
     setIsLoading(true);
@@ -76,10 +79,13 @@ export default function TrackingPage() {
   const paybackMedio = filteredData.reduce((acc, curr) => acc + (curr.payback_anos || 0), 0) / (filteredData.length || 1);
   const totalExposicao = filteredData.reduce((acc, curr) => acc + (curr.exposicao_max_caixa || 0), 0);
 
+  const fatosLista = filteredData.length === 1 ? fatosDaLista(filteredData[0]) : null;
+
   return (
     <div className="space-y-6 animate-in fade-in duration-300" translate="no" lang="pt-BR">
-      <div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <h1 className="text-3xl font-bold tracking-tight text-slate-900">ACOMPANHAMENTO DE EMPREENDIMENTOS</h1>
+        <BotaoComoLemos onClick={() => setPainelMetodoAberto(true)} />
       </div>
 
       {/* TABS */}
@@ -364,6 +370,11 @@ export default function TrackingPage() {
           </div>
         )}
       </Card>
+      <ComoLemosAcompanhamentoPanel
+        open={painelMetodoAberto}
+        onClose={() => setPainelMetodoAberto(false)}
+        fatos={fatosLista}
+      />
     </div>
   );
 }

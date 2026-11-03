@@ -5,6 +5,8 @@ import { api } from "@/lib/api";
 import { Card } from "@/components/ui/Card";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import { ArrowLeft, Download, RefreshCcw, ChevronDown } from "lucide-react";
+import { BotaoComoLemos, ComoLemosAcompanhamentoPanel } from "@/components/tracking/ComoLemosAcompanhamentoPanel";
+import { fatosDoDetalhe } from "@/lib/comoLemosAcompanhamento";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend, LabelList } from 'recharts';
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
 
@@ -63,6 +65,7 @@ export default function TrackingDetailPage() {
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({});
+  const [painelMetodoAberto, setPainelMetodoAberto] = useState(false);
 
   const toggleYear = (year: string) => {
     setExpandedYears(prev => ({ ...prev, [year]: !prev[year] }));
@@ -147,6 +150,18 @@ export default function TrackingDetailPage() {
     Entradas: 0, Tributos: 0, Terreno: 0, Obras: 0, Projetos: 0, Marketing: 0, Comercial: 0, Administrativas: 0, Devolucao_Distratos: 0, Total_Saidas: 0
   });
 
+  const nomeProduto =
+    allProjects.find((p) => String(p.id) === decodeURIComponent(id))?.project_name
+    || data.project_name
+    || decodeURIComponent(id);
+  const fatosMetodo = fatosDoDetalhe({
+    nome: nomeProduto,
+    fase: data.status || allProjects.find((p) => String(p.id) === decodeURIComponent(id))?.status,
+    kpis,
+    dre,
+    fluxoCaixa: fc,
+  });
+
   const velVendas = data.velocidade_vendas || [];
   const velVendasTotal = velVendas.reduce((acc: any, curr: any) => {
     acc.vendas += curr.vendas;
@@ -210,6 +225,7 @@ export default function TrackingDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <BotaoComoLemos onClick={() => setPainelMetodoAberto(true)} />
           <button 
             onClick={handleSync}
             disabled={isSyncing}
@@ -545,6 +561,11 @@ export default function TrackingDetailPage() {
           </Card>
         </div>
       </div>
+      <ComoLemosAcompanhamentoPanel
+        open={painelMetodoAberto}
+        onClose={() => setPainelMetodoAberto(false)}
+        fatos={fatosMetodo}
+      />
     </div>
   );
 }

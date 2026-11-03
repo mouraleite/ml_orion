@@ -376,6 +376,19 @@ def sync_centros_custo(current_user: UserResponse = Depends(get_current_user), d
 
 from fastapi import BackgroundTasks
 
+@router.get("/centros-custo/{db_id}/primeiro-mes-caixa")
+def primeiro_mes_caixa_centro(
+    db_id: int,
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(get_current_user),
+):
+    """Primeiro mês de caixa/saída do produto. Só informa o cadastro; não mexe no acompanhamento."""
+    cc = db.query(CostCenter).filter(CostCenter.id == db_id).first()
+    if not cc:
+        raise HTTPException(status_code=404, detail="Centro de Custo não encontrado")
+    from app.services.terreno_manual import primeiro_meses_caixa_produto
+    return primeiro_meses_caixa_produto(db, cc)
+
 @router.put("/centros-custo/{db_id}")
 def update_centro_custo(
     db_id: int, 

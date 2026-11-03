@@ -16,6 +16,14 @@ import {
   mostraFlagAcompanharEmpreendimento,
   tipoEfetivoCentro,
 } from "@/lib/acompanharEmpreendimento";
+import {
+  TEXTO_INICIO_CURVA,
+  TEXTO_TERRENO_MANUAL,
+  formatarMesPt,
+  linhasAlertaTerreno,
+  mesSugeridoInicio,
+  mostraInicioTerreno,
+} from "@/lib/terrenoManualCadastro";
 
 const FIELD_CLASS =
   "w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-ml-green/20 focus:border-ml-green text-slate-800 bg-white";
@@ -88,6 +96,11 @@ export default function CentroDeCustoPage() {
   const [editPartnershipRuleId, setEditPartnershipRuleId] = useState<number | "">("");
   const [editProduto, setEditProduto] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [primeiroMesObra, setPrimeiroMesObra] = useState<{
+    primeiro_mes_caixa: string | null;
+    primeiro_mes_desembolso: string | null;
+  } | null>(null);
+  const [carregandoPrimeiroMes, setCarregandoPrimeiroMes] = useState(false);
 
  // Form do Gerenciador de Colunas
  const [newColName, setNewColName] = useState("");
@@ -134,6 +147,31 @@ export default function CentroDeCustoPage() {
  }
 
  useEffect(() => { loadData(); }, []);
+
+  useEffect(() => {
+    if (!isEditModalOpen || !editingCC?.db_id) {
+      setPrimeiroMesObra(null);
+      return;
+    }
+    let cancelado = false;
+    setCarregandoPrimeiroMes(true);
+    apoioService.getPrimeiroMesCaixa(editingCC.db_id)
+      .then((data) => {
+        if (!cancelado) {
+          setPrimeiroMesObra({
+            primeiro_mes_caixa: data.primeiro_mes_caixa,
+            primeiro_mes_desembolso: data.primeiro_mes_desembolso,
+          });
+        }
+      })
+      .catch(() => {
+        if (!cancelado) setPrimeiroMesObra(null);
+      })
+      .finally(() => {
+        if (!cancelado) setCarregandoPrimeiroMes(false);
+      });
+    return () => { cancelado = true; };
+  }, [isEditModalOpen, editingCC?.db_id]);
 
  // ── Ações: Colunas Dinâmicas ─────────────────────────────────────────────────
  async function handleCreateColumn() {
@@ -313,6 +351,10 @@ export default function CentroDeCustoPage() {
  const produtosUnicos = Array.from(new Set(centrosEnriquecidos.map((c) => c.produto).filter((c) => c !=="—"))).sort();
  const idsUnicos = Array.from(new Set(centros.map((c) => String(c.id)))).sort((a, b) => Number(a) - Number(b));
  const tiposUnicos = Array.from(new Set(centros.map((c) => c.tipo_sienge).filter(Boolean))).sort();
+  const mesSugeridoTerreno = mesSugeridoInicio({
+    primeiroMesCaixa: primeiroMesObra?.primeiro_mes_caixa,
+    primeiroMesDesembolso: primeiroMesObra?.primeiro_mes_desembolso,
+  });
 
  const filtered = centrosEnriquecidos.filter((cc) => {
  const q = busca.toLowerCase();
@@ -804,35 +846,66 @@ export default function CentroDeCustoPage() {
                   className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-ml-green/40 focus:border-ml-green text-slate-800"
                   placeholder="0,00"
                 />
+                <p className="text-xs text-slate-500">{TEXTO_TERRENO_MANUAL}</p>
               </div>
 
-              {editManualLandCost > 0 && (
-                <div className="grid grid-cols-2 gap-4 border-l-2 border-ml-green pl-3 py-1">
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-semibold text-slate-700 block">Curva de Desembolso</label>
-                    <select
-                      value={editLandCurveId}
-                      onChange={(e) => setEditLandCurveId(e.target.value === "" ? "" : Number(e.target.value))}
-                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-ml-green/40 focus:border-ml-green text-slate-800 bg-white"
-                    >
-                      <option value="">À Vista (Sem Curva)</option>
-                      {curves
-                        .filter((c) => c.tipo?.toLowerCase().includes('aquisi'))
-                        .map((curve) => (
-                          <option key={curve.id} value={curve.id}>
-                            {curve.nome}
-                          </option>
-                        ))}
-                    </select>
+              {mostraInicioTerreno(editManualLandCost) && (
+                <div className="space-y-3 border-l-2 border-ml-green pl-3 py-1">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-semibold text-slate-700 block">Início do Pagamento</label>
+                      <input
+                        type="month"
+                        value={editLandStartDate}
+                        onChange={(e) => setEditLandStartDate(e.target.value)}
+                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-ml-green/40 focus:border-ml-green text-slate-800"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-sm font-semibold text-slate-700 block">Curva de Desembolso</label>
+                      <select
+                        value={editLandCurveId}
+                        onChange={(e) => setEditLandCurveId(e.target.value === "" ? "" : Number(e.target.value))}
+                        className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-ml-green/40 focus:border-ml-green text-slate-800 bg-white"
+                      >
+                        <option value="">À Vista (Sem Curva)</option>
+                        {curves
+                          .filter((c) => c.tipo?.toLowerCase().includes('aquisi'))
+                          .map((curve) => (
+                            <option key={curve.id} value={curve.id}>
+                              {curve.nome}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-sm font-semibold text-slate-700 block">Início do Pagamento</label>
-                    <input
-                      type="month"
-                      value={editLandStartDate}
-                      onChange={(e) => setEditLandStartDate(e.target.value)}
-                      className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-ml-green/40 focus:border-ml-green text-slate-800"
-                    />
+                  <p className="text-xs text-slate-500">{TEXTO_INICIO_CURVA}</p>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 space-y-2">
+                    {carregandoPrimeiroMes && !primeiroMesObra ? (
+                      <p className="text-xs text-amber-900">Buscando o primeiro mês de caixa desta obra…</p>
+                    ) : (
+                      linhasAlertaTerreno({
+                        primeiroMesCaixa: primeiroMesObra?.primeiro_mes_caixa,
+                        primeiroMesDesembolso: primeiroMesObra?.primeiro_mes_desembolso,
+                      }).map((linha) => (
+                        <p key={linha} className="text-xs text-amber-950">{linha}</p>
+                      ))
+                    )}
+                    {mesSugeridoTerreno ? (
+                        <button
+                          type="button"
+                          disabled={editLandStartDate === mesSugeridoTerreno}
+                          onClick={() => setEditLandStartDate(mesSugeridoTerreno)}
+                          className="text-xs font-semibold text-amber-950 underline decoration-amber-400 underline-offset-2 disabled:no-underline disabled:opacity-60"
+                        >
+                          {editLandStartDate === mesSugeridoTerreno
+                            ? `Início já está em ${formatarMesPt(mesSugeridoTerreno)}`
+                            : `Usar ${formatarMesPt(mesSugeridoTerreno)}`}
+                        </button>
+                    ) : null}
+                    {!editLandStartDate ? (
+                      <p className="text-xs text-amber-800">Sem mês inicial, lista e detalhe ainda não usam o mesmo mês — escolha um.</p>
+                    ) : null}
                   </div>
                 </div>
               )}

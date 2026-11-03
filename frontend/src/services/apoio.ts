@@ -157,8 +157,17 @@ export const apoioService = {
     return response.data;
   },
 
-  updateCentroCusto: async (dbId: number, data: { custom_data?: any; status?: string; track_in_dashboard?: boolean; project_phase?: string; manual_land_cost?: number; apportionment_rules?: any[] }): Promise<any> => {
+  updateCentroCusto: async (dbId: number, data: { custom_data?: any; status?: string; track_in_dashboard?: boolean; project_phase?: string; manual_land_cost?: number; land_payment_curve_id?: number | null; land_payment_start_date?: string | null; apportionment_rules?: any[] }): Promise<any> => {
     const response = await api.put(`/apoio/centros-custo/${dbId}`, data);
+    return response.data;
+  },
+
+  getPrimeiroMesCaixa: async (dbId: number): Promise<{
+    primeiro_mes_caixa: string | null;
+    primeiro_mes_desembolso: string | null;
+    mes_sugerido: string | null;
+  }> => {
+    const response = await api.get(`/apoio/centros-custo/${dbId}/primeiro-mes-caixa`);
     return response.data;
   },
 
