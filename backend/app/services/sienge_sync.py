@@ -130,6 +130,9 @@ def sync_single_cc_sienge_data(db: Session, cc: CostCenter, start_date: str = "2
     # 5. SINCRONIZAR CONTAS A PAGAR EM ABERTO (previsão futura)
     sync_payables_forecast(db, cc)
 
+    # 6. Títulos vencidos em aberto — só o DFC de empreendimentos (não é forecast)
+    sync_overdue_open_tracking(db, cc)
+
 def sync_units(db: Session, cc: CostCenter):
     """Sincroniza as unidades (Lotes/Apartamentos) do Centro de Custo"""
     from app.services.sienge_client import api_v1_base_url
@@ -636,6 +639,8 @@ def sync_bank_movements_batch(
     except Exception:
         start_d = end_d = None
 
+    from sqlalchemy import or_ as _or
+
     cc_ids = [c.id for c in cc_by_sienge.values()]
     inc_reembolso_by_cc: dict = defaultdict(lambda: defaultdict(float))
     out_cp_by_cc: dict = defaultdict(lambda: defaultdict(float))
@@ -648,7 +653,10 @@ def sync_bank_movements_batch(
                 ActualTransaction.transaction_type == "INCOME",
                 ActualTransaction.is_forecast == False,
                 ActualTransaction.source_id.like("INC-%"),
-                ActualTransaction.category.ilike("%reembolso%"),
+                _or(
+                    ActualTransaction.category.ilike("%reembolso%"),
+                    ActualTransaction.category.ilike("%duplicidade%"),
+                ),
                 ActualTransaction.transaction_date >= start_d,
                 ActualTransaction.transaction_date <= end_d,
             )
@@ -696,8 +704,6 @@ def sync_bank_movements_batch(
             ActualTransaction.transaction_date <= end_d,
         ).delete(synchronize_session=False)
         db.flush()
-
-    from sqlalchemy import or_ as _or
 
     existing = {
         (r.cost_center_id, r.source_id): r
@@ -871,11 +877,12 @@ def sync_incomes(db: Session, cc: CostCenter, start_date: str, end_date: str):
     db.commit()
 
 def _clear_open_forecast(db: Session, cost_center_id: int, transaction_type: str) -> None:
-    """Apaga previsões em aberto. Boolean no Postgres; não comparar com inteiro 1."""
+    """Apaga só FCST-* (previsão futura). Não apaga TRK-VENC-* do DFC de empreendimentos."""
     db.query(ActualTransaction).filter(
         ActualTransaction.cost_center_id == cost_center_id,
         ActualTransaction.transaction_type == transaction_type,
         ActualTransaction.is_forecast.is_(True),
+        ActualTransaction.source_id.like("FCST-%"),
     ).delete(synchronize_session=False)
     db.commit()
 
@@ -1031,6 +1038,105 @@ def sync_payables_forecast(db: Session, cc: CostCenter):
     db.commit()
     db.commit()
     print(f"[Forecast] {count} parcelas de pagamento futuras sincronizadas para CC {cc.id_sienge}")
+
+
+def _clear_trk_venc(db: Session, cost_center_id: int) -> None:
+    db.query(ActualTransaction).filter(
+        ActualTransaction.cost_center_id == cost_center_id,
+        ActualTransaction.is_forecast.is_(True),
+        ActualTransaction.source_id.like("TRK-VENC-%"),
+    ).delete(synchronize_session=False)
+    db.flush()
+
+
+def sync_overdue_open_tracking(db: Session, cc: CostCenter, start_year: Optional[int] = None) -> int:
+    """Títulos vencidos com saldo, para o DFC de empreendimentos.
+
+    Não grava FCST-* e não entra nas telas de forecast/orçamento.
+    """
+    if not cc.id_sienge:
+        return 0
+    today = datetime.now().date()
+    year0 = start_year if start_year is not None else today.year
+    _clear_trk_venc(db, cc.id)
+    count = 0
+    try:
+        for year in range(year0, today.year + 1):
+            start = f"{year}-01-01"
+            end = today.isoformat() if year == today.year else f"{year}-12-31"
+            url_in = (
+                f"{SIENGE_BASE_URL}/income?startDate={start}&endDate={end}"
+                f"&selectionType=D&correctionIndexerId=0&correctionDate=2019-01-01"
+                f"&costCentersId={cc.id_sienge}"
+            )
+            for page in _fetch_paginated_bulk(url_in):
+                for item in page:
+                    n = _add_overdue_line(db, cc, item, "INCOME", today)
+                    count += n
+            url_out = (
+                f"{SIENGE_BASE_URL}/outcome?startDate={start}&endDate={end}"
+                f"&selectionType=D&correctionIndexerId=0&correctionDate=2019-01-01"
+                f"&costCentersId={cc.id_sienge}&withAuthorizations=false&withBankMovements=false"
+            )
+            for page in _fetch_paginated_bulk(url_out):
+                for item in page:
+                    n = _add_overdue_line(db, cc, item, "OUTCOME", today)
+                    count += n
+    except Exception as exc:
+        print(f"[Sienge Sync] Exception overdue tracking CC {cc.id_sienge}: {exc}")
+    db.commit()
+    print(f"[Tracking] {count} títulos vencidos em aberto para CC {cc.id_sienge}")
+    return count
+
+
+def _add_overdue_line(db: Session, cc: CostCenter, item: dict, tipo: str, today) -> int:
+    due_date_str = item.get("dueDate") or item.get("installmentBaseDate")
+    if not due_date_str:
+        return 0
+    try:
+        dt = datetime.strptime(str(due_date_str)[:10], "%Y-%m-%d").date()
+    except Exception:
+        return 0
+    if dt >= today:
+        return 0
+    bal = item.get("balanceAmount")
+    corr = item.get("correctedBalanceAmount")
+    if bal is not None:
+        amount = max(float(bal or 0), float(corr or 0))
+    else:
+        amount = float(item.get("originalAmount") or item.get("openValue") or 0)
+    if amount <= 0:
+        return 0
+    if tipo == "INCOME":
+        cats = item.get("receiptsCategories") or item.get("financialCategories") or []
+        default = "Receita de Venda de Lotes"
+        prefix = "TRK-VENC-INC"
+    else:
+        cats = item.get("paymentsCategories") or item.get("financialCategories") or []
+        default = "Obras"
+        prefix = "TRK-VENC-OUT"
+    fatia = rateio_previsto_do_cc(cats, cc.id_sienge, default)
+    if not fatia:
+        return 0
+    ratio, cat_name = fatia
+    amount = amount * ratio
+    if amount <= 0:
+        return 0
+    bill_id = item.get("billId") or item.get("documentId")
+    installment_id = item.get("installmentId", item.get("installmentNumber", 0))
+    db.add(
+        ActualTransaction(
+            cost_center_id=cc.id,
+            source_id=f"{prefix}-{bill_id}-{installment_id}",
+            transaction_type=tipo,
+            transaction_date=dt,
+            value=amount,
+            category=cat_name,
+            is_forecast=True,
+        )
+    )
+    return 1
+
 
 def sync_sienge_colaboradores(db: Session):
     from app.services.sienge_api import get_colaboradores

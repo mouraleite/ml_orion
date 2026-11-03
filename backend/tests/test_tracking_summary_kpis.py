@@ -325,15 +325,16 @@ def test_caixa_realizado_do_acompanhamento_segue_recorte_do_orcamento():
     act = _calc_actuals_for_cc(db, cc_id, cached_cat_to_group={})
     assert act["vgv_vendido"] == 1500.0
     assert act["monthly_revenues_real"]["2026-03"] == 80.0
-    assert act["lucro_liq_operacional"] == -520.0
-    assert act["monthly_net_cf_real"]["2026-03"] == -520.0
+    assert act["lucro_liq_operacional"] == -20.0
+    assert act["monthly_net_cf_real"]["2026-03"] == -20.0
 
     prefetched = _prefetch_tracking_actuals(db, [cc_id], include_forecast=False)
     lista = _calc_actuals_for_cc(db, cc_id, cached_cat_to_group={}, prefetched=prefetched, kpis_only=True)
     assert lista["vgv_vendido"] == 1500.0
     assert lista["monthly_revenues_real"]["2026-03"] == 80.0
-    assert lista["lucro_liq_operacional"] == -520.0
-    assert lista["monthly_net_cf_real"]["2026-03"] == -520.0
+    assert lista["lucro_liq_operacional"] == -20.0
+    assert lista["monthly_net_cf_real"]["2026-03"] == -20.0
+    assert not (prefetched.get("pmt_hist") or {}).get(cc_id)
 
 
 def test_pmt_antigo_entra_no_lucro_e_na_serie_de_tir():

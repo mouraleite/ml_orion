@@ -4,6 +4,7 @@ Não lê orçamento/forecast. Ano ou mês, grupos da visão, planos financeiros 
 """
 from collections import defaultdict
 from datetime import datetime
+from types import SimpleNamespace
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
@@ -125,16 +126,96 @@ def _node_id_prefixo(nodes, prefixo):
     return None
 
 
-def _destino_node(transaction_type, category, cat_to_group, cat_to_node_id, node_by_desc, node_venda_id, node_admin_id):
+# Planos que o DFC Sienge traz e a visão padrão ainda não vincula.
+# Só o DFC de empreendimentos usa isso — não grava visão nem mexe no orçamento.
+_PLANO_CODIGO_FALLBACK = {
+    "irpj": "02.02",
+    "csll": "02.02",
+    "despesas de administração de empreendimentos": "04.04",
+    "donativos e contribuições": "05.07",
+}
+_NOS_SIENGE_AUSENTES = (
+    ("02.02", "IMPOSTOS TRIMESTRAIS"),
+    ("04.04", "CUSTO ADM DE EMPREENDIMENTOS"),
+    ("05.07", "DONATIVOS E CONTRIBUIÇÕES"),
+)
+_FORMULA_DFC = (
+    ("03", ("04", "05")),
+    ("06", ("01", "02", "03")),
+    ("08", ("06", "07")),
+    ("10", ("08", "09")),
+    ("12", ("10", "11")),
+)
+
+
+def _garantir_nos_sienge(nodes):
+    have = {(n.codigo or "").strip() for n in nodes}
+    extra = list(nodes)
+    next_id = -9000
+    for codigo, descricao in _NOS_SIENGE_AUSENTES:
+        if codigo in have:
+            continue
+        extra.append(SimpleNamespace(id=next_id, codigo=codigo, descricao=descricao))
+        next_id -= 1
+    extra.sort(key=lambda n: ((n.codigo or ""), n.id or 0))
+    return extra
+
+
+def _aplicar_fallback_planos(nodes, cat_to_group, cat_to_node_id):
+    for nome, codigo in _PLANO_CODIGO_FALLBACK.items():
+        if nome in cat_to_node_id:
+            continue
+        nid = _node_id_codigo(nodes, codigo)
+        if not nid:
+            continue
+        cat_to_node_id[nome] = nid
+        node = next((n for n in nodes if n.id == nid), None)
+        if node:
+            cat_to_group[nome] = (node.descricao or "").strip().upper()
+
+
+def _signed_caixa_dfc(transaction_type, category, total_value):
+    """Sienge DFC: entrada +, saída -. Redutora '(-) Retenção' entra positiva."""
+    val = abs(float(total_value or 0.0))
+    if transaction_type == "INCOME":
+        return val
+    nome = (category or "").strip()
+    if nome.startswith("(-)"):
+        return val
+    return -val
+
+
+def _eh_distrato(category, group):
+    cat = (category or "").lower()
+    grp = (group or "").upper()
+    return "DISTRATO" in grp or "CANCELAMENTO" in grp or "distrat" in cat
+
+
+def _destino_node(transaction_type, category, cat_to_group, cat_to_node_id, node_by_desc, node_venda_id, node_admin_id, node_cancel_id=None):
     cat = (category or "").lower().strip()
     group = cat_to_group.get(cat, "")
     if transaction_type == "INCOME":
         return cat_to_node_id.get(cat) or node_by_desc.get(group) or node_venda_id
     if transaction_type == "OUTCOME":
-        if "DISTRATO" in group or "CANCELAMENTO" in group or "distrat" in cat:
-            return None
+        if _eh_distrato(category, group):
+            return cat_to_node_id.get(cat) or node_cancel_id or node_by_desc.get("CANCELAMENTOS DE VENDAS")
         return cat_to_node_id.get(cat) or node_by_desc.get(group) or node_admin_id
     return None
+
+
+def _somar_nos(linhas, dest_codigo, origens):
+    dest = next((row for row in linhas if (row.get("codigo") or "") == dest_codigo), None)
+    if not dest:
+        return
+    meses = dict(dest.get("valores_mes") or {})
+    for orig in origens:
+        src = next((row for row in linhas if (row.get("codigo") or "") == orig), None)
+        if not src:
+            continue
+        for mes, valor in (src.get("valores_mes") or {}).items():
+            meses[mes] = meses.get(mes, 0.0) + valor
+    dest["valores_mes"] = meses
+    dest.update(_linha_valores(meses))
 
 
 def _anos_de_meses(valores_mes):
@@ -179,11 +260,22 @@ def montar_dfc_vida(db, group_id: str):
     if not vision or not nodes:
         raise HTTPException(status_code=404, detail="Visão DFC padrão não encontrada.")
 
+    nodes = _garantir_nos_sienge(nodes)
+    _aplicar_fallback_planos(nodes, cat_to_group, cat_to_node_id)
+    for n in nodes:
+        desc = (n.descricao or "").strip().upper()
+        if desc and n.id not in node_by_desc.values():
+            node_by_desc[desc] = n.id
+
     node_venda_id = _node_id_codigo(nodes, "01.01") or _node_id_prefixo(nodes, "01.")
     node_admin_id = (
         _node_id_codigo(nodes, "05.03")
         or node_by_desc.get("ADMINISTRATIVAS")
         or _node_id_prefixo(nodes, "05.")
+    )
+    node_cancel_id = (
+        _node_id_codigo(nodes, "01.04")
+        or node_by_desc.get("CANCELAMENTOS DE VENDAS")
     )
 
     cc_ids = [cc.id for cc in members]
@@ -209,14 +301,15 @@ def montar_dfc_vida(db, group_id: str):
         if not mes or mes == "N/A" or len(mes) < 7:
             return
         nid = _destino_node(
-            transaction_type, category, cat_to_group, cat_to_node_id, node_by_desc, node_venda_id, node_admin_id
+            transaction_type, category, cat_to_group, cat_to_node_id, node_by_desc,
+            node_venda_id, node_admin_id, node_cancel_id,
         )
         if not nid:
             return
-        val = abs(total_value) if total_value else 0.0
-        signed = val if transaction_type == "INCOME" else -val
+        signed = _signed_caixa_dfc(transaction_type, category, total_value)
         valores_mes_folha[nid][mes] += signed
-        lucro_dfc += signed
+        if nid != node_cancel_id:
+            lucro_dfc += signed
         cat_key = (category or "").lower().strip()
         fp = cat_to_fp.get(cat_key)
         if fp:
@@ -295,6 +388,9 @@ def montar_dfc_vida(db, group_id: str):
         for mes, valor in child["valores_mes"].items():
             parent["valores_mes"][mes] = parent["valores_mes"].get(mes, 0.0) + valor
         parent.update(_linha_valores(parent["valores_mes"]))
+
+    for dest, origens in _FORMULA_DFC:
+        _somar_nos(linhas, dest, origens)
 
     anos = sorted({ano for row in linhas for ano, valor in row["valores"].items() if abs(valor) > 0.005})
     meses = sorted({mes for row in linhas for mes, valor in row["valores_mes"].items() if abs(valor) > 0.005})

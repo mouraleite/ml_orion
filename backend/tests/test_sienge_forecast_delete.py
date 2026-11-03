@@ -47,9 +47,20 @@ def test_clear_open_forecast_apaga_so_previsao(db_session):
             is_forecast=False,
         )
     )
+    db_session.add(
+        ActualTransaction(
+            cost_center_id=1,
+            source_id="TRK-VENC-INC-9-1",
+            transaction_type="INCOME",
+            transaction_date=date(2026, 9, 15),
+            value=30,
+            category="Receita",
+            is_forecast=True,
+        )
+    )
     db_session.commit()
 
     _clear_open_forecast(db_session, 1, "INCOME")
 
-    left = db_session.query(ActualTransaction).filter_by(cost_center_id=1).all()
-    assert [row.source_id for row in left] == ["INC-1"]
+    left = {row.source_id for row in db_session.query(ActualTransaction).filter_by(cost_center_id=1).all()}
+    assert left == {"INC-1", "TRK-VENC-INC-9-1"}

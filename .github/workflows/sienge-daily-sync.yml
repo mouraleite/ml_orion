@@ -1,5 +1,6 @@
 # Acorda a API no plano free nos horários do sync (09:00 e 14:00 Brasília).
 # Sem o Cron Job pago do Render, o relógio interno só dispara se o serviço estiver ligado.
+# O job financeiro é incremental (últimos 3 dias). Não faz full_load e não reescreve o histórico.
 name: Sienge daily sync
 
 on:
@@ -10,33 +11,54 @@ on:
 jobs:
   wake-and-sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 90
     steps:
-      - name: Acorda a API e dispara o job
+      - name: Acorda a API e dispara o job incremental
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -euo pipefail
           URL="https://erp-ml-api-b04m.onrender.com"
           echo "Acordando a API..."
+          up=0
           for i in 1 2 3 4 5 6 8 10; do
             if curl -sf --max-time 60 "$URL/health"; then
               echo "API no ar."
+              up=1
               break
             fi
             echo "Ainda subindo ($i)..."
             sleep 20
           done
+          if [ "$up" != "1" ]; then
+            echo "API não respondeu /health."
+            exit 1
+          fi
           if [ -n "$CRON_SECRET" ]; then
-            echo "Disparando POST /api/v1/sync/cron"
+            echo "Disparando POST /api/v1/sync/cron (incremental 3 dias)"
             curl -sf --max-time 120 -X POST "$URL/api/v1/sync/cron" \
               -H "X-Cron-Secret: $CRON_SECRET"
             echo
           else
             echo "Secret CRON_SECRET ausente no GitHub: a API foi acordada; o job sobe pela janela do scheduler."
           fi
-          echo "Mantendo a API acordada ~12 min (cadastros + início do financeiro)."
-          for i in $(seq 1 12); do
+          echo "Mantendo a API acordada até last_api_sync gravar a data de hoje (máx. 80 min)."
+          today_utc=$(date -u +%Y-%m-%d)
+          ok=0
+          for i in $(seq 1 80); do
             sleep 60
             curl -sf --max-time 30 "$URL/health" >/dev/null || true
+            status=$(curl -sf --max-time 30 "$URL/api/v1/sync/status" || true)
+            echo "min=$i status=${status}"
+            case "$status" in
+              *"$today_utc"*)
+                echo "Sync incremental concluído (last_api_sync de hoje)."
+                ok=1
+                break
+                ;;
+            esac
           done
+          if [ "$ok" != "1" ]; then
+            echo "last_api_sync não avançou para ${today_utc} em 80 min. O job de 3 dias não terminou."
+            exit 1
+          fi

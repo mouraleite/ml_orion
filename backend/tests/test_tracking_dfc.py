@@ -29,10 +29,15 @@ def _seed_visao_e_centros(db):
     db.add_all([
         VisionNode(id=1, vision_id=1, codigo="01", descricao="RECEITAS"),
         VisionNode(id=2, vision_id=1, codigo="01.01", descricao="VENDAS DE UNIDADES"),
+        VisionNode(id=7, vision_id=1, codigo="01.04", descricao="CANCELAMENTOS DE VENDAS"),
         VisionNode(id=3, vision_id=1, codigo="04", descricao="CUSTOS"),
         VisionNode(id=4, vision_id=1, codigo="04.03", descricao="OBRAS"),
         VisionNode(id=5, vision_id=1, codigo="05", descricao="DESPESAS"),
         VisionNode(id=6, vision_id=1, codigo="05.03", descricao="ADMINISTRATIVAS"),
+        VisionNode(id=8, vision_id=1, codigo="03", descricao="CUSTOS E DESPESAS"),
+        VisionNode(id=9, vision_id=1, codigo="06", descricao="GCO - GERAÇÃO DE CAIXA OPERACIONAL"),
+        VisionNode(id=10, vision_id=1, codigo="02", descricao="IMPOSTOS"),
+        VisionNode(id=11, vision_id=1, codigo="02.01", descricao="IMPOSTOS SOBRE VENDAS"),
     ])
     db.add_all([
         FinancialPlan(id=1, name="Receita de Venda de Lotes", db_id="1.01"),
@@ -51,9 +56,11 @@ def _seed_visao_e_centros(db):
         (10, "INC-1", "INCOME", "Receita de Venda de Lotes", date(2025, 3, 10), 1000.0, False),
         (10, "FCST-INC-1", "INCOME", "Receita de Venda de Lotes", date(2027, 1, 10), 400.0, True),
         (11, "OUT-1-OP1-PMT-1-DT-20260801-FC-1", "OUTCOME", "Materiais Aplicados (Obra)", date(2026, 8, 1), 300.0, False),
+        (11, "OUT-1-PMT-1-DT-20260801", "OUTCOME", "Materiais Aplicados (Obra)", date(2026, 8, 1), 300.0, False),
         (10, "FCST-OUT-1", "OUTCOME", "Administrativas Diversas", date(2026, 6, 1), 100.0, True),
         (12, "INC-RESERVA", "INCOME", "Receita de Venda de Lotes", date(2025, 4, 10), 9000.0, False),
         (11, "OUT-DIST-1-OP1-PMT-1-DT-20260901-FC-1", "OUTCOME", "Distrato de Venda", date(2026, 9, 1), 50.0, False),
+        (11, "OUT-IRPJ-OP1-PMT-1-DT-20260801-FC-1", "OUTCOME", "IRPJ", date(2026, 8, 1), 40.0, False),
     ]
     for cc_id, source_id, tipo, categoria, dia, valor, previsto in rows:
         db.add(ActualTransaction(
@@ -84,20 +91,25 @@ def test_lucro_dfc_bate_com_a_lista_e_soma_obra():
 
     payload = montar_dfc_vida(db, morada["id"])
     conf = payload["conferencia"]
-    assert conf["lucro_lista"] == 1000.0
-    assert conf["lucro_dfc"] == 1000.0
+    assert conf["lucro_lista"] == 960.0
+    assert conf["lucro_dfc"] == 960.0
     assert conf["ok"] is True
     assert payload["anos"] == ["2025", "2026", "2027"]
 
     by_codigo = {row["codigo"]: row for row in payload["linhas"]}
     assert by_codigo["01.01"]["valores"]["2025"] == 1000.0
     assert by_codigo["01.01"]["valores"]["2027"] == 400.0
-    assert by_codigo["01"]["total"] == 1400.0
+    assert by_codigo["01"]["total"] == 1350.0
     assert by_codigo["04.03"]["valores"]["2026"] == -300.0
     assert by_codigo["04"]["total"] == -300.0
     assert by_codigo["05.03"]["valores"]["2026"] == -100.0
+    assert by_codigo["01.04"]["valores_mes"]["2026-09"] == -50.0
+    assert by_codigo["02.02"]["valores_mes"]["2026-08"] == -40.0
+    assert by_codigo["02"]["total"] == -40.0
+    assert by_codigo["03"]["total"] == -400.0
+    assert by_codigo["06"]["total"] == 910.0
     assert 9000.0 not in by_codigo["01.01"]["valores"].values()
-    assert payload["meses"] == ["2025-03", "2026-06", "2026-08", "2027-01"]
+    assert payload["meses"] == ["2025-03", "2026-06", "2026-08", "2026-09", "2027-01"]
     assert by_codigo["01.01"]["valores_mes"]["2025-03"] == 1000.0
     assert by_codigo["04.03"]["valores_mes"]["2026-08"] == -300.0
 
@@ -108,6 +120,38 @@ def test_lucro_dfc_bate_com_a_lista_e_soma_obra():
     assert planos_0403["Materiais Aplicados (Obra)"]["valores_mes"]["2026-08"] == -300.0
     assert planos_0503["Administrativas Diversas"]["total"] == -100.0
     assert "Receita de Venda de Lotes" not in {p["descricao"] for p in by_codigo["01"]["planos"]}
+
+
+def test_redutora_sienge_entra_positiva_no_dfc():
+    from app.api.routes.tracking_dfc import _signed_caixa_dfc
+
+    assert _signed_caixa_dfc("OUTCOME", "(-) Retenção de INSS - Terceiros", 10) == 10
+    assert _signed_caixa_dfc("OUTCOME", "Recolhimento de INSS - Terceiros", 10) == -10
+    assert _signed_caixa_dfc("INCOME", "Receita de Venda de Lotes", 10) == 10
+
+
+def test_titulo_vencido_aberto_entra_no_dfc_como_previsto():
+    from app.api.routes.tracking_dfc import listar_empreendimentos_dfc, montar_dfc_vida
+    from app.models.actual_transaction import ActualTransaction
+
+    db = _seed_visao_e_centros(_sqlite_dfc())
+    db.add(ActualTransaction(
+        cost_center_id=10,
+        source_id="TRK-VENC-INC-99-1",
+        transaction_type="INCOME",
+        category="Receita de Venda de Lotes",
+        transaction_date=date(2026, 9, 20),
+        value=80.0,
+        is_forecast=True,
+    ))
+    db.commit()
+    morada = next(
+        row for row in listar_empreendimentos_dfc(db)
+        if row["project_name"] == "MORADA DOS IPÊS II"
+    )
+    payload = montar_dfc_vida(db, morada["id"])
+    by_codigo = {row["codigo"]: row for row in payload["linhas"]}
+    assert by_codigo["01.01"]["valores_mes"]["2026-09"] == 80.0
 
 
 def test_rotas_dfc_ficam_no_acompanhamento():

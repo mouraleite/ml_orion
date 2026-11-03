@@ -31,6 +31,46 @@ def test_rendimento_historico_52():
     assert lines[0]["source_id"] == "BM-9001-FC-66"
 
 
+def test_duplicidade_entrada_vira_receita():
+    item = {
+        "bankMovementId": 746813,
+        "bankMovementAmount": 1631.85,
+        "bankMovementOperationType": "E",
+        "bankMovementDate": "2023-01-23",
+        "financialCategories": [
+            {
+                "costCenterId": 14201,
+                "financialCategoryId": 1040105,
+                "financialCategoryName": "Recebimento em Duplicidade",
+                "financialCategoryRate": 56,
+            }
+        ],
+    }
+    lines = list(iter_bank_movement_receita_lines(item, "14201"))
+    assert len(lines) == 1
+    assert round(lines[0]["value"], 2) == 913.84
+    assert lines[0]["source_id"] == "BM-746813-FC-1040105"
+
+
+def test_skip_duplicidade_when_inc_exists():
+    item = {
+        "bankMovementId": 712688,
+        "bankMovementAmount": 974.37,
+        "bankMovementOperationType": "E",
+        "bankMovementDate": "2022-09-21",
+        "financialCategories": [
+            {
+                "costCenterId": 14201,
+                "financialCategoryId": 1040105,
+                "financialCategoryName": "Recebimento em Duplicidade",
+                "financialCategoryRate": 56,
+            }
+        ],
+    }
+    skip = build_inc_reembolso_keys({(9, "Recebimento em Duplicidade"): 545.65})
+    assert list(iter_bank_movement_receita_lines(item, "14201", skip_reembolso_keys=skip)) == []
+
+
 def test_skip_reembolso_when_inc_exists():
     item = {
         "bankMovementId": 9002,

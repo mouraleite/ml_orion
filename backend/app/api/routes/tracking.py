@@ -91,9 +91,29 @@ def _agregar_caixa_realizado_efetivo(db, cc_ids):
 
 
 def _agregar_pmt_historico_caixa(db, cc_ids):
-    """Pago no formato antigo OUT-{titulo}-PMT-*. Entra no acompanhamento; orçamento/forecast não lê isso."""
+    """Pago no formato antigo OUT-{titulo}-PMT-*. Só entra se o CC ainda não tem OP1/OP8/OP10.
+
+    Depois do backfill Sienge, somar PMT + OP1 duplicava o caixa do acompanhamento/DFC.
+    Orçamento e forecast não lêem PMT — não alterar esses módulos aqui.
+    """
     cc_ids = list({cid for cid in cc_ids if cid is not None})
     if not cc_ids:
+        return []
+    ccs_com_parser_atual = {
+        row[0]
+        for row in db.query(ActualTransaction.cost_center_id).filter(
+            ActualTransaction.cost_center_id.in_(cc_ids),
+            ActualTransaction.is_forecast == False,
+            ActualTransaction.transaction_type == "OUTCOME",
+            or_(
+                ActualTransaction.source_id.like("OUT-%-OP1-%"),
+                ActualTransaction.source_id.like("OUT-%-OP8-%"),
+                ActualTransaction.source_id.like("OUT-%-OP10-%"),
+            ),
+        ).distinct().all()
+    }
+    restantes = [cid for cid in cc_ids if cid not in ccs_com_parser_atual]
+    if not restantes:
         return []
     return db.query(
         ActualTransaction.cost_center_id,
@@ -101,7 +121,7 @@ def _agregar_pmt_historico_caixa(db, cc_ids):
         ActualTransaction.category,
         func.sum(ActualTransaction.value).label("total_value"),
     ).filter(
-        ActualTransaction.cost_center_id.in_(cc_ids),
+        ActualTransaction.cost_center_id.in_(restantes),
         ActualTransaction.is_forecast == False,
         ActualTransaction.transaction_type == "OUTCOME",
         ActualTransaction.source_id.like("OUT-%-PMT-%"),
@@ -153,7 +173,10 @@ def _agregar_caixa_previsto(db, cc_ids):
             ActualTransaction.cost_center_id.in_(cc_ids),
             ActualTransaction.is_forecast == True,
             ActualTransaction.transaction_type == "INCOME",
-            ActualTransaction.source_id.like("FCST-INC-%"),
+            or_(
+                ActualTransaction.source_id.like("FCST-INC-%"),
+                ActualTransaction.source_id.like("TRK-VENC-INC-%"),
+            ),
         )
         .group_by(ActualTransaction.source_id)
         .subquery()
@@ -533,6 +556,8 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
         cat = category.lower().strip() if category else ""
 
         val = abs(total_value) if total_value else 0.0
+        if (category or "").strip().startswith("(-)"):
+            val = -val
 
 
 

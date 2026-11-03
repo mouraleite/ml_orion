@@ -53,12 +53,14 @@ def _bm_amount(item: dict) -> float:
 
 
 def _category_kind(category_name: str, historic_id: Optional[int]) -> Optional[str]:
-    """rendimento | desconto | reembolso | None"""
+    """rendimento | desconto | reembolso | duplicidade | None"""
     nm = (category_name or "").lower()
     if "descontos obtidos" in nm:
         return "desconto"
     if "reembolso" in nm:
         return "reembolso"
+    if "duplicidade" in nm:
+        return "duplicidade"
     if "rendimento" in nm or historic_id == HISTORIC_RENDIMENTO_APLICACAO:
         return "rendimento"
     return None
@@ -193,7 +195,7 @@ def iter_bank_movement_receita_lines(
         if kind is None:
             continue
 
-        if kind == "reembolso" and (month, cat_name.strip()) in skip_reembolso:
+        if kind in ("reembolso", "duplicidade") and (month, cat_name.strip()) in skip_reembolso:
             continue
 
         ratio = category_rate_ratio(cat)
