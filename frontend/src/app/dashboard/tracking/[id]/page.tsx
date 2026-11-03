@@ -31,15 +31,31 @@ export default function TrackingDetailPage() {
 
   const loadData = async () => {
     setIsLoading(true);
+    let detalhe: any = null;
     try {
       const res = await api.get(`/tracking/${id}/details?view_mode=${viewMode}`);
-      setData(res.data);
-      
-      const summaryRes = await api.get("/tracking/summary");
-      setAllProjects(Array.isArray(summaryRes.data) ? summaryRes.data : (summaryRes.data.items || []));
+      detalhe = res.data;
+      setData(detalhe);
     } catch (e) {
       console.error(e);
       alert("Erro ao carregar detalhes.");
+      setIsLoading(false);
+      return;
+    }
+    const currentId = decodeURIComponent(id);
+    const fallback = detalhe?.project_name
+      ? [{ id: currentId, project_name: detalhe.project_name }]
+      : [];
+    try {
+      const listRes = await api.get("/tracking/empreendimentos", { timeout: 60000 });
+      const lista = Array.isArray(listRes.data) ? listRes.data : (listRes.data.items || []);
+      if (currentId && !lista.some((p: any) => String(p.id) === currentId)) {
+        lista.unshift({ id: currentId, project_name: detalhe?.project_name || currentId });
+      }
+      setAllProjects(lista);
+    } catch (e) {
+      console.error(e);
+      setAllProjects(fallback);
     } finally {
       setIsLoading(false);
     }

@@ -2479,6 +2479,49 @@ def _kpis_da_fatia(slice_act):
     }
 
 
+def listar_empreendimentos_seletor(db: Session):
+    """Id e nome para o combo. Mesmos grupos da lista, sem KPI nem actuals."""
+    items = []
+    viabilities = db.query(Viability).filter(
+        Viability.version_of_id == None,
+        Viability.status.notin_(["Em Andamento", "Em Aprovação"]),
+    ).all()
+    for v in viabilities:
+        items.append({"id": f"v-{v.id}", "project_name": v.project_name or ""})
+
+    tracked = db.query(CostCenter).filter(CostCenter.track_in_dashboard == True).all()
+    seen = set()
+    for c in tracked:
+        macro_prefix = c.id_sienge[:3] if c.id_sienge and len(c.id_sienge) >= 3 else str(c.id)
+        _city, proj_name = parse_project_name(c)
+        group_key = f"{macro_prefix}_{proj_name}"
+        if group_key in seen:
+            continue
+        seen.add(group_key)
+        members = []
+        if c.id_sienge and len(c.id_sienge) >= 3:
+            related = db.query(CostCenter).filter(CostCenter.id_sienge.like(f"{macro_prefix}%")).all()
+            for rc in related:
+                if _mesmo_produto_obra(proj_name, parse_project_name(rc)[1]):
+                    members.append(rc)
+        if not any(rc.id == c.id for rc in members):
+            members.append(c)
+        main_cc = sorted(members, key=lambda x: len(x.nome or ""))[0]
+        _city, project_name = parse_project_name(main_cc)
+        items.append({"id": f"cg-{group_key}", "project_name": project_name})
+
+    items.sort(key=lambda row: (row.get("project_name") or "").lower())
+    return items
+
+
+@router.get("/empreendimentos")
+def get_tracking_empreendimentos(
+    db: Session = Depends(get_db),
+    current_user: UserResponse = Depends(deps.get_current_active_user),
+):
+    return {"items": listar_empreendimentos_seletor(db)}
+
+
 @router.get("/summary")
 
 def get_tracking_summary(db: Session = Depends(get_db), current_user: UserResponse = Depends(deps.get_current_active_user)):

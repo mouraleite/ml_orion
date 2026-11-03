@@ -160,3 +160,26 @@ def test_rotas_dfc_ficam_no_acompanhamento():
     paths = {getattr(route, "path", "") for route in router.routes}
     assert "/dfc" in paths
     assert "/dfc/empreendimentos" in paths
+
+
+def test_seletor_lista_id_e_nome_sem_kpi():
+    from app.api.routes.tracking import listar_empreendimentos_seletor, router
+    from app.models.viability import Viability
+
+    db = _sqlite_dfc()
+    _seed_visao_e_centros(db)
+    db.add(Viability(id=5, project_name="Land Bank Teste", status="Aprovado"))
+    db.add(Viability(id=6, project_name="Obra em andamento", status="Em Andamento"))
+    db.commit()
+
+    items = listar_empreendimentos_seletor(db)
+    ids = {row["id"] for row in items}
+    names = {row["project_name"] for row in items}
+    assert "v-5" in ids
+    assert "v-6" not in ids
+    assert "Land Bank Teste" in names
+    assert "MORADA DOS IPÊS II" in names
+    assert "RESERVA DOS IPÊS" in names
+    assert any(item_id.startswith("cg-143_") for item_id in ids)
+    paths = {getattr(route, "path", "") for route in router.routes}
+    assert "/empreendimentos" in paths
