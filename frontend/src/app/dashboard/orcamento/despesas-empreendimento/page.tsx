@@ -209,32 +209,28 @@ function PeriodoCard({
   const v = n - ref;
   const p = varPerc(n, ref);
   const fav = isDesvioFavoravel(v, "DESPESAS");
+  const varClass = fav ? "text-emerald-700" : "text-red-600";
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 min-w-0">
-      <div className="flex items-center justify-between gap-2 mb-1.5">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{titulo}</p>
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 min-w-0 overflow-hidden">
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 truncate">{titulo}</p>
         <Semaforo n={n} ref={ref} />
       </div>
-      <div className="grid grid-cols-4 gap-1 text-right">
-        <div>
-          <p className="text-[9px] uppercase tracking-wider text-slate-400">{nLabel}</p>
-          <p className="text-sm font-bold tabular-nums text-slate-900"><Num v={n} /></p>
-        </div>
-        <div>
-          <p className="text-[9px] uppercase tracking-wider text-slate-400">{refLabel}</p>
-          <p className="text-sm font-semibold tabular-nums text-slate-700"><Num v={ref} /></p>
-        </div>
-        <div>
-          <p className="text-[9px] uppercase tracking-wider text-slate-400">Var R$</p>
-          <p className={`text-sm font-semibold tabular-nums ${fav ? "text-emerald-700" : "text-red-600"}`}>
-            <Num v={v} />
-          </p>
-        </div>
-        <div>
-          <p className="text-[9px] uppercase tracking-wider text-slate-400">Var %</p>
-          <p className="text-sm font-semibold"><Perc v={p} /></p>
-        </div>
-      </div>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 items-baseline m-0">
+        <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{nLabel}</dt>
+        <dd className="m-0 text-lg font-bold tabular-nums text-slate-900 text-right whitespace-nowrap">
+          <Num v={n} />
+        </dd>
+        <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{refLabel}</dt>
+        <dd className="m-0 text-sm font-semibold tabular-nums text-slate-700 text-right whitespace-nowrap">
+          <Num v={ref} />
+        </dd>
+        <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Var</dt>
+        <dd className={`m-0 text-sm font-semibold tabular-nums text-right whitespace-nowrap ${varClass}`}>
+          <Num v={v} />
+          <span className="ml-2"><Perc v={p} /></span>
+        </dd>
+      </dl>
     </div>
   );
 }
@@ -573,7 +569,7 @@ export default function DespesasEmpreendimentoPage() {
       </div>
 
       {!loading && periodosFonte ? (
-        <div className="shrink-0 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2">
+        <div className="shrink-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {(["ano", "ytd", "ytg", "fy"] as Periodo[]).map((k) => {
             const labels: Record<Periodo, string> = {
               ano: `Ano ${ano} × ${anoRef}`,
