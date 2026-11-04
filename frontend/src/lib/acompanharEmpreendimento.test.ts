@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   centroEhSateliteDeProduto,
+  ehCabecaDeObra,
   mostraFlagAcompanharEmpreendimento,
+  opcoesObraAcompanhamento,
   podeAcompanharEmpreendimento,
+  rotuloCentroIdNome,
   tipoEfetivoCentro,
-} from "./acompanharEmpreendimento";
+} from "./acompanharEmpreendimento.ts";
 
 describe("podeAcompanharEmpreendimento", () => {
   it("mostra no cabeçalho Somente Obra e Obra e Centro de Custo", () => {
@@ -96,5 +99,35 @@ describe("helpers", () => {
     assert.equal(centroEhSateliteDeProduto("BOITUVA - RESERVA DOS IPÊS - MLDU (ELLENCO & MLDU)"), true);
     assert.equal(centroEhSateliteDeProduto("ITATINGA - NOVO HORIZONTE - GESTÃO DE CARTEIRA E ESTOQUE"), true);
     assert.equal(centroEhSateliteDeProduto("BOITUVA - MORADA DOS IPÊS II"), false);
+  });
+});
+
+describe("obra no acompanhamento", () => {
+  it("só aceita Somente Obra e Obra e Centro de Custo", () => {
+    assert.equal(ehCabecaDeObra("Somente Obra"), true);
+    assert.equal(ehCabecaDeObra("Obra e Centro de Custo"), true);
+    assert.equal(ehCabecaDeObra("Centro de Custo associado à Obra"), false);
+    assert.equal(ehCabecaDeObra("Somente Centro de Custo"), false);
+  });
+
+  it("rótulo junta ID e nome", () => {
+    assert.equal(
+      rotuloCentroIdNome(17700, "TAGUAI - JARDIM DOS IPÊS III"),
+      "17700 - TAGUAI - JARDIM DOS IPÊS III",
+    );
+    assert.equal(rotuloCentroIdNome("", "FROTA"), "FROTA");
+  });
+
+  it("lista ignora associado, somente CC e frota", () => {
+    const opcoes = opcoesObraAcompanhamento([
+      { db_id: 1, id: 900, nome: "AUTOMÓVEL FIAT", tipo_sienge: "Somente Centro de Custo" },
+      { db_id: 2, id: 17701, nome: "TAGUAI - JARDIM DOS IPÊS III - OBRAS", tipo_sienge: "Centro de Custo associado à Obra" },
+      { db_id: 3, id: 17700, nome: "TAGUAI - JARDIM DOS IPÊS III", tipo_sienge: "Somente Obra" },
+      { db_id: 4, id: 12800, nome: "AVARÉ - CENTRAL PARQUE II", tipo_sienge: "Obra e Centro de Custo" },
+    ]);
+    assert.deepEqual(
+      opcoes.map((c) => c.id),
+      [12800, 17700],
+    );
   });
 });

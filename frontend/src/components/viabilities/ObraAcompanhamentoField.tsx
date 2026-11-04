@@ -3,17 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { apoioService } from "@/services/apoio";
 import {
-  mostraFlagAcompanharEmpreendimento,
-  tipoEfetivoCentro,
+  opcoesObraAcompanhamento,
+  rotuloCentroIdNome,
+  type CentroObraOpcao,
 } from "@/lib/acompanharEmpreendimento";
-
-type Centro = {
-  db_id: number;
-  nome: string;
-  tipo_sienge?: string;
-  custom_data?: Record<string, unknown> | null;
-  track_in_dashboard?: boolean;
-};
 
 type Props = {
   value: number | null | undefined;
@@ -21,8 +14,13 @@ type Props = {
   onChange: (id: number | null) => void;
 };
 
+function rotuloOpcao(c: CentroObraOpcao): string {
+  const base = rotuloCentroIdNome(c.id, c.nome);
+  return c.track_in_dashboard ? `${base} (já acompanha)` : base;
+}
+
 export function ObraAcompanhamentoField({ value, readonly, onChange }: Props) {
-  const [centros, setCentros] = useState<Centro[]>([]);
+  const [centros, setCentros] = useState<CentroObraOpcao[]>([]);
 
   useEffect(() => {
     let alive = true;
@@ -37,39 +35,34 @@ export function ObraAcompanhamentoField({ value, readonly, onChange }: Props) {
   }, []);
 
   const opcoes = useMemo(() => {
-    return centros
-      .filter((c) =>
-        mostraFlagAcompanharEmpreendimento({
-          tipo: tipoEfetivoCentro(c),
-          nome: c.nome || "",
-          jaAcompanhado: Boolean(c.track_in_dashboard),
-        }),
-      )
-      .sort((a, b) => (a.nome || "").localeCompare(b.nome || "", "pt-BR"));
-  }, [centros]);
+    const filtradas = opcoesObraAcompanhamento(centros);
+    if (value == null) return filtradas;
+    if (filtradas.some((c) => c.db_id === value)) return filtradas;
+    const atual = centros.find((c) => c.db_id === value);
+    return atual ? [atual, ...filtradas] : filtradas;
+  }, [centros, value]);
 
-  const selecionado = opcoes.find((c) => c.db_id === value);
+  const selecionado = opcoes.find((c) => c.db_id === value) || centros.find((c) => c.db_id === value);
   const jaAcompanha = Boolean(selecionado?.track_in_dashboard);
 
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 min-w-0">
         <span className="text-sm text-slate-500 whitespace-nowrap">Obra no acompanhamento:</span>
         {readonly ? (
-          <span className="text-xs text-slate-700">
-            {selecionado?.nome || "Nenhuma"}
+          <span className="text-xs text-slate-700 truncate" title={selecionado ? rotuloOpcao(selecionado) : undefined}>
+            {selecionado ? rotuloCentroIdNome(selecionado.id, selecionado.nome) : "Nenhuma"}
           </span>
         ) : (
           <select
             value={value ?? ""}
             onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
-            className="max-w-xs rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-800 outline-none focus:ring-1 focus:ring-ml-green"
+            className="min-w-[280px] max-w-xl rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-800 outline-none focus:ring-1 focus:ring-ml-green"
           >
             <option value="">Nenhuma — continua como Land Bank</option>
             {opcoes.map((c) => (
               <option key={c.db_id} value={c.db_id}>
-                {c.nome}
-                {c.track_in_dashboard ? " (já acompanha)" : ""}
+                {rotuloOpcao(c)}
               </option>
             ))}
           </select>
