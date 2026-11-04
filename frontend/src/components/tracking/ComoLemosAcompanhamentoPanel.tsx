@@ -6,8 +6,8 @@ import {
   FatosAcompanhamento,
   TEXTO_CAMADAS,
   TEXTO_DRE,
-  TEXTO_FORA,
   TEXTO_SEM_PRODUTO,
+  TEXTO_TIR_SEM_PRODUTO,
   TEXTO_VGV_ESTOQUE,
   TITULO_CRONOGRAMA_OBRA,
   TITULO_PAINEL,
@@ -109,12 +109,7 @@ export function ComoLemosAcompanhamentoPanel({ open, onClose, fatos }: Props) {
 
           <Bloco titulo="VGV e estoque">{TEXTO_VGV_ESTOQUE}</Bloco>
           <Bloco titulo="DRE">{TEXTO_DRE}</Bloco>
-          <Bloco titulo="TIR e MTIR">
-            {fatos
-              ? textoTir(fatos)
-              : "TIR clássica só existe se o caixa começa com investimento. Se o primeiro mês é entrada, o card pode mostrar 0% e a taxa da vida é a MTIR (TMA 12%). Payback e exposição leem o mesmo fluxo."}
-          </Bloco>
-          <Bloco titulo="O que não entra">{TEXTO_FORA}</Bloco>
+          <Bloco titulo="TIR e MTIR">{fatos ? textoTir(fatos) : TEXTO_TIR_SEM_PRODUTO}</Bloco>
         </div>
       </aside>
     </div>

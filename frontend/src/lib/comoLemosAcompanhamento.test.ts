@@ -16,8 +16,13 @@ describe("camadas do método", () => {
     assert.equal(TITULO_CRONOGRAMA_OBRA, "Cronograma de desembolso de obra");
     assert.equal(TITULO_VENDAS_ESTOQUE, "Vendas de lotes em estoque");
     assert.equal(TEXTO_CAMADAS.obras.includes("Estoque"), false);
-    assert.match(TEXTO_CAMADAS.obras, /saldo/);
-    assert.match(TEXTO_CAMADAS.estoque, /6 meses/);
+    assert.match(TEXTO_CAMADAS.obras, /saldo do orçamento da obra/);
+    assert.match(TEXTO_CAMADAS.obras, /mês que vem/);
+    assert.match(TEXTO_CAMADAS.estoque, /6 meses que tiveram venda/);
+    assert.match(TEXTO_CAMADAS.estoque, /média do m²/);
+    assert.equal(TEXTO_CAMADAS.estoque.includes("mês que vem"), false);
+    assert.match(TEXTO_CAMADAS.pago, /baixas do Sienge/);
+    assert.match(TEXTO_CAMADAS.comprometido, /títulos em aberto/);
   });
 });
 

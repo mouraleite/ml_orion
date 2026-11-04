@@ -6,22 +6,23 @@ export const TITULO_CRONOGRAMA_OBRA = "Cronograma de desembolso de obra";
 export const TITULO_VENDAS_ESTOQUE = "Vendas de lotes em estoque";
 
 export const TEXTO_CAMADAS = {
-  pago: "Baixa no Sienge. Não se altera aqui.",
-  comprometido: "Títulos em aberto. Não mexe no realizado.",
-  obras: "Só o saldo, a partir do mês que vem.",
-  estoque: "Média dos últimos 6 meses com venda, a partir do mês que vem.",
+  pago: "Olhamos as baixas do Sienge: o que já entrou ou saiu do caixa.",
+  comprometido: "Olhamos os títulos em aberto no Sienge: já lançados, ainda sem baixa.",
+  obras: "Olhamos o saldo do orçamento da obra que ainda não foi pago nem comprometido e jogamos no cronograma a partir do mês que vem.",
+  estoque: "Olhamos os últimos 6 meses que tiveram venda e fazemos a média do m².",
 } as const;
 
 export const TEXTO_VGV_ESTOQUE =
-  "VGV vendido são os contratos. O estoque entra no card da lista; a curva mês a mês só no detalhe.";
+  "O VGV vendido soma os contratos. O estoque é a área que ainda não vendeu, vezes a média do m² dos últimos 6 meses com venda.";
 
-export const TEXTO_DRE = "Lucro operacional é caixa (entrada menos saída), não VGV.";
-
-export const TEXTO_FORA =
-  "Orçamento e forecast ficam nas telas deles. Este painel não muda número.";
+export const TEXTO_DRE =
+  "O lucro operacional é caixa: entrada menos saída. Não é o VGV dos contratos.";
 
 export const TEXTO_SEM_PRODUTO =
-  "O mesmo método vale para todos os produtos. Abra um empreendimento para ver os números desta obra.";
+  "O método é o mesmo em todos os produtos. Abra um empreendimento para ver os números desta obra.";
+
+export const TEXTO_TIR_SEM_PRODUTO =
+  "A TIR clássica só existe se o caixa começa com investimento. Se o primeiro mês já é entrada, o card pode mostrar 0% — a taxa da vida é a MTIR (TMA 12%). Payback e exposição leem o mesmo fluxo.";
 
 export type FatosAcompanhamento = {
   nome: string;
