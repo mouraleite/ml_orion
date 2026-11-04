@@ -86,12 +86,15 @@ describe("accessMatrix", () => {
     const names = orc?.items.map((i) => i.name) || [];
     assert.deepEqual(
       names.slice(names.indexOf("DFC"), names.indexOf("Relatórios") + 1),
-      ["DFC", "DFC gerencial", "Relatórios"],
+      ["DFC", "DFC gerencial", "Despesas por empreendimento", "Relatórios"],
     );
     assert.equal(matchMenuPath("/dashboard/orcamento/dfc-gerencial")?.permKey, "DFC gerencial");
     assert.equal(matchMenuPath("/dashboard/orcamento/dfc")?.permKey, "DFC");
     assert.equal(isPathAllowed({ Orçamento: { DFC: true } }, "/dashboard/orcamento/dfc-gerencial"), true);
     assert.equal(isPathAllowed({}, "/dashboard/orcamento/dfc-gerencial"), false);
+    assert.equal(matchMenuPath("/dashboard/orcamento/despesas-empreendimento")?.permKey, "Despesas por empreendimento");
+    assert.equal(isPathAllowed({ Orçamento: { DFC: true } }, "/dashboard/orcamento/despesas-empreendimento"), true);
+    assert.equal(isPathAllowed({}, "/dashboard/orcamento/despesas-empreendimento"), false);
   });
 
   it("não confunde realizado com realizado-despesas", () => {

@@ -35,6 +35,8 @@ type Props = {
   onRefresh?: () => void;
   loading?: boolean;
   children?: ReactNode;
+  hideMeses?: boolean;
+  sempreMostrarVersaoForecast?: boolean;
 };
 
 const ANOS = [2024, 2025, 2026, 2027];
@@ -61,8 +63,11 @@ export function OrcamentoFlyoutFilterBar({
   onRefresh,
   loading,
   children,
+  hideMeses = false,
+  sempreMostrarVersaoForecast = false,
 }: Props) {
-  const showForecastVersion = showModo && modo === "forecast" && onForecastIdChange;
+  const showForecastVersion =
+    !!onForecastIdChange && (sempreMostrarVersaoForecast || (showModo && modo === "forecast"));
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl px-3 py-2.5 flex flex-wrap items-end gap-3 shrink-0">
@@ -73,6 +78,7 @@ export function OrcamentoFlyoutFilterBar({
         canUseHoldingMldu={canUseHoldingMldu}
       />
       <EmpresaLinkedFilters opcoes={empresaOpcoes} value={filtroEmpresaIds} onChange={onEmpresaChange} />
+      {!hideMeses ? (
       <div className="w-44 z-10">
         <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Meses</label>
         <MultiSelect
@@ -83,6 +89,7 @@ export function OrcamentoFlyoutFilterBar({
           className="bg-white"
         />
       </div>
+      ) : null}
       <div>
         <label className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Ano</label>
         <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2 text-sm">
