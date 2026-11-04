@@ -163,6 +163,36 @@ def test_criar_vendas_mesmo_empreendimento_recusa(client):
     assert "Já existe orçamento criado" in r2.json()["detail"]
 
 
+def test_salvar_vendas_altera_numero_com_observacao_nula(client, db_session):
+    """Espelha a tela: GET devolve observacao null, usuário muda um mês e clica Salvar."""
+    from app.models.orcamento import Orcamento, OrcamentoVendaItem
+
+    criar = client.post("/api/v1/orcamentos/criar", json={
+        "ano": 2062, "tipo": "VENDAS", "produto_id": 1, "plano_venda_id": 1,
+    })
+    assert criar.status_code == 200, criar.text
+    loaded = client.get("/api/v1/orcamentos/vendas/2062")
+    assert loaded.status_code == 200, loaded.text
+    itens = loaded.json()["itens"]
+    assert itens, "GET deveria devolver a linha criada"
+    itens[0]["observacao"] = None
+    mes = itens[0]["meses"][0]
+    mes["numero_vendas"] = 4
+    mes["ticket_medio"] = 250000.0
+    mes["vgv"] = 1000000.0
+    resp = client.post("/api/v1/orcamentos/vendas/2062/salvar", json={"itens": itens})
+    assert resp.status_code == 200, resp.text
+    db_session.expire_all()
+    orc = db_session.query(Orcamento).filter_by(ano=2062, tipo="VENDAS").first()
+    gravado = db_session.query(OrcamentoVendaItem).filter_by(
+        orcamento_id=orc.id, mes=mes["mes"],
+    ).first()
+    assert gravado is not None
+    assert gravado.numero_vendas == 4
+    assert gravado.ticket_medio == 250000.0
+    assert gravado.vgv == 1000000.0
+
+
 def test_salvar_vendas_permite_venda_e_distrato_mesmo_plano(client):
     r = client.post("/api/v1/orcamentos/criar", json={
         "ano": 2052, "tipo": "VENDAS", "produto_id": 1, "plano_venda_id": 1,

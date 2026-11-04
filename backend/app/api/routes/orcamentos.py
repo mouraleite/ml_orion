@@ -201,13 +201,13 @@ class MesVenda(BaseModel):
     ticket_medio: float = 0.0
     numero_vendas: int = 0
     vgv: float = 0.0
-    origem_venda: str = None
+    origem_venda: Optional[str] = None
 
 class OrcamentoVendaLinha(BaseModel):
     produto_id: int
     plano_venda_id: int
     meses: List[MesVenda]
-    observacao: str = None
+    observacao: Optional[str] = None
 
 class OrcamentoVendasSaveRequest(BaseModel):
     itens: List[OrcamentoVendaLinha]

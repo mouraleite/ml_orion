@@ -221,6 +221,34 @@ def test_criar_vendas_admin_ok(client, db_session):
     assert item.ano == 2078
 
 
+def test_salvar_forecast_vendas_altera_numero_com_observacao_nula(client, db_session):
+    """Espelha a tela: GET devolve observacao null, usuário muda um mês e clica Salvar."""
+    criar = client.post("/api/v1/forecasts/criar_de_base", json={
+        "ano": 2080, "tipo": "VENDAS", "produto_id": 1, "plano_venda_id": 1,
+    })
+    assert criar.status_code == 200, criar.text
+    loaded = client.get("/api/v1/forecasts/vendas/2080")
+    assert loaded.status_code == 200, loaded.text
+    itens = loaded.json()["itens"]
+    assert itens, "GET deveria devolver a linha criada"
+    itens[0]["observacao"] = None
+    mes = itens[0]["meses"][0]
+    mes["numero_vendas"] = 3
+    mes["ticket_medio"] = 180000.0
+    mes["vgv"] = 540000.0
+    resp = client.post("/api/v1/forecasts/vendas/2080/salvar", json={"itens": itens})
+    assert resp.status_code == 200, resp.text
+    db_session.expire_all()
+    fid = criar.json()["forecast_id"]
+    gravado = db_session.query(ForecastVendaItem).filter_by(
+        forecast_id=fid, mes=mes["mes"],
+    ).first()
+    assert gravado is not None
+    assert gravado.numero_vendas == 3
+    assert gravado.ticket_medio == 180000.0
+    assert gravado.vgv == 540000.0
+
+
 def test_salvar_inclui_empreendimento_novo_no_mesmo_documento(client, db_session):
     db_session.add(ProdutoPlanoFinanceiro(produto_id=2, plano_financeiro_id=1, permitido=True))
     db_session.commit()
