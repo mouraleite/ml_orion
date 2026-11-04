@@ -263,22 +263,22 @@ function Line({
   const bg = isEmp ? "bg-slate-50" : isGrupo ? "bg-white" : "bg-slate-50/70";
   return (
     <tr className={`${bg} hover:bg-slate-50`}>
-      <td className={`sticky left-0 z-10 px-3 py-2 border-b border-slate-100 min-w-[280px] ${bg}`}>
-        <div className="flex items-center gap-1" style={{ paddingLeft: indent * 16 }}>
+      <td className={`sticky left-0 z-10 px-3 py-2.5 border-b border-slate-100 min-w-[360px] w-[360px] ${bg}`}>
+        <div className="flex items-start gap-1.5" style={{ paddingLeft: indent * 20 }}>
           {hasKids ? (
-            <button type="button" onClick={onToggle} className="p-0.5 rounded hover:bg-slate-200">
+            <button type="button" onClick={onToggle} className="p-0.5 rounded hover:bg-slate-200 mt-0.5 shrink-0">
               {expanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-500" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-500" />}
             </button>
           ) : (
-            <span className="w-4" />
+            <span className="w-4 shrink-0" />
           )}
-          <span className={`font-mono text-xs text-slate-400 w-14 shrink-0 ${isGrupo ? "" : "opacity-80"}`}>{row.codigo}</span>
+          <span className={`font-mono text-xs text-slate-400 w-14 shrink-0 mt-0.5 ${isGrupo ? "" : "opacity-80"}`}>{row.codigo}</span>
           {clickCentro && row.kind === "centro" && onOpenCentro ? (
-            <button type="button" onClick={onOpenCentro} className="text-sm text-ml-green font-semibold hover:underline truncate text-left">
+            <button type="button" onClick={onOpenCentro} className="text-sm text-ml-green font-semibold hover:underline text-left leading-snug">
               {row.descricao}
             </button>
           ) : (
-            <span className={`text-sm truncate ${isEmp ? "font-bold text-slate-900" : isGrupo ? "font-semibold text-slate-800" : "text-slate-600"}`}>
+            <span className={`text-sm leading-snug ${isEmp ? "font-bold text-slate-900" : isGrupo ? "font-semibold text-slate-800" : "text-slate-600"}`}>
               {row.descricao}
             </span>
           )}
@@ -495,7 +495,7 @@ export default function DespesasEmpreendimentoPage() {
   );
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 min-w-0 gap-4 overflow-hidden">
+    <div className="flex flex-col min-w-0 gap-4 pb-8">
       <div className="shrink-0 space-y-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Despesas por empreendimento</h1>
@@ -592,8 +592,8 @@ export default function DespesasEmpreendimentoPage() {
         </div>
       ) : null}
 
-      <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-100 bg-white">
+      <div className="flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm min-h-[28rem]">
+        <div className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-100 bg-white rounded-t-2xl">
           <h2 className="font-bold text-slate-700">
             {drill ? (
               <span className="flex items-center gap-2">
@@ -638,11 +638,11 @@ export default function DespesasEmpreendimentoPage() {
         {loading ? (
           <div className="p-6"><AppLoadingState /></div>
         ) : (
-          <div className="flex-1 min-h-0 overflow-auto">
+          <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[2200px]">
               <thead className="sticky top-0 z-20 bg-white">
                 <tr className="text-[10px] uppercase tracking-wider text-slate-400">
-                  <th rowSpan={2} className="sticky left-0 z-40 bg-white text-left px-3 py-2 font-semibold border-b border-slate-200 align-bottom">
+                  <th rowSpan={2} className="sticky left-0 z-40 bg-white text-left px-3 py-2 font-semibold border-b border-slate-200 align-bottom min-w-[360px] w-[360px]">
                     {drill ? "Grupo / Plano" : "Empresa / Grupo / Empreendimento"}
                   </th>
                   {MESES_LABEL.map((m, i) => (
