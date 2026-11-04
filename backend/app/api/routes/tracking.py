@@ -31,6 +31,11 @@ from app.services.realizado_sienge import (
 
 from app.services.math_engine import calculate_viability_results
 from app.services.viabilidade_obra import ids_centros_produtos_acompanhados, land_bank_oculto_por_obra
+from app.services.tracking_impostos import (
+    aliquotas_lucro_presumido,
+    lancar_tributos_no_fluxo,
+    projetar_tributos_presumido,
+)
 
 from app.models.vision import Vision, FinancialPlanVisionLink
 
@@ -207,7 +212,7 @@ def _receita_realizado_efetiva(transaction_type, category) -> bool:
 def _projetar_vgv_estoque_no_fluxo(anual_cf_fcst, monthly_net_cf_fcst, estoque_atual, avg_vendas_por_mes, avg_vgv_per_unit, weights_by_installments, proj_month, proj_year, max_months=600):
     """Lança o VGV de estoque nos mesmos meses da projeção mês a mês."""
     if not (estoque_atual > 0 and avg_vendas_por_mes > 0):
-        return
+        return {}
     series = []
     estoque_restante = float(estoque_atual)
     while estoque_restante > 1e-9 and len(series) < max_months:
@@ -215,14 +220,14 @@ def _projetar_vgv_estoque_no_fluxo(anual_cf_fcst, monthly_net_cf_fcst, estoque_a
         estoque_restante -= vendas_do_mes
         series.append(vendas_do_mes * avg_vgv_per_unit)
     if not series:
-        return
+        return {}
     insts = []
     for inst, weight in weights_by_installments.items():
         inst_i = int(inst)
         if inst_i > 0 and weight:
             insts.append((inst_i, float(weight)))
     if not insts:
-        return
+        return {}
     max_inst = max(inst_i for inst_i, _ in insts)
     diff = [0.0] * (len(series) + max_inst + 1)
     for inst_i, weight in insts:
@@ -232,6 +237,7 @@ def _projetar_vgv_estoque_no_fluxo(anual_cf_fcst, monthly_net_cf_fcst, estoque_a
                 diff[s] += parcela
                 diff[s + inst_i] -= parcela
     running = 0.0
+    recebimentos = {}
     for idx, delta in enumerate(diff):
         running += delta
         if abs(running) < 1e-6:
@@ -239,8 +245,11 @@ def _projetar_vgv_estoque_no_fluxo(anual_cf_fcst, monthly_net_cf_fcst, estoque_a
             continue
         y = proj_year + (proj_month - 1 + idx) // 12
         m = (proj_month - 1 + idx) % 12 + 1
+        mes = f"{y}-{m:02d}"
         anual_cf_fcst[str(y)]["Entradas"] += running
-        monthly_net_cf_fcst[f"{y}-{m:02d}"] += running
+        monthly_net_cf_fcst[mes] += running
+        recebimentos[mes] = recebimentos.get(mes, 0.0) + running
+    return recebimentos
 
 
 class _AreaLista:
@@ -270,7 +279,7 @@ def _prefetch_tracking_actuals(db, cc_ids, include_forecast: bool = True):
     cc_by = {}
     fcst_totals = defaultdict(lambda: {"INCOME": 0.0, "OUTCOME": 0.0})
     if not cc_ids:
-        return {"sales": sales_by, "real": real_by, "fcst": fcst_by, "fcst_totals": {}, "fcst_monthly": {}, "pmt_hist": {}, "units": units_by, "ccs": cc_by}
+        return {"sales": sales_by, "real": real_by, "fcst": fcst_by, "fcst_totals": {}, "fcst_monthly": {}, "pmt_hist": {}, "units": units_by, "ccs": cc_by, "aliquotas_presumido": aliquotas_lucro_presumido(db)}
 
     sales = db.query(
         ActualTransaction.cost_center_id,
@@ -332,6 +341,7 @@ def _prefetch_tracking_actuals(db, cc_ids, include_forecast: bool = True):
         "pmt_hist": pmt_hist_by,
         "units": units_by,
         "ccs": cc_by,
+        "aliquotas_presumido": aliquotas_lucro_presumido(db),
     }
 
 
@@ -1011,7 +1021,7 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
                 avg_vgv_per_unit = vgv_estoque / estoque_atual if estoque_atual > 0 else 0
 
-                _projetar_vgv_estoque_no_fluxo(
+                recebimentos_estoque = _projetar_vgv_estoque_no_fluxo(
 
                     anual_cf_fcst,
 
@@ -1030,6 +1040,14 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
                     proj_year,
 
                 )
+                aliq = (prefetched or {}).get("aliquotas_presumido") if prefetched is not None else None
+                if not aliq and db is not None:
+                    aliq = aliquotas_lucro_presumido(db)
+                if recebimentos_estoque and aliq:
+                    tributos_estoque = projetar_tributos_presumido(recebimentos_estoque, aliq)
+                    impostos += lancar_tributos_no_fluxo(
+                        tributos_estoque, anual_cf_fcst, monthly_net_cf_fcst
+                    )
 
 
 
