@@ -191,7 +191,7 @@ class OrcamentoItemCreate(BaseModel):
     nov: float = 0.0
     dez: float = 0.0
     total_anual: float = 0.0
-    observacao: str = None
+    observacao: Optional[str] = None
 
 class OrcamentoSaveRequest(BaseModel):
     itens: List[OrcamentoItemCreate]

@@ -89,6 +89,26 @@ def test_salvar_recusa_linha_repetida(client):
     assert resp.status_code == 400
 
 
+def test_salvar_despesas_com_matriz_produto_vazia(client, db_session):
+    """Produção: produto_plano_financeiro está vazio; a carga Excel já ignora isso."""
+    client.post("/api/v1/orcamentos/criar", json={
+        "ano": 2061, "tipo": "DESPESAS", "produto_id": 1, "plano_financeiro_id": 1,
+    })
+    db_session.query(ProdutoPlanoFinanceiro).delete()
+    db_session.commit()
+    resp = client.post("/api/v1/orcamentos/despesas/2061/salvar", json={
+        "itens": [{
+            "produto_id": 1,
+            "plano_financeiro_id": 1,
+            "jan": 9000.0,
+            "set": 9000.0,
+            "total_anual": 18000.0,
+            "observacao": None,
+        }],
+    })
+    assert resp.status_code == 200, resp.text
+
+
 def test_excel_recusa_orcamento_aprovado(client, db_session):
     r = client.post("/api/v1/orcamentos/criar", json={
         "ano": 2049, "tipo": "DESPESAS", "produto_id": 1, "plano_financeiro_id": 1,

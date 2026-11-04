@@ -210,10 +210,21 @@ export default function OrcamentoDespesasPage() {
   const salvar = async () => {
     setSaving(true);
     try {
-      await orcamentoService.salvarDespesas(ano, deptId, linhas);
+      const itens = linhas.map((l) => ({
+        ...l,
+        observacao: l.observacao ?? "",
+      }));
+      await orcamentoService.salvarDespesas(ano, deptId, itens);
       toast.success("Orçamento salvo com sucesso!");
     } catch (err: any) {
-      toast.error(err.response?.data?.detail || "Erro ao salvar orçamento. Verifique permissões.");
+      const detail = err?.response?.data?.detail;
+      const msg =
+        typeof detail === "string"
+          ? detail
+          : Array.isArray(detail) && detail[0]?.msg
+            ? detail[0].msg
+            : "Erro ao salvar orçamento. Verifique permissões.";
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
