@@ -16,6 +16,7 @@ import {
   mostraFlagAcompanharEmpreendimento,
   tipoEfetivoCentro,
 } from "@/lib/acompanharEmpreendimento";
+import { rotuloTipoSienge } from "@/lib/tipoCentroCusto";
 import {
   TEXTO_INICIO_CURVA,
   TEXTO_TERRENO_MANUAL,
@@ -343,14 +344,21 @@ export default function CentroDeCustoPage() {
  const centrosEnriquecidos = centros.map((cc) => {
  const parsed = parseCentroNome(cc.nome);
  const produto = produtoExibido(cc.nome, cc.custom_data);
- return { ...cc, cidade: parsed.cidade, produto, produtoPadrao: parsed.produto, produtoEditado: Boolean(produtoOverride(cc.custom_data)) };
+ return {
+   ...cc,
+   tipo_sienge: rotuloTipoSienge(cc.tipo_sienge),
+   cidade: parsed.cidade,
+   produto,
+   produtoPadrao: parsed.produto,
+   produtoEditado: Boolean(produtoOverride(cc.custom_data)),
+ };
  });
 
  const empresasUnicas = Array.from(new Set(centros.map((c) => c.id_empresa).filter(Boolean))).sort((a, b) => a - b).map(String);
  const cidadesUnicas = Array.from(new Set(centrosEnriquecidos.map((c) => c.cidade).filter((c) => c !=="—"))).sort();
  const produtosUnicos = Array.from(new Set(centrosEnriquecidos.map((c) => c.produto).filter((c) => c !=="—"))).sort();
  const idsUnicos = Array.from(new Set(centros.map((c) => String(c.id)))).sort((a, b) => Number(a) - Number(b));
- const tiposUnicos = Array.from(new Set(centros.map((c) => c.tipo_sienge).filter(Boolean))).sort();
+ const tiposUnicos = Array.from(new Set(centrosEnriquecidos.map((c) => c.tipo_sienge).filter(Boolean))).sort();
   const mesSugeridoTerreno = mesSugeridoInicio({
     primeiroMesCaixa: primeiroMesObra?.primeiro_mes_caixa,
     primeiroMesDesembolso: primeiroMesObra?.primeiro_mes_desembolso,

@@ -6,6 +6,7 @@ from typing import Optional
 from app.api.deps import get_current_user, get_db
 from app.schemas.user import UserResponse
 from app.services.erp_integration import erp_service
+from app.services.tipo_centro_custo import codigo_tipo_sienge, rotulo_tipo_sienge
 from app.models.company import Company, CompanyPartner
 from app.models.user import User
 from app.models.custom_field import CustomField
@@ -286,7 +287,9 @@ def get_centros_custo(current_user: UserResponse = Depends(get_current_user), db
                 "cnpj": custom.get("__cnpj"),
                 "id_empresa": custom.get("__id_empresa"),
                 "nome_empresa": custom.get("__nome_empresa"),
-                "tipo_sienge": custom.get("__tipo_override") or custom.get("__tipo_sienge_cache") or "Desconhecido",
+                "tipo_sienge": rotulo_tipo_sienge(
+                    custom.get("__tipo_override") or custom.get("__tipo_sienge_cache")
+                ),
                 "custom_data": custom,
                 "track_in_dashboard": c.track_in_dashboard,
                 "project_phase": c.project_phase,
@@ -303,13 +306,6 @@ def run_sync_centros_custo(db: Session):
     sienge_centros = erp_service.fetch_centros_custo()
     sienge_obras = erp_service.fetch_enterprises()
     
-    TIPO_MAP = {
-        "1": "Obra e Centro de Custo",
-        "2": "Somente Obra",
-        "3": "Somente Centro de Custo",
-        "4": "Centro de Custo associado à Obra"
-    }
-    
     obras_map = {str(o["id"]): o for o in sienge_obras}
     centros_map = {str(c["id"]): c for c in sienge_centros}
     
@@ -318,7 +314,7 @@ def run_sync_centros_custo(db: Session):
         cc_id = str(cc["id"])
         if cc_id in obras_map:
             obra = obras_map[cc_id]
-            cc["tipo_sienge"] = TIPO_MAP.get(obra["tipo"], "Desconhecido")
+            cc["tipo_sienge"] = rotulo_tipo_sienge(obra.get("tipo"))
             cc["cnpj"] = obra.get("cnpj")
             cc["id_empresa"] = obra.get("id_empresa")
             cc["nome_empresa"] = obra.get("nome_empresa")
@@ -329,13 +325,14 @@ def run_sync_centros_custo(db: Session):
     for obra in sienge_obras:
         o_id = str(obra["id"])
         if o_id not in centros_map:
+            codigo = codigo_tipo_sienge(obra.get("tipo"))
             merged_list.append({
                 "id": obra["id"],
                 "nome": obra["nome"],
                 "cnpj": obra["cnpj"],
                 "id_empresa": obra["id_empresa"],
                 "nome_empresa": obra.get("nome_empresa"),
-                "tipo_sienge": TIPO_MAP.get(obra["tipo"], "Somente Obra")
+                "tipo_sienge": rotulo_tipo_sienge(codigo) if codigo else "Somente Obra",
             })
     
     # Sincroniza com banco

@@ -1,5 +1,7 @@
 /** Quem pode marcar “Acompanhar empreendimento” no cadastro de centro de custo. */
 
+import { rotuloTipoSienge } from "./tipoCentroCusto";
+
 export const TIPOS_CABECA_OBRA = [
   "Somente Obra",
   "Obra e Centro de Custo",
@@ -16,8 +18,10 @@ export function tipoEfetivoCentro(cc: {
   custom_data?: Record<string, unknown> | null;
 }): string {
   const override = cc.custom_data?.__tipo_override;
-  if (typeof override === "string" && override.trim()) return override.trim();
-  return (cc.tipo_sienge || "").trim();
+  if (typeof override === "string" && override.trim()) {
+    return rotuloTipoSienge(override.trim());
+  }
+  return rotuloTipoSienge(cc.tipo_sienge);
 }
 
 export function centroEhSateliteDeProduto(nome: string): boolean {

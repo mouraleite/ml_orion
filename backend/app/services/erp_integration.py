@@ -7,6 +7,7 @@ from app.models.cost_center import CostCenter
 from app.models.financial_plan import FinancialPlan
 from app.services.sienge_api_service import SiengeApiService
 from app.services.sienge_client import SiengeClient, get_default_client
+from app.services.tipo_centro_custo import codigo_tipo_sienge
 import json
 
 logger = logging.getLogger(__name__)
@@ -94,7 +95,7 @@ class SiengeErpService:
                 "cnpj": item.get("cnpj"),
                 "id_empresa": id_empresa,
                 "nome_empresa": nome_empresa,
-                "tipo": "" if tipo is None else str(tipo),
+                "tipo": codigo_tipo_sienge(tipo),
             })
         return out
 

@@ -20,7 +20,17 @@ class _FakeSiengeClient:
                     "companyId": 2,
                     "companyName": "MLDU",
                     "type": "1",
-                }
+                },
+                {
+                    "id": 17700,
+                    "name": "Obra 17700",
+                    "companyId": 2,
+                    "type": {
+                        "id": 2,
+                        "description": "Building",
+                        "icon": "https://cdn.sienge.com.br/icons/building.png",
+                    },
+                },
             ]
         elif url.endswith("/companies"):
             yield [{"id": 2, "name": "Moura Leite", "tradeName": "MLDU", "cnpj": "00"}]
@@ -67,6 +77,8 @@ def test_sienge_mapeia_centros_e_obras():
     assert obras[0]["id_empresa"] == 2
     assert obras[0]["nome_empresa"] == "MLDU"
     assert obras[0]["tipo"] == "1"
+    assert obras[1]["id"] == 17700
+    assert obras[1]["tipo"] == "2"
 
 
 def test_sienge_mapeia_planos_financeiros():
