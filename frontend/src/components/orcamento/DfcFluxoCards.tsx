@@ -42,10 +42,13 @@ export function DfcFluxoCards({
   const legenda = legendaMesesDfc(meses);
   const lyHint = hintPeriodo("ly");
   const mlduDe = (n: number, ref: number) => (comMldu ? { n, ref } : undefined);
+  const grade = geracaoCaixa
+    ? `grid grid-cols-1 sm:grid-cols-2 ${comMldu ? "xl:grid-cols-4 lg:gap-4" : "lg:grid-cols-4"} gap-3`
+    : `grid grid-cols-1 sm:grid-cols-3 gap-3 ${comMldu ? "lg:gap-4" : ""}`;
 
   return (
     <div className="shrink-0 space-y-2">
-      <div className={`grid grid-cols-1 sm:grid-cols-3 gap-3 ${comMldu ? "lg:gap-4" : ""}`}>
+      <div className={grade}>
         <PeriodoKpiCard
           titulo="Entradas"
           legenda={legenda}
@@ -79,8 +82,8 @@ export function DfcFluxoCards({
           tipo="RESULTADO"
           mldu={mlduDe(liquidoMldu ?? 0, liquidoN1Mldu ?? 0)}
         />
+        {geracaoCaixa ? <GeracaoCaixaCard bloco={geracaoCaixa} comMldu={comMldu} /> : null}
       </div>
-      {geracaoCaixa ? <GeracaoCaixaCard bloco={geracaoCaixa} comMldu={comMldu} /> : null}
       <DesvioLegend />
     </div>
   );

@@ -81,7 +81,7 @@ export function PeriodoKpiCard({
   mldu?: { n: number; ref: number; nLabel?: string; refLabel?: string };
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 min-w-0 overflow-hidden" title={hint}>
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 min-w-0 overflow-hidden h-full" title={hint}>
       <div className="flex items-start justify-between gap-2 mb-1">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{titulo}</p>
