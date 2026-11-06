@@ -17,6 +17,7 @@ from app.api.deps import get_db, get_current_user, get_active_department
 from app.core.roles import is_gestor_user
 from app.models.forecast import Forecast
 from app.services.orcamento_dfc import montar_dfc, montar_dfc_comparativo, par_ids_forecast_dfc
+from app.services.geracao_caixa import payload_geracao_caixa
 from app.services.holding_consolidation import maybe_apply_holding_mldu
 from app.services.budget_shared import (
     merge_opcoes_produtos,
@@ -591,6 +592,18 @@ def get_orcamento_dfc(
         "versoes_disponiveis": _versoes_forecast_dfc(db, ano, dept.id),
         **arvore,
         "opcoes_produtos": opcoes_produtos,
+        "geracao_caixa": payload_geracao_caixa(
+            db,
+            ano=ano,
+            nodes=nodes_spec,
+            rec_n=rec_itens,
+            desp_n=desp_itens,
+            rec_n1=rec_itens_n1,
+            desp_n1=desp_itens_n1,
+            opcoes_produtos=opcoes_produtos,
+            ids_empresa=ids_empresa,
+            holding_mldu=holding_mldu,
+        ),
     }
     if holding_mldu:
         avisos = list(

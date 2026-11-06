@@ -68,6 +68,7 @@ def load_models():
         "phase_details",
         "revenue",
         "scenario",
+        "sienge_account_balance",
         "sienge_api_call",
         "sienge_colaborador",
         "snapshot",

@@ -190,7 +190,7 @@ Tela nova com orçado × realizado reusa `SemaforoDesvio` — não inventa limia
 
 ## 9. Geração de caixa (roll-forward)
 
-Travado em 2026-11-06. O card ainda não entra na tela.
+Travado em 2026-11-06. Card no DFC e no DFC gerencial. Snapshot 31/12 persiste no sync; o GET do DFC não chama o Sienge.
 
 Não é estoque 31/12 × 31/12 do Sienge, nem o DFC líquido sozinho, nem a página atual Geração de Caixa (receitas − despesas).
 

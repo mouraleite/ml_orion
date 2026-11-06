@@ -4,12 +4,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings, cors_allow_origins
 from app.api.routes import auth, users, governance, viabilities, curves, snapshots, actuals, documents, dashboard, orcamento_dfc_gerencial, orcamento_despesas_empreendimento, apoio, analysis, market_indices, tracking, tracking_dfc, sync, partnership, system, matriz_permissoes, tax_regimes, orcamentos, fechamento, forecasts, auditoria, integracao, migration, acompanhamento, sienge, access_profiles, holding
 from app.api.module_write_middleware import ModuleWriteMiddleware
-from app.db.database import init_db
+from app.db.database import engine, init_db, load_models
+from app.db.schema_patches import ensure_sienge_account_balances
 
 # Em desenvolvimento: create_all só cria tabelas faltantes (SQLite ou Postgres vazio).
-# Em production: schema via Alembic (alembic upgrade head); não roda create_all.
+# Em production: schema via Alembic; a tabela do card de caixa é criada se ainda não existir.
 if settings.ENVIRONMENT.strip().lower() not in ("production", "prod"):
     init_db()
+else:
+    load_models()
+    ensure_sienge_account_balances(engine)
 
 from app.core.scheduler import start_scheduler, stop_scheduler
 from app.db.audit_listener import setup_audit_listener

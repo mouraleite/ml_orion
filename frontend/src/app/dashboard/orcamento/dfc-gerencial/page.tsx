@@ -391,6 +391,7 @@ export default function OrcamentoDfcGerencialPage() {
           liquidoMldu={data?.liquido_real_mldu}
           liquidoN1Mldu={data?.liquido_n1_mldu}
           comMldu
+          geracaoCaixa={data?.geracao_caixa}
         />
       )}
 

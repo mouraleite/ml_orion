@@ -353,6 +353,7 @@ export default function OrcamentoDfcPage() {
           liquido={liquido}
           liquidoN1={liquidoN1}
           totalEntradas={data?.total_entradas}
+          geracaoCaixa={data?.geracao_caixa}
         />
       )}
 

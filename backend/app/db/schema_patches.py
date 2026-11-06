@@ -21,6 +21,78 @@ def _has_table(engine: Engine, table: str) -> bool:
     return table in inspect(engine).get_table_names()
 
 
+def _create_sienge_account_balances(conn, dialect: str) -> None:
+    if dialect == "sqlite":
+        conn.execute(
+            text(
+                """
+                CREATE TABLE sienge_account_balances (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    company_id_sienge VARCHAR NOT NULL,
+                    account_number VARCHAR NOT NULL,
+                    account_name VARCHAR,
+                    account_type VARCHAR(8) NOT NULL,
+                    balance_date DATE NOT NULL,
+                    amount FLOAT NOT NULL,
+                    synced_at DATETIME NOT NULL
+                )
+                """
+            )
+        )
+    else:
+        conn.execute(
+            text(
+                """
+                CREATE TABLE sienge_account_balances (
+                    id SERIAL PRIMARY KEY,
+                    company_id_sienge VARCHAR NOT NULL,
+                    account_number VARCHAR NOT NULL,
+                    account_name VARCHAR,
+                    account_type VARCHAR(8) NOT NULL,
+                    balance_date DATE NOT NULL,
+                    amount FLOAT NOT NULL,
+                    synced_at TIMESTAMP NOT NULL
+                )
+                """
+            )
+        )
+    conn.execute(
+        text(
+            "CREATE UNIQUE INDEX uq_sienge_account_balances_key "
+            "ON sienge_account_balances (company_id_sienge, account_number, balance_date)"
+        )
+    )
+    conn.execute(
+        text(
+            "CREATE INDEX ix_sienge_account_balances_company "
+            "ON sienge_account_balances (company_id_sienge)"
+        )
+    )
+    conn.execute(
+        text("CREATE INDEX ix_sienge_account_balances_type ON sienge_account_balances (account_type)")
+    )
+    conn.execute(
+        text("CREATE INDEX ix_sienge_account_balances_date ON sienge_account_balances (balance_date)")
+    )
+    conn.execute(
+        text(
+            "CREATE INDEX ix_sienge_account_balances_date_type "
+            "ON sienge_account_balances (balance_date, account_type)"
+        )
+    )
+    logger.info("schema_patches: criada tabela sienge_account_balances")
+
+
+def ensure_sienge_account_balances(engine: Engine) -> None:
+    """Tabela nova do card de caixa. Idempotente; seguro em production."""
+    if _has_table(engine, "sienge_account_balances"):
+        return
+    with engine.begin() as conn:
+        if _has_table(engine, "sienge_account_balances"):
+            return
+        _create_sienge_account_balances(conn, engine.dialect.name)
+
+
 def apply_schema_patches(engine: Engine) -> None:
     """Garante colunas/tabelas da Onda B (MLDU) sem falhar se já existirem."""
     dialect = engine.dialect.name
@@ -281,3 +353,6 @@ def apply_schema_patches(engine: Engine) -> None:
                     )
                 )
             logger.info("schema_patches: viabilities.obra_cost_center_id adicionada")
+
+        if not _has_table(engine, "sienge_account_balances"):
+            _create_sienge_account_balances(conn, dialect)

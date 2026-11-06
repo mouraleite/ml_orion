@@ -25,6 +25,7 @@ from app.services.budget_shared import (
     merge_opcoes_produtos,
 )
 from app.services.holding_consolidation import maybe_apply_holding_mldu
+from app.services.geracao_caixa import payload_geracao_caixa
 from app.services.orcamento_dfc_gerencial import AGRUPAMENTO_CENTRO, montar_dfc_gerencial
 
 router = APIRouter()
@@ -131,4 +132,19 @@ def get_orcamento_dfc_gerencial(
         **arvore,
         "opcoes_produtos": opcoes_produtos,
         "holding_avisos": avisos,
+        "geracao_caixa": payload_geracao_caixa(
+            db,
+            ano=ano,
+            nodes=nodes_spec,
+            rec_n=rec_itens,
+            desp_n=desp_itens,
+            rec_n1=rec_itens_n1,
+            desp_n1=desp_itens_n1,
+            opcoes_produtos=opcoes_produtos,
+            ids_empresa=ids_empresa,
+            rec_n_mldu=rec_mldu,
+            desp_n_mldu=desp_mldu,
+            rec_n1_mldu=rec_n1_mldu,
+            desp_n1_mldu=desp_n1_mldu,
+        ),
     }

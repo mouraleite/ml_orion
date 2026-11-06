@@ -83,6 +83,15 @@ def sync_all_sienge_data(db: Session, full_load: bool = False):
     print("Sincronizando Caixa e Bancos (BM-*)...")
     sync_bank_movements_batch(db, start_date, end_date, cost_centers=centros)
 
+    print("Sincronizando saldos de caixa 31/12 (B+I+C)...")
+    try:
+        from app.services.sienge_account_balances import persist_closed_year_balances
+
+        snap = persist_closed_year_balances(db)
+        print(f"[Sienge Sync] snapshot caixa: {snap}")
+    except Exception as e:
+        print(f"[Sienge Sync] Aviso: snapshot caixa não aplicado: {e}")
+
     # Ao final do sincronismo de centros de custo, sincroniza também os colaboradores
     print("Sincronizando Colaboradores (Credores) do Sienge...")
     sync_sienge_colaboradores(db)
