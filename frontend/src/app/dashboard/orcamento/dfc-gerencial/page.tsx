@@ -16,6 +16,7 @@ import {
   MATERIALITY_THRESHOLD,
   MESES_STR,
 } from "@/lib/orcamentoDesvioUi";
+import { tituloPeriodo } from "@/lib/periodosFpa";
 
 const MESES_LABEL = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 
@@ -25,8 +26,8 @@ type RefModo = "orcado" | "forecast";
 const SERIES: { key: SerieKey; label: string; short: string; locked?: boolean }[] = [
   { key: "real", label: "Real cheio", short: "Real", locked: true },
   { key: "real_mldu", label: "Real MLDU", short: "MLDU" },
-  { key: "n1", label: "Ano anterior cheio", short: "Ano anterior" },
-  { key: "n1_mldu", label: "Ano anterior MLDU", short: "Ano anterior MLDU" },
+  { key: "n1", label: tituloPeriodo("ly"), short: tituloPeriodo("ly") },
+  { key: "n1_mldu", label: `${tituloPeriodo("ly")} MLDU`, short: `${tituloPeriodo("ly")} MLDU` },
   { key: "ref", label: "Orçado cheio", short: "Orç" },
   { key: "ref_mldu", label: "Orçado MLDU", short: "Orç MLDU" },
 ];
@@ -395,14 +396,14 @@ export default function OrcamentoDfcGerencialPage() {
       {!loading && (
         <div className="shrink-0">
           <OrcamentoHeroStrip
-            refLabel={`Realizado ${ano - 1}`}
+            refLabel={tituloPeriodo("ly")}
             refVal={liquidoN1}
             realVal={liquido}
             varRs={varRs}
             varPerc={varPerc || 0}
             favoravel={favoravel}
             material={material}
-            refCaption="Caixa líquido cheio"
+            refCaption={`Caixa líquido ${ano - 1}`}
             caption={`Entradas ${formatMoedaCompact(data?.total_entradas || 0)} · Saídas ${formatMoedaCompact(saidas)} · MLDU ${formatMoedaCompact(data?.liquido_real_mldu || 0)} · AV sobre total de entradas`}
           />
         </div>

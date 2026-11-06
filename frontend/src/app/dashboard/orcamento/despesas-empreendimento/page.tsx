@@ -14,6 +14,12 @@ import {
   isDesvioFavoravel,
   MESES_STR,
 } from "@/lib/orcamentoDesvioUi";
+import {
+  PERIODOS_KPI,
+  hintPeriodo,
+  legendaPeriodo,
+  tituloPeriodo,
+} from "@/lib/periodosFpa";
 
 const MESES_LABEL = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
 const P_MAT = 5000;
@@ -195,12 +201,16 @@ function periodoVal(p: PeriodoVals | undefined, modo: OrcamentoModo, mldu: boole
 
 function PeriodoCard({
   titulo,
+  legenda,
+  hint,
   n,
   ref,
   nLabel,
   refLabel,
 }: {
   titulo: string;
+  legenda?: string;
+  hint?: string;
   n: number;
   ref: number;
   nLabel: string;
@@ -211,9 +221,14 @@ function PeriodoCard({
   const fav = isDesvioFavoravel(v, "DESPESAS");
   const varClass = fav ? "text-emerald-700" : "text-red-600";
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 min-w-0 overflow-hidden">
-      <div className="flex items-center justify-between gap-2 mb-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500 truncate">{titulo}</p>
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 min-w-0 overflow-hidden" title={hint}>
+      <div className="flex items-start justify-between gap-2 mb-2">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{titulo}</p>
+          {legenda ? (
+            <p className="text-[10px] text-slate-400 mt-0.5 tracking-normal">{legenda}</p>
+          ) : null}
+        </div>
         <Semaforo n={n} ref={ref} />
       </div>
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 items-baseline m-0">
@@ -500,7 +515,7 @@ export default function DespesasEmpreendimentoPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Análise de Orçamento</h1>
           <p className="text-slate-500 text-sm mt-1">
-            Real {ano} até o corte, forecast depois do corte, contra {modo === "forecast" ? "forecast" : "orçado"} {anoRef}.
+            YTD real {ano}, YTG forecast, FY contra {modo === "forecast" ? "forecast" : "orçado"} {anoRef}.
             Cheio e MLDU lado a lado. Despesa positiva.
           </p>
         </div>
@@ -569,19 +584,15 @@ export default function DespesasEmpreendimentoPage() {
       </div>
 
       {!loading && periodosFonte ? (
-        <div className="shrink-0 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {(["ano", "ytd", "ytg", "fy"] as Periodo[]).map((k) => {
-            const labels: Record<Periodo, string> = {
-              ano: `Ano ${ano} × ${anoRef}`,
-              ytd: `YTD (jan–${MESES_LABEL[corte - 1]})`,
-              ytg: corte >= 12 ? "YTG (sem meses)" : `YTG (${MESES_LABEL[corte]}–dez)`,
-              fy: "FY (YTD + YTG)",
-            };
+        <div className="shrink-0 grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {PERIODOS_KPI.map((k) => {
             const pv = periodoVal(periodosFonte[k], modo, false);
             return (
               <PeriodoCard
                 key={k}
-                titulo={labels[k]}
+                titulo={tituloPeriodo(k)}
+                legenda={legendaPeriodo(k, corte)}
+                hint={hintPeriodo(k)}
                 n={pv.n}
                 ref={pv.ref}
                 nLabel={nLabel}

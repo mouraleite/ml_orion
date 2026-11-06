@@ -121,6 +121,7 @@ A faixa **Referência | Variação | Realizado** + a frase de leitura executiva.
 
 - “Requer atenção”, “Favorável”, “Neutro” — manter.
 - “Comparar com: Orçado | Forecast” — manter.
+- Recorte de ano civil: **YTD**, **YTG**, **FY**, **LY**. Título = a sigla; meses na legenda. Ver §6.
 - Não vender (“Cérebro da Holding”, “insights poderosos”). Frase curta: o que desviou e onde.
 
 ---
@@ -131,3 +132,26 @@ Chrome entregue nas duas telas do escopo. Sem mudança de cálculo, drill ou log
 
 1. **Resumo geral** — hero Ref | Δ | Realizado; despesas/receitas/VGV secundários; unidades/ticket como apoio; uma barra de filtros.
 2. **Orçado × Realizado** — departamento, ano e meses na mesma barra; produto/plano/empresa no painel colapsável; assinatura acima da dobra; analítica intacta.
+
+---
+
+## 6. Recortes de período (padrão)
+
+Em tela de ano civil, estas siglas são o vocabulário do produto. Helper: `frontend/src/lib/periodosFpa.ts`.
+
+| Sigla | Significado | Quando |
+|---|---|---|
+| **YTD** | realizado até o corte | jan → mês de corte |
+| **YTG** | restante do ano | depois do corte |
+| **FY** | ano cheio = YTD + YTG | mix de 12 meses |
+| **LY** | ano anterior | só se a série existir |
+
+```text
+❌ Quarto card "Ano" duplicando FY
+❌ YTD (jan–set) no título — meses vão na legenda
+❌ Chamar de FY o "cheio" (100% vs MLDU)
+❌ FY em tracking "vida do projeto" ou DFC mensal filtrado
+✅ Linha de KPI: YTD · YTG · FY
+✅ Série do ano passado: LY
+✅ Tela nova de ano civil reusa periodosFpa.ts
+```

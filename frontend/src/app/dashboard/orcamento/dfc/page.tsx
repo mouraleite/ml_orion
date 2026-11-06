@@ -14,6 +14,7 @@ import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
 import { useEmpresaCadastroFilter } from "@/hooks/useEmpresaCadastroFilter";
 import { formatMoedaCompact, formatPerc, isDesvioFavoravel, MATERIALITY_THRESHOLD } from "@/lib/orcamentoDesvioUi";
 import { DfcComparativoPanel } from "@/components/orcamento/DfcComparativoPanel";
+import { tituloPeriodo } from "@/lib/periodosFpa";
 
 const MESES_STR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"] as const;
 const MESES_LABEL = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
@@ -22,7 +23,7 @@ type SerieKey = "real" | "n1" | "orcado" | "forecast";
 
 const SERIES: { key: SerieKey; label: string; short: string; locked?: boolean }[] = [
   { key: "real", label: "Realizado", short: "Real", locked: true },
-  { key: "n1", label: "Ano anterior", short: "Ano anterior" },
+  { key: "n1", label: tituloPeriodo("ly"), short: tituloPeriodo("ly") },
   { key: "orcado", label: "Orçado", short: "Orç" },
   { key: "forecast", label: "Forecast", short: "FCST" },
 ];
@@ -360,14 +361,14 @@ export default function OrcamentoDfcPage() {
       {!loading && (
         <div className="shrink-0">
         <OrcamentoHeroStrip
-          refLabel={`Realizado ${ano - 1}`}
+          refLabel={tituloPeriodo("ly")}
           refVal={liquidoN1}
           realVal={liquido}
           varRs={varRs}
           varPerc={varPerc || 0}
           favoravel={favoravel}
           material={material}
-          refCaption="Caixa líquido"
+          refCaption={`Caixa líquido ${ano - 1}`}
           caption={`Entradas ${formatMoedaCompact(data?.total_entradas || 0)} · Saídas ${formatMoedaCompact(saidas)} · AV sobre total de entradas`}
         />
         </div>
