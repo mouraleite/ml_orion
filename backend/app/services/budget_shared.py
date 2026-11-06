@@ -21,6 +21,10 @@ from app.models.financial_plan import FinancialPlan
 from app.models.forecast import Forecast, ForecastItem, ForecastVendaItem
 from app.models.orcamento import Orcamento, OrcamentoItem, OrcamentoVendaItem
 from app.models.payment_plan import PaymentPlan
+from app.services.id_sienge import (
+    expand_ids_sienge_primeiro,
+    mapa_nome_sienge_primeiro,
+)
 from app.services.periodos import MESES_STR, soma_meses_obj
 from app.services.sharepoint_departamento import (
     fix_forecasts_sharepoint_sem_departamento,
@@ -29,15 +33,18 @@ from app.services.sharepoint_departamento import (
 LOCK_SECONDS = 1800
 
 
+def _empresa_nome(e) -> str:
+    return e.nome_fantasia or e.razao_social or f"Empresa {e.id}"
+
+
+def empresas_nome_por_id(companies: Iterable) -> dict[str, str]:
+    """Mapa id → nome. O id Sienge ganha do PK interno no mesmo número."""
+    return mapa_nome_sienge_primeiro(companies, _empresa_nome)
+
+
 def build_empresas_map(db: Session) -> dict[str, str]:
-    """Mapa id Sienge (e fallback id interno) → nome exibível."""
-    result: dict[str, str] = {}
-    for e in db.query(Company).all():
-        nome = e.nome_fantasia or e.razao_social or f"Empresa {e.id}"
-        if e.id_sienge:
-            result[str(e.id_sienge)] = nome
-        result[str(e.id)] = nome
-    return result
+    """Mapa id Sienge → nome. PK interno do cadastro não entra."""
+    return empresas_nome_por_id(db.query(Company).all())
 
 
 def build_opcoes_produtos(produtos: Sequence, empresas_map: dict[str, str]) -> list[dict]:
@@ -100,21 +107,14 @@ def filter_itens_por_empresa_ids(
     return [i for i in itens if i.get("produto_id") in allowed]
 
 
+def expand_empresa_ids(companies: Iterable, empresa_ids: Sequence[str] | None) -> list[str]:
+    """Normaliza o filtro para o ID Sienge da empresa."""
+    return expand_ids_sienge_primeiro(companies, empresa_ids)
+
+
 def expand_empresa_filter_ids(db: Session, empresa_ids: Sequence[str] | None) -> list[str]:
-    """Inclui id Sienge e id interno da mesma empresa, para o recorte achar o cadastro."""
-    wanted = {str(e).strip() for e in (empresa_ids or []) if str(e).strip()}
-    if not wanted:
-        return []
-    numeric = [int(x) for x in wanted if x.isdigit()]
-    clauses = [Company.id_sienge.in_(list(wanted))]
-    if numeric:
-        clauses.append(Company.id.in_(numeric))
-    from sqlalchemy import or_
-    for c in db.query(Company).filter(or_(*clauses)).all():
-        if c.id_sienge:
-            wanted.add(str(c.id_sienge))
-        wanted.add(str(c.id))
-    return list(wanted)
+    """Filtro de empresa no ID Sienge (igual ao cadastro do Sienge)."""
+    return expand_empresa_ids(db.query(Company).all(), empresa_ids)
 
 
 def build_opcoes_planos(planos: Sequence, *, nome_attr: str = "name") -> list[dict]:

@@ -1,4 +1,5 @@
 import { parseCentroNome } from "@/lib/parseCentroNome";
+import { idPublicoSienge, idsPublicosCentro } from "./idSienge";
 
 export type SelectOption = { value: string; label: string };
 
@@ -52,24 +53,7 @@ const EMPTY: GridFilterOptionsResult = {
   empresasNome: [],
 };
 
-/** Mapa id Sienge (e id interno) → nome — espelha build_empresas_map do backend. */
-export function buildEmpresasMapFromCadastro(
-  empresas: Array<{
-    id?: string | number | null;
-    db_id?: number | null;
-    nomeFantasia?: string | null;
-    razaoSocial?: string | null;
-  }>,
-): Map<string, string> {
-  const map = new Map<string, string>();
-  for (const e of empresas) {
-    const nome = e.nomeFantasia || e.razaoSocial || "";
-    if (!nome) continue;
-    if (e.id != null && e.id !== "") map.set(String(e.id), nome);
-    if (e.db_id != null) map.set(String(e.db_id), nome);
-  }
-  return map;
-}
+export { empresasNomePorId as buildEmpresasMapFromCadastro } from "./empresasNomePorId";
 
 /** Resolve nome_empresa pelo cadastro de Apoio (Company), como no orçamento de despesas. */
 export function enrichProdutosComEmpresaCadastro<
@@ -119,9 +103,9 @@ export function buildGridFilterOptions(
     planosList = data.opcoes_planos.filter((p) => planosComData.has(p.id));
   }
 
-  const centrosId = Array.from(
-    new Set(produtosList.map((p) => p.id_sienge || String(p.id))),
-  ).sort((a, b) => Number(a) - Number(b));
+  const centrosId = idsPublicosCentro(produtosList).sort(
+    (a, b) => Number(a) - Number(b),
+  );
   const produtos = Array.from(
     new Set(produtosList.map((p) => parseCentroNome(p.nome).produto)),
   );
@@ -155,7 +139,7 @@ export function filterLinhasMensais<T extends { produto_id: number; plano_financ
     if (
       filters.filtroIdCentro.length > 0 &&
       produtoInfo &&
-      !filters.filtroIdCentro.includes(produtoInfo.id_sienge || String(produtoInfo.id))
+      !filters.filtroIdCentro.includes(idPublicoSienge(produtoInfo))
     ) {
       return false;
     }

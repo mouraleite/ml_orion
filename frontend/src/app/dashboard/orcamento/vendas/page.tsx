@@ -24,6 +24,7 @@ import {
   type MonthlyGridFilterValues,
 } from "@/components/shared/MonthlyGridFilterPanel";
 import { buildEmpresaLinkedOptions } from "@/lib/gridFilters";
+import { idPublicoSienge, idsPublicosCentro } from "@/lib/idSienge";
 import { YearSelect } from "@/components/shared/YearSelect";
 import { HoldingMlduBanner } from "@/components/shared/HoldingMlduBanner";
 import { useHoldingMldu } from "@/hooks/useHoldingMldu";
@@ -366,7 +367,7 @@ export default function OrcamentoVendasPage() {
 
   const filtroOpcoes = useMemo(() => {
     if (!data) return { centrosId: [], produtos: [], planos: [], empresasId: [], empresasNome: [] };
-    const centrosId = Array.from(new Set(data.opcoes_produtos.map(p => p.id_sienge || String(p.id)))).sort((a, b) => Number(a) - Number(b));
+    const centrosId = idsPublicosCentro(data.opcoes_produtos).sort((a, b) => Number(a) - Number(b));
     const produtos = Array.from(new Set(data.opcoes_produtos.map(p => parseCentroNome(p.nome).produto)));
     const plans = Array.from(new Set(data.opcoes_planos.map(p => p.nome)));
     const empresas = buildEmpresaLinkedOptions(data.opcoes_produtos);
@@ -423,7 +424,7 @@ export default function OrcamentoVendasPage() {
       const nomeCompleto = produtoInfo ? `${produtoInfo.id_sienge || ""} - ${produtoInfo.nome}` : "";
       
       if (busca && !nomeCompleto.toLowerCase().includes(busca.toLowerCase())) return false;
-      if (filtroIdCentro.length > 0 && produtoInfo && !filtroIdCentro.includes(produtoInfo.id_sienge || String(produtoInfo.id))) return false;
+      if (filtroIdCentro.length > 0 && produtoInfo && !filtroIdCentro.includes(idPublicoSienge(produtoInfo))) return false;
       if (filtroProduto.length > 0 && produtoInfo && !filtroProduto.includes(parseCentroNome(produtoInfo.nome).produto)) return false;
       if (filtroPlano.length > 0 && planoInfo && !filtroPlano.includes(planoInfo.nome)) return false;
       if (filtroEmpresaIds.length > 0 && produtoInfo && !filtroEmpresaIds.includes(produtoInfo.id_empresa || '')) return false;

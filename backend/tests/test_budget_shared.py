@@ -264,6 +264,24 @@ def test_dedupe_carga_inicial_sienge_vira_orcamento_unico():
     assert out[0]["id"] == "OC_Carga Inicial Sienge 2026"
 
 
+def _db_with_companies(companies):
+    class _Q:
+        def __init__(self, items):
+            self._items = items
+
+        def all(self):
+            return self._items
+
+        def filter(self, *args, **kwargs):
+            return self
+
+    class _Db:
+        def query(self, _model):
+            return _Q(companies)
+
+    return _Db()
+
+
 def test_build_empresas_map_usa_id_sienge():
     from app.services.budget_shared import build_empresas_map, build_opcoes_produtos
 
@@ -272,20 +290,11 @@ def test_build_empresas_map_usa_id_sienge():
         SimpleNamespace(id=101, id_sienge="1", nome_fantasia="MLDU", razao_social="ML"),
     ]
 
-    class _Q:
-        def __init__(self, items):
-            self._items = items
-
-        def all(self):
-            return self._items
-
-    class _Db:
-        def query(self, _model):
-            return _Q(companies)
-
-    empresas_map = build_empresas_map(_Db())  # type: ignore[arg-type]
+    empresas_map = build_empresas_map(_db_with_companies(companies))  # type: ignore[arg-type]
     assert empresas_map["12"] == "Ellenco"
     assert empresas_map["1"] == "MLDU"
+    assert "100" not in empresas_map
+    assert "101" not in empresas_map
 
     produto = SimpleNamespace(
         id=1,
@@ -296,6 +305,62 @@ def test_build_empresas_map_usa_id_sienge():
     opcoes = build_opcoes_produtos([produto], empresas_map)
     assert opcoes[0]["id_empresa"] == "12"
     assert opcoes[0]["nome_empresa"] == "Ellenco"
+
+
+def test_build_empresas_map_id_interno_nao_sobrescreve_sienge_de_outra():
+    """PK 32 da Terras de Itu não pode assumir o Sienge 32 do Novo Horizonte."""
+    from app.services.budget_shared import build_empresas_map, build_opcoes_produtos
+
+    companies = [
+        SimpleNamespace(id=4, id_sienge="32", nome_fantasia="NOVO HORIZONTE", razao_social="NH"),
+        SimpleNamespace(id=32, id_sienge="4", nome_fantasia="TERRAS DE ITU", razao_social="TI"),
+    ]
+    empresas_map = build_empresas_map(_db_with_companies(companies))  # type: ignore[arg-type]
+    assert empresas_map["4"] == "TERRAS DE ITU"
+    assert empresas_map["32"] == "NOVO HORIZONTE"
+    assert set(empresas_map) == {"4", "32"}
+
+    produtos = [
+        SimpleNamespace(
+            id=70,
+            nome="CORPORATIVO - TERRAS DE ITU",
+            id_sienge="70400",
+            custom_data={"__id_empresa": "4", "__nome_empresa": "cache"},
+        ),
+        SimpleNamespace(
+            id=27,
+            nome="CORPORATIVO - NOVO HORIZONTE",
+            id_sienge="73200",
+            custom_data={"__id_empresa": "32", "__nome_empresa": "cache"},
+        ),
+    ]
+    opcoes = build_opcoes_produtos(produtos, empresas_map)
+    by_id = {p["id"]: p for p in opcoes}
+    assert by_id[70]["nome_empresa"] == "TERRAS DE ITU"
+    assert by_id[27]["nome_empresa"] == "NOVO HORIZONTE"
+
+
+def test_expand_empresa_filter_ids_nao_mistura_empresas_com_ids_cruzados():
+    from app.services.budget_shared import expand_empresa_filter_ids
+
+    companies = [
+        SimpleNamespace(id=4, id_sienge="32", nome_fantasia="NOVO HORIZONTE", razao_social="NH"),
+        SimpleNamespace(id=32, id_sienge="4", nome_fantasia="TERRAS DE ITU", razao_social="TI"),
+    ]
+    db = _db_with_companies(companies)
+    assert set(expand_empresa_filter_ids(db, ["4"])) == {"4"}  # type: ignore[arg-type]
+    assert set(expand_empresa_filter_ids(db, ["32"])) == {"32"}  # type: ignore[arg-type]
+
+
+def test_expand_empresa_filter_ids_devolve_so_id_sienge():
+    from app.services.budget_shared import expand_empresa_filter_ids
+
+    companies = [
+        SimpleNamespace(id=100, id_sienge="12", nome_fantasia="Ellenco", razao_social="Ellenco SA"),
+    ]
+    db = _db_with_companies(companies)
+    assert set(expand_empresa_filter_ids(db, ["12"])) == {"12"}  # type: ignore[arg-type]
+    assert set(expand_empresa_filter_ids(db, ["100"])) == {"12"}  # type: ignore[arg-type]
 
 
 def test_filter_itens_por_empresa_ids_recorta_pelo_id_do_cadastro():

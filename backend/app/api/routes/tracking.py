@@ -31,6 +31,7 @@ from app.services.realizado_sienge import (
 
 from app.services.math_engine import calculate_viability_results
 from app.services.viabilidade_obra import ids_centros_produtos_acompanhados, land_bank_oculto_por_obra
+from app.services.id_sienge import get_by_sienge_or_pk
 from app.services.tracking_impostos import (
     aliquotas_lucro_presumido,
     lancar_tributos_no_fluxo,
@@ -2862,17 +2863,7 @@ def _get_tracking_details_logic(db, id: str, view_mode: str = 'consolidado'):
 
             macro_prefix, cc_id = raw_id.split("_slice_")
 
-            native_cc = db.query(CostCenter).filter(CostCenter.id_sienge == cc_id).first()
-
-            if not native_cc:
-
-                try:
-
-                    native_cc = db.query(CostCenter).filter(CostCenter.id == int(cc_id)).first()
-
-                except:
-
-                    pass
+            native_cc = get_by_sienge_or_pk(db, CostCenter, cc_id)
 
             ccs = [native_cc] if native_cc else []
 
@@ -2988,7 +2979,7 @@ def _get_tracking_details_logic(db, id: str, view_mode: str = 'consolidado'):
 
                 cc_id_int = -1
 
-            native_cc = db.query(CostCenter).filter(or_(CostCenter.id_sienge == cc_id, CostCenter.id == cc_id_int)).first()
+            native_cc = get_by_sienge_or_pk(db, CostCenter, cc_id)
 
             if native_cc:
 
@@ -3322,7 +3313,7 @@ def _get_tracking_details_logic(db, id: str, view_mode: str = 'consolidado'):
 
         if is_slice:
 
-                slice_cc = db.query(CostCenter).filter(CostCenter.id_sienge == cc_id).first()
+                slice_cc = get_by_sienge_or_pk(db, CostCenter, cc_id)
 
                 slice_pct = 1.0
 

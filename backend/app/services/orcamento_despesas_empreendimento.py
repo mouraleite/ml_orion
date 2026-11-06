@@ -313,7 +313,7 @@ def montar_despesas_empreendimento(
             _row(
                 kind="empresa",
                 id=f"e|{emp_id}",
-                codigo="",
+                codigo="" if emp_id == "_sem" else emp_id,
                 descricao=emp_nome,
                 amounts=emp_tot,
                 corte=corte_ok,

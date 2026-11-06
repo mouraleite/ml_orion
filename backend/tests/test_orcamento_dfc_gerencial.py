@@ -159,6 +159,7 @@ class TestAgrupamento:
         )
         nomes = [e["descricao"] for e in ger["empresas"]]
         assert nomes == ["SPE Alpha", "SPE Gama"]
+        assert [e["codigo"] for e in ger["empresas"]] == ["10", "20"]
         alpha = ger["empresas"][0]
         cats = {c["codigo"]: c for c in alpha["filhos"]}
         receitas = cats["01.01"]

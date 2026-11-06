@@ -172,6 +172,24 @@ class TestMontagem:
         assert plano["meses_n"]["out"] == 40.0
         assert plano["meses_orcado"]["jan"] == 80.0
 
+    def test_amarra_empresa_por_id_mesmo_quando_o_nome_repete(self):
+        opcoes = [
+            {"id": 1, "nome": "CC A", "id_empresa": "4", "nome_empresa": "TERRAS DE ITU"},
+            {"id": 2, "nome": "CC B", "id_empresa": "32", "nome_empresa": "TERRAS DE ITU"},
+        ]
+        desp_n = [
+            _item(20, 1, realizado={"jan": 10.0}),
+            _item(20, 2, realizado={"jan": 20.0}),
+        ]
+        desp_ref = [
+            _item(20, 1, orcado={"jan": 10.0}),
+            _item(20, 2, orcado={"jan": 20.0}),
+        ]
+        out = montar_despesas_empreendimento(_nodes(), desp_n, desp_n, desp_ref, desp_ref, opcoes, corte=9)
+        assert {e["empresa_id"] for e in out["empresas"]} == {"4", "32"}
+        assert {e["codigo"] for e in out["empresas"]} == {"4", "32"}
+        assert len(out["empresas"]) == 2
+
     def test_forecast_n1_nao_mistura_com_mix(self):
         desp_n, desp_ref = _base()
         out = montar_despesas_empreendimento(_nodes(), desp_n, desp_n, desp_ref, desp_ref, _opcoes(), corte=9)

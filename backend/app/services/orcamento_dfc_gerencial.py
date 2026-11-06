@@ -303,7 +303,7 @@ def _empresa_row(
     return _row(
         kind="empresa",
         id=f"e|{emp_id}",
-        codigo="",
+        codigo="" if emp_id == "_sem" else emp_id,
         descricao=emp_nome,
         amounts=totals,
         meses=meses,

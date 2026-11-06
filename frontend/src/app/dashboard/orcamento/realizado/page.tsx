@@ -17,6 +17,7 @@ import {
   buildEmpresasMapFromCadastro,
   enrichProdutosComEmpresaCadastro,
 } from "@/lib/gridFilters";
+import { idsPublicosCentro } from "@/lib/idSienge";
 import { HoldingMlduBanner } from "@/components/shared/HoldingMlduBanner";
 import { useHoldingMldu } from "@/hooks/useHoldingMldu";
 import { useActiveDepartmentId } from "@/lib/useActiveDepartmentId";
@@ -4404,10 +4405,15 @@ export default function RealizadoPage() {
     const produtosAtivos = (data.opcoes_produtos || []).filter((p: any) => produtosComData.has(p.id));
     const planosAtivos = (data.opcoes_planos || []).filter((p: any) => planosComData.has(p.id));
 
-    const centrosId = Array.from(new Set(produtosAtivos.map((p: any) => {
-      const cc = baseCC.find((c: any) => c.db_id === p.id);
-      return cc?.id ? String(cc.id) : String(p.id_sienge || p.id);
-    }))).sort((a, b) => Number(a) - Number(b));
+    const centrosId = idsPublicosCentro(
+      produtosAtivos.map((p: any) => {
+        const cc = baseCC.find((c: any) => c.db_id === p.id);
+        return {
+          id: p.id,
+          id_sienge: p.id_sienge || (cc?.id != null ? String(cc.id) : null),
+        };
+      }),
+    ).sort((a, b) => Number(a) - Number(b));
     const produtos = Array.from(new Set(produtosAtivos.map((p: any) => parseCentroNome(p.nome).produto)));
     const plans = Array.from(new Set(planosAtivos.map((p: any) => p.nome)));
     const produtosComEmpresa = produtosAtivos.map((p: any) => {
