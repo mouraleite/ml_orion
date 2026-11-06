@@ -2,8 +2,8 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronRight } from "lucide-react";
 import { getDespesasEmpreendimento } from "@/services/orcamentoDespesasEmpreendimento";
+import { GROW_TREE_NAME_TH_CLASS, GROW_TREE_PAGE_CLASS, GrowTreeChevron, GrowTreeNameCell, GrowTreeSheet } from "@/components/shared/GrowTreeSheet";
 import { useActiveDepartmentId, isDepartmentContextId } from "@/lib/useActiveDepartmentId";
 import { OrcamentoFlyoutFilterBar, type OrcamentoModo } from "@/components/orcamento/OrcamentoFlyoutFilterBar";
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
@@ -11,7 +11,6 @@ import { useEmpresaCadastroFilter } from "@/hooks/useEmpresaCadastroFilter";
 import {
   formatMoedaCompact,
   formatPerc,
-  isDesvioFavoravel,
   MESES_STR,
 } from "@/lib/orcamentoDesvioUi";
 import {
@@ -20,11 +19,12 @@ import {
   legendaPeriodo,
   tituloPeriodo,
 } from "@/lib/periodosFpa";
+import { varPercDesvio } from "@/lib/semaforoDesvio";
+import { DesvioLegend } from "@/components/orcamento/DesvioLegend";
+import { PeriodoKpiCard } from "@/components/orcamento/PeriodoKpiCard";
+import { SemaforoDesvio } from "@/components/orcamento/SemaforoDesvio";
 
 const MESES_LABEL = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-const P_MAT = 5000;
-const P_TOL = 0.05;
-const P_LIM = 0.10;
 
 type Periodo = "ano" | "ytd" | "ytg" | "fy";
 type SerieKey = "n" | "n_mldu" | "ref" | "ref_mldu";
@@ -75,29 +75,6 @@ function Num({ v }: { v: number }) {
 function Perc({ v }: { v: number | null }) {
   if (v == null) return <span className="text-slate-300">—</span>;
   return <span className={`tabular-nums ${v < 0 ? "text-red-600" : "text-slate-700"}`}>{formatPerc(v)}</span>;
-}
-
-function varPerc(n: number, ref: number): number | null {
-  if (Math.abs(ref) < 1e-12) return Math.abs(n) > 1e-12 ? 1 : null;
-  return (n - ref) / Math.abs(ref);
-}
-
-function semaforo(n: number, ref: number) {
-  const v = n - ref;
-  if (Math.abs(ref) < 1e-12 && Math.abs(n) > 1e-12) {
-    return { cor: "bg-sky-500", titulo: "Novo" };
-  }
-  if (Math.abs(v) < P_MAT) return { cor: "bg-slate-300", titulo: "Imaterial" };
-  const p = Math.abs(varPerc(n, ref) || 0);
-  const fav = isDesvioFavoravel(v, "DESPESAS");
-  if (fav || p <= P_TOL) return { cor: "bg-emerald-500", titulo: fav ? "Favorável" : "Dentro da tolerância" };
-  if (p <= P_LIM) return { cor: "bg-amber-400", titulo: "Atenção" };
-  return { cor: "bg-red-500", titulo: "Acima do limite" };
-}
-
-function Semaforo({ n, ref }: { n: number; ref: number }) {
-  const s = semaforo(n, ref);
-  return <span title={s.titulo} className={`inline-block w-2 h-2 rounded-full ${s.cor}`} />;
 }
 
 function refMes(row: EmpRow, modo: OrcamentoModo, mldu: boolean, mes?: string) {
@@ -199,57 +176,6 @@ function periodoVal(p: PeriodoVals | undefined, modo: OrcamentoModo, mldu: boole
   return { n, ref };
 }
 
-function PeriodoCard({
-  titulo,
-  legenda,
-  hint,
-  n,
-  ref,
-  nLabel,
-  refLabel,
-}: {
-  titulo: string;
-  legenda?: string;
-  hint?: string;
-  n: number;
-  ref: number;
-  nLabel: string;
-  refLabel: string;
-}) {
-  const v = n - ref;
-  const p = varPerc(n, ref);
-  const fav = isDesvioFavoravel(v, "DESPESAS");
-  const varClass = fav ? "text-emerald-700" : "text-red-600";
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 min-w-0 overflow-hidden" title={hint}>
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{titulo}</p>
-          {legenda ? (
-            <p className="text-[10px] text-slate-400 mt-0.5 tracking-normal">{legenda}</p>
-          ) : null}
-        </div>
-        <Semaforo n={n} ref={ref} />
-      </div>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 items-baseline m-0">
-        <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{nLabel}</dt>
-        <dd className="m-0 text-lg font-bold tabular-nums text-slate-900 text-right whitespace-nowrap">
-          <Num v={n} />
-        </dd>
-        <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">{refLabel}</dt>
-        <dd className="m-0 text-sm font-semibold tabular-nums text-slate-700 text-right whitespace-nowrap">
-          <Num v={ref} />
-        </dd>
-        <dt className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Var</dt>
-        <dd className={`m-0 text-sm font-semibold tabular-nums text-right whitespace-nowrap ${varClass}`}>
-          <Num v={v} />
-          <span className="ml-2"><Perc v={p} /></span>
-        </dd>
-      </dl>
-    </div>
-  );
-}
-
 function Line({
   row,
   expanded,
@@ -278,15 +204,8 @@ function Line({
   const bg = isEmp ? "bg-slate-50" : isGrupo ? "bg-white" : "bg-slate-50/70";
   return (
     <tr className={`${bg} hover:bg-slate-50`}>
-      <td className={`sticky left-0 z-10 px-3 py-2.5 border-b border-slate-100 min-w-[360px] w-[360px] ${bg}`}>
-        <div className="flex items-start gap-1.5" style={{ paddingLeft: indent * 20 }}>
-          {hasKids ? (
-            <button type="button" onClick={onToggle} className="p-0.5 rounded hover:bg-slate-200 mt-0.5 shrink-0">
-              {expanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-500" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-500" />}
-            </button>
-          ) : (
-            <span className="w-4 shrink-0" />
-          )}
+      <GrowTreeNameCell indent={indent} bg={bg}>
+          <GrowTreeChevron open={expanded} visible={hasKids} onClick={onToggle} />
           <span className={`font-mono text-xs text-slate-400 w-14 shrink-0 mt-0.5 ${isGrupo ? "" : "opacity-80"}`}>{row.codigo}</span>
           {clickCentro && row.kind === "centro" && onOpenCentro ? (
             <button type="button" onClick={onOpenCentro} className="text-sm text-ml-green font-semibold hover:underline text-left leading-snug">
@@ -297,8 +216,7 @@ function Line({
               {row.descricao}
             </span>
           )}
-        </div>
-      </td>
+      </GrowTreeNameCell>
       {MESES_STR.map((m, mi) => {
         const n = serieValue(row, "n", modo, m);
         const ref = serieValue(row, "ref", modo, m);
@@ -320,7 +238,7 @@ function Line({
             {active.includes("n") && active.includes("ref") ? (
               <td className="px-1.5 py-2 border-b border-slate-100 text-right text-[11px] whitespace-nowrap">
                 <span className="inline-flex items-center justify-end gap-1">
-                  <Semaforo n={n} ref={ref} />
+                  <SemaforoDesvio n={n} ref={ref} tipo="DESPESAS" />
                   <Num v={n - ref} />
                 </span>
               </td>
@@ -337,7 +255,10 @@ function Line({
             ) : null}
             {showMldu && active.includes("n_mldu") && active.includes("ref_mldu") ? (
               <td className="px-1.5 py-2 border-b border-slate-100 text-right text-[11px] whitespace-nowrap">
-                <Num v={nM - refM} />
+                <span className="inline-flex items-center justify-end gap-1">
+                  <SemaforoDesvio n={nM} ref={refM} tipo="DESPESAS" />
+                  <Num v={nM - refM} />
+                </span>
               </td>
             ) : null}
           </React.Fragment>
@@ -364,7 +285,7 @@ function Line({
             {active.includes("n") && active.includes("ref") ? (
               <td className="px-1.5 py-2 border-b border-slate-100 text-right text-[11px] font-semibold whitespace-nowrap bg-slate-50/80">
                 <span className="inline-flex items-center justify-end gap-1">
-                  <Semaforo n={n} ref={ref} />
+                  <SemaforoDesvio n={n} ref={ref} tipo="DESPESAS" />
                   <Num v={n - ref} />
                 </span>
               </td>
@@ -381,14 +302,17 @@ function Line({
             ) : null}
             {showMldu && active.includes("n_mldu") && active.includes("ref_mldu") ? (
               <td className="px-1.5 py-2 border-b border-slate-100 text-right text-[11px] font-semibold whitespace-nowrap bg-slate-50/80">
-                <Num v={nM - refM} />
+                <span className="inline-flex items-center justify-end gap-1">
+                  <SemaforoDesvio n={nM} ref={refM} tipo="DESPESAS" />
+                  <Num v={nM - refM} />
+                </span>
               </td>
             ) : null}
           </React.Fragment>
         );
       })}
       <td className="px-2 py-2 border-b border-slate-100 text-right text-xs whitespace-nowrap border-l border-slate-200">
-        <Perc v={varPerc(serieValue(row, "n", modo), serieValue(row, "ref", modo))} />
+        <Perc v={varPercDesvio(serieValue(row, "n", modo), serieValue(row, "ref", modo))} />
       </td>
     </tr>
   );
@@ -510,7 +434,7 @@ export default function DespesasEmpreendimentoPage() {
   );
 
   return (
-    <div className="flex flex-col min-w-0 gap-4 pb-8">
+    <div className={GROW_TREE_PAGE_CLASS}>
       <div className="shrink-0 space-y-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Análise de Orçamento</h1>
@@ -588,7 +512,7 @@ export default function DespesasEmpreendimentoPage() {
           {PERIODOS_KPI.map((k) => {
             const pv = periodoVal(periodosFonte[k], modo, false);
             return (
-              <PeriodoCard
+              <PeriodoKpiCard
                 key={k}
                 titulo={tituloPeriodo(k)}
                 legenda={legendaPeriodo(k, corte)}
@@ -597,14 +521,17 @@ export default function DespesasEmpreendimentoPage() {
                 ref={pv.ref}
                 nLabel={nLabel}
                 refLabel={refLabel}
+                tipo="DESPESAS"
               />
             );
           })}
         </div>
       ) : null}
+      {!loading && periodosFonte ? <DesvioLegend className="shrink-0" /> : null}
 
-      <div className="flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm min-h-[28rem]">
-        <div className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-100 bg-white rounded-t-2xl">
+      <GrowTreeSheet
+        toolbar={
+          <>
           <h2 className="font-bold text-slate-700">
             {drill ? (
               <span className="flex items-center gap-2">
@@ -644,16 +571,16 @@ export default function DespesasEmpreendimentoPage() {
             <button type="button" onClick={() => setExpanded(new Set(collectIds(raiz, intoPlanos)))} className="text-xs font-semibold text-ml-green hover:underline ml-2">Expandir</button>
             <button type="button" onClick={() => setExpanded(new Set(raiz.map((e) => e.id)))} className="text-xs font-semibold text-slate-500 hover:underline">Recolher</button>
           </div>
-        </div>
-
+          </>
+        }
+      >
         {loading ? (
           <div className="p-6"><AppLoadingState /></div>
         ) : (
-          <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[2200px]">
               <thead className="sticky top-0 z-20 bg-white">
                 <tr className="text-[10px] uppercase tracking-wider text-slate-400">
-                  <th rowSpan={2} className="sticky left-0 z-40 bg-white text-left px-3 py-2 font-semibold border-b border-slate-200 align-bottom min-w-[360px] w-[360px]">
+                  <th rowSpan={2} className={GROW_TREE_NAME_TH_CLASS}>
                     {drill ? "Grupo / Plano" : "Empresa / Grupo / Empreendimento"}
                   </th>
                   {MESES_LABEL.map((m, i) => (
@@ -728,9 +655,8 @@ export default function DespesasEmpreendimentoPage() {
                 ))}
               </tbody>
             </table>
-          </div>
         )}
-      </div>
+      </GrowTreeSheet>
 
       {(data?.holding_avisos || []).length > 0 ? (
         <p className="shrink-0 text-xs text-amber-700">{(data.holding_avisos as string[]).join(" · ")}</p>

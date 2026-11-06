@@ -10,6 +10,7 @@ import { useActiveDepartmentId, isDepartmentContextId } from "@/lib/useActiveDep
 import { DesvioLegend } from "@/components/orcamento/DesvioLegend";
 import { DesvioExecStrip } from "@/components/orcamento/DesvioExecStrip";
 import { DesvioBadgeBrand } from "@/components/orcamento/DesvioBadgeBrand";
+import { SemaforoDesvio } from "@/components/orcamento/SemaforoDesvio";
 import {
   MESES_STR,
   buildExecInsights,
@@ -171,6 +172,9 @@ export function BudgetAcompMatrixPage({
             materialCount={insights.materialCount}
             comDesvioCount={insights.comDesvioCount}
             refLabel={refLabel}
+            n={insights.realTotal}
+            ref={insights.refTotal}
+            tipo={desvioTipo}
           />
           <DesvioLegend />
         </>
@@ -229,9 +233,12 @@ export function BudgetAcompMatrixPage({
                         <td className="px-3 py-2 text-slate-500 font-medium sticky left-[340px] bg-inherit z-20 shadow-[1px_0_0_0_#e2e8f0]">{row.label}</td>
                         {colMonths.map((m) => (
                           <td key={m} className={`px-3 py-2 text-right tabular-nums ${m === "total" ? "font-bold border-l border-slate-200" : ""}`}>
-                            {row.isPerc
-                              ? <DesvioBadgeBrand value={item[row.key]?.[m] || 0} inverted={inverted} />
-                              : formatMoedaCompact(item[row.key]?.[m] || 0)}
+                            {row.isPerc ? (
+                              <span className="inline-flex items-center justify-end gap-1.5">
+                                {m === "total" ? <SemaforoDesvio n={d.real} ref={d.ref} tipo={desvioTipo} /> : null}
+                                <DesvioBadgeBrand value={item[row.key]?.[m] || 0} inverted={inverted} />
+                              </span>
+                            ) : formatMoedaCompact(item[row.key]?.[m] || 0)}
                           </td>
                         ))}
                         {ri === 0 && (

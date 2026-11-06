@@ -121,7 +121,7 @@ A faixa **Referência | Variação | Realizado** + a frase de leitura executiva.
 
 - “Requer atenção”, “Favorável”, “Neutro” — manter.
 - “Comparar com: Orçado | Forecast” — manter.
-- Recorte de ano civil: **YTD**, **YTG**, **FY**, **LY**. Título = a sigla; meses na legenda. Ver §6.
+- Recorte de ano civil: **YTD**, **YTG**, **FY**, **LY**. Título = a sigla; meses na legenda. Ver §7.
 - Não vender (“Cérebro da Holding”, “insights poderosos”). Frase curta: o que desviou e onde.
 
 ---
@@ -135,7 +135,17 @@ Chrome entregue nas duas telas do escopo. Sem mudança de cálculo, drill ou log
 
 ---
 
-## 6. Recortes de período (padrão)
+## 6. Caixa de árvore (padrão)
+
+Telas com tabela larga e níveis expansíveis (DFC, DFC gerencial, Despesas por empreendimento, DFC de empreendimentos, DFC comparativo) usam `GrowTreeSheet` em `frontend/src/components/shared/GrowTreeSheet.tsx`.
+
+- A caixa **cresce** ao abrir empresa → grupo → plano. A página rola; não travar altura com `flex-1 min-h-0 overflow-hidden`.
+- Coluna de nome: 360px, indentação 20px por nível, sem `truncate`.
+- Grade editável de orçado × realizado **não** entra neste padrão.
+
+---
+
+## 7. Recortes de período (padrão)
 
 Em tela de ano civil, estas siglas são o vocabulário do produto. Helper: `frontend/src/lib/periodosFpa.ts`.
 
@@ -155,3 +165,39 @@ Em tela de ano civil, estas siglas são o vocabulário do produto. Helper: `fron
 ✅ Série do ano passado: LY
 ✅ Tela nova de ano civil reusa periodosFpa.ts
 ```
+
+---
+
+## 8. Semáforo de desvio (padrão)
+
+Régua única em `frontend/src/lib/semaforoDesvio.ts`. Ponto: `SemaforoDesvio`. Legenda: `DesvioLegend`.
+
+| Cor | Estado | Quando |
+|---|---|---|
+| Cinza | Imaterial | \|n − ref\| < R$ 5 mil |
+| Verde | Favorável / dentro da tolerância | desvio favorável **ou** ≤ 5% |
+| Âmbar | Atenção | desfavorável e ≤ 10% |
+| Vermelho | Acima do limite | desfavorável e > 10% |
+| Azul | Novo | n com valor e ref zero |
+
+`tipo`: `DESPESAS` (menor é melhor) · `RECEITAS` / `VENDAS` / `RESULTADO` (maior é melhor). Saída de DFC já negativa usa `RESULTADO`.
+
+O ponto entra no KPI que compara n × ref e no **total** da coluna de variação. Não entra em cada mês da grade, em cadastro, nem em grade editável.
+
+Tela nova com orçado × realizado reusa `SemaforoDesvio` — não inventa limiar.
+
+---
+
+## 9. Geração de caixa (roll-forward)
+
+Travado em 2026-11-06. O card ainda não entra na tela.
+
+Não é estoque 31/12 × 31/12 do Sienge, nem o DFC líquido sozinho, nem a página atual Geração de Caixa (receitas − despesas).
+
+1. **Abertura** do ano N = saldo de contas correntes no **último 31/12 fechado** (`GET /v1/accounts-balances`, `amount`, `companyId` = id Sienge, tipos B Bancária + I Investimento + C CAIXA). Persistido; não consultar o Sienge a cada load do DFC.
+2. **YTD** = entradas − saídas **realizadas** até o corte (na visão DFC da tela).
+3. **YTG** = entradas − saídas **orçadas** do restante do ano.
+4. **Posição fim N** = abertura + YTD + YTG. **Geração N** = posição fim − abertura.
+5. Enquanto N não fechou, a abertura de N+1 **é essa posição fim projetada** — não um 31/12 do Sienge que ainda não existe.
+
+Em nov/2026: 31/12/2025 + realizado jan–out + orçado nov–dez → projeta 31/12/2026, que abre 2027. No DFC gerencial, cheio e MLDU.

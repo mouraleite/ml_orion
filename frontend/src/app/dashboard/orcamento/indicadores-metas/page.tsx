@@ -100,6 +100,7 @@ export default function IndicadoresMetasPage() {
             realVal={resultadoReal}
             varRs={varRes}
             varPerc={k.resultado_desvio_perc ?? varPerc}
+            tipo="RESULTADO"
             favoravel={favoravel}
             material={material}
             refCaption="Resultado líquido"
@@ -111,6 +112,9 @@ export default function IndicadoresMetasPage() {
               realVal={formatMoedaK(k.desp_realizado ?? 0)}
               refVal={`${modoLabel}: ${formatMoedaK(k.desp_referencia ?? 0)}`}
               desvio={k.desp_desvio_perc}
+              n={k.desp_realizado ?? 0}
+              ref={k.desp_referencia ?? 0}
+              tipo="DESPESAS"
               invert
             />
             <OrcamentoSecondaryMetric
@@ -118,12 +122,18 @@ export default function IndicadoresMetasPage() {
               realVal={formatMoedaK(k.rec_realizado ?? 0)}
               refVal={`${modoLabel}: ${formatMoedaK(k.rec_referencia ?? 0)}`}
               desvio={k.rec_desvio_perc}
+              n={k.rec_realizado ?? 0}
+              ref={k.rec_referencia ?? 0}
+              tipo="RECEITAS"
             />
             <OrcamentoSecondaryMetric
               title="VGV (realizado)"
               realVal={formatMoedaK(k.vgv_realizado ?? 0)}
               refVal={`${modoLabel}: ${formatMoedaK(k.vgv_referencia ?? 0)}`}
               desvio={k.vgv_desvio_perc}
+              n={k.vgv_realizado ?? 0}
+              ref={k.vgv_referencia ?? 0}
+              tipo="VENDAS"
             />
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-1 px-1 text-[11px] text-slate-500 tabular-nums">
@@ -136,6 +146,9 @@ export default function IndicadoresMetasPage() {
             varRs={varRes}
             varPerc={varPerc}
             refLabel={refLabel}
+            n={resultadoReal}
+            ref={resultadoRef}
+            tipo="RESULTADO"
           />
           <DesvioLegend />
         </>

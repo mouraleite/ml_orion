@@ -2,13 +2,15 @@
 
 import { Fragment, Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, ChevronRight, FileSpreadsheet } from "lucide-react";
+import { FileSpreadsheet } from "lucide-react";
+import { GROW_TREE_NAME_TH_CLASS, GROW_TREE_PAGE_CLASS, GrowTreeChevron, GrowTreeNameCell, GrowTreeSheet } from "@/components/shared/GrowTreeSheet";
 import { api } from "@/lib/api";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { MultiSelect } from "@/components/ui/MultiSelect";
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
 import { CollapsibleFilterPanel } from "@/components/shared/CollapsibleFilterPanel";
 import { formatMoedaCompact, formatMoedaK, MESES_STR } from "@/lib/orcamentoDesvioUi";
+import { SemaforoDesvio } from "@/components/orcamento/SemaforoDesvio";
 
 type Centro = { id: number; id_sienge?: string | null; nome?: string | null };
 type Empreendimento = {
@@ -246,7 +248,7 @@ function TrackingDfcInner() {
   const limparFiltros = () => router.replace("/dashboard/tracking/dfc");
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 min-w-0 gap-4 overflow-hidden" translate="no" lang="pt-BR">
+    <div className={GROW_TREE_PAGE_CLASS} translate="no" lang="pt-BR">
       <div className="shrink-0 space-y-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">DFC de empreendimentos</h1>
@@ -334,7 +336,10 @@ function TrackingDfcInner() {
                 conferencia.ok ? "bg-emerald-50/80 text-emerald-800" : "bg-orange-50/80 text-orange-950"
               }`}
             >
-              <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70 mb-0.5">Desvio</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wider opacity-70 mb-0.5 inline-flex items-center justify-center gap-1.5">
+                Desvio
+                <SemaforoDesvio n={conferencia.lucro_dfc} ref={conferencia.lucro_lista} tipo="RESULTADO" />
+              </p>
               <p className="text-xl font-bold tabular-nums">
                 {conferencia.desvio > 0 ? "+" : ""}
                 {formatMoedaK(conferencia.desvio)}
@@ -363,8 +368,9 @@ function TrackingDfcInner() {
         </div>
       ) : null}
 
-      <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-100 bg-white">
+      <GrowTreeSheet
+        toolbar={
+          <>
           <h2 className="font-bold text-slate-700">
             {visaoNome}
             {data?.visao?.is_padrao ? (
@@ -403,14 +409,14 @@ function TrackingDfcInner() {
               <FileSpreadsheet className="w-4 h-4 text-brand-green" /> Excel
             </button>
           </div>
-        </div>
-
+          </>
+        }
+      >
         {loading ? (
           <div className="p-6">
             <AppLoadingState title="Montando o DFC da vida do projeto…" hint="Usa o mesmo caixa do acompanhamento." />
           </div>
         ) : (
-          <div className="flex-1 min-h-0 overflow-auto">
             <table className="w-full text-sm min-w-[1100px]">
               <thead className="sticky top-0 z-20 bg-white">
                 {view === "mes" ? (
@@ -418,7 +424,7 @@ function TrackingDfcInner() {
                     <tr className="text-[10px] uppercase tracking-wider text-slate-400">
                       <th
                         rowSpan={2}
-                        className="sticky left-0 z-40 bg-white text-left px-3 py-2 font-semibold border-b border-slate-200 align-bottom"
+                        className={GROW_TREE_NAME_TH_CLASS}
                       >
                         Categoria
                       </th>
@@ -453,7 +459,7 @@ function TrackingDfcInner() {
                   </>
                 ) : (
                   <tr className="text-[10px] uppercase tracking-wider text-slate-400">
-                    <th className="sticky left-0 z-40 bg-white text-left px-3 py-2 font-semibold border-b border-slate-200">
+                    <th className={GROW_TREE_NAME_TH_CLASS}>
                       Categoria
                     </th>
                     {colunaLabels.map((label, i) => (
@@ -478,28 +484,11 @@ function TrackingDfcInner() {
                   return (
                     <Fragment key={linha.id}>
                       <tr className="bg-white hover:bg-slate-50">
-                        <td className="sticky left-0 z-10 px-3 py-2 border-b border-slate-100 min-w-[280px] bg-white">
-                          <div className="flex items-center gap-1" style={{ paddingLeft: indent * 16 }}>
-                            {temPlanos ? (
-                              <button
-                                type="button"
-                                onClick={() => toggleLinha(linha.id)}
-                                className="p-0.5 rounded hover:bg-slate-200"
-                                aria-expanded={aberto}
-                              >
-                                {aberto ? (
-                                  <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
-                                ) : (
-                                  <ChevronRight className="w-3.5 h-3.5 text-slate-500" />
-                                )}
-                              </button>
-                            ) : (
-                              <span className="w-4" />
-                            )}
-                            <span className="font-mono text-xs text-slate-400 w-14 shrink-0">{linha.codigo}</span>
-                            <span className="text-sm truncate font-semibold text-slate-800">{linha.descricao}</span>
-                          </div>
-                        </td>
+                        <GrowTreeNameCell indent={indent} bg="bg-white">
+                            <GrowTreeChevron open={aberto} visible={temPlanos} onClick={() => toggleLinha(linha.id)} />
+                            <span className="font-mono text-xs text-slate-400 w-14 shrink-0 mt-0.5">{linha.codigo}</span>
+                            <span className="text-sm leading-snug font-semibold text-slate-800">{linha.descricao}</span>
+                        </GrowTreeNameCell>
                         {colunas.map((col) => (
                           <td
                             key={col}
@@ -515,13 +504,11 @@ function TrackingDfcInner() {
                       {aberto &&
                         (linha.planos || []).map((plano) => (
                           <tr key={`${linha.id}-${plano.id}`} className="bg-slate-50/70">
-                            <td className="sticky left-0 z-10 px-3 py-2 border-b border-slate-100 min-w-[280px] bg-slate-50">
-                              <div className="flex items-center gap-1" style={{ paddingLeft: (indent + 1) * 16 }}>
-                                <span className="w-4" />
-                                <span className="font-mono text-xs text-slate-400 w-14 shrink-0 opacity-80">{plano.codigo}</span>
-                                <span className="text-sm truncate text-slate-600">{plano.descricao}</span>
-                              </div>
-                            </td>
+                            <GrowTreeNameCell indent={indent + 1} bg="bg-slate-50">
+                                <GrowTreeChevron open={false} visible={false} />
+                                <span className="font-mono text-xs text-slate-400 w-14 shrink-0 mt-0.5 opacity-80">{plano.codigo}</span>
+                                <span className="text-sm leading-snug text-slate-600">{plano.descricao}</span>
+                            </GrowTreeNameCell>
                             {colunas.map((col) => (
                               <td
                                 key={col}
@@ -540,9 +527,8 @@ function TrackingDfcInner() {
                 })}
               </tbody>
             </table>
-          </div>
         )}
-      </div>
+      </GrowTreeSheet>
 
       <p className="shrink-0 text-xs text-slate-400">
         Fonte: mesmo caixa do acompanhamento de empreendimentos, agrupado pela visão do Apoio. Planos fora da visão caem em receita de vendas ou administrativas.

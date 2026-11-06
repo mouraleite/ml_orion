@@ -142,7 +142,14 @@ export default function RecebimentoGrupoPage() {
 
       {!loading && grupos.length > 0 && (
         <>
-          <DesvioExecStrip {...insights} refLabel={refLabel} narrative={insights.narrative} />
+          <DesvioExecStrip
+            {...insights}
+            refLabel={refLabel}
+            narrative={insights.narrative}
+            n={insights.realTotal}
+            ref={insights.refTotal}
+            tipo="RECEITAS"
+          />
           <DesvioLegend />
         </>
       )}

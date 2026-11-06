@@ -2,18 +2,17 @@
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ChevronRight, FileSpreadsheet } from "lucide-react";
+import { FileSpreadsheet } from "lucide-react";
+import { GROW_TREE_NAME_TH_CLASS, GROW_TREE_PAGE_CLASS, GrowTreeChevron, GrowTreeNameCell, GrowTreeSheet } from "@/components/shared/GrowTreeSheet";
 import { getDfcGerencial, type DfcGerencialAgrupamento } from "@/services/orcamentoDfcGerencial";
 import { useActiveDepartmentId, isDepartmentContextId } from "@/lib/useActiveDepartmentId";
 import { OrcamentoFlyoutFilterBar } from "@/components/orcamento/OrcamentoFlyoutFilterBar";
-import { OrcamentoHeroStrip } from "@/components/orcamento/OrcamentoHeroStrip";
+import { DfcFluxoCards } from "@/components/orcamento/DfcFluxoCards";
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
 import { useEmpresaCadastroFilter } from "@/hooks/useEmpresaCadastroFilter";
 import {
   formatMoedaCompact,
   formatPerc,
-  isDesvioFavoravel,
-  MATERIALITY_THRESHOLD,
   MESES_STR,
 } from "@/lib/orcamentoDesvioUi";
 import { tituloPeriodo } from "@/lib/periodosFpa";
@@ -57,6 +56,7 @@ type GerencialRow = {
   total_forecast_mldu?: number;
   ah: number | null;
   av: number | null;
+  sentido?: string | null;
   filhos?: GerencialRow[];
 };
 
@@ -204,21 +204,13 @@ function DfcLine({
   const bg = isEmp ? "bg-slate-50" : isCat ? "bg-white" : "bg-slate-50/70";
   return (
     <tr className={`${bg} hover:bg-slate-50`}>
-      <td className={`sticky left-0 z-10 px-3 py-2 border-b border-slate-100 min-w-[280px] ${bg}`}>
-        <div className="flex items-center gap-1" style={{ paddingLeft: indent * 16 }}>
-          {hasKids ? (
-            <button type="button" onClick={onToggle} className="p-0.5 rounded hover:bg-slate-200">
-              {expanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-500" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-500" />}
-            </button>
-          ) : (
-            <span className="w-4" />
-          )}
-          <span className={`font-mono text-xs text-slate-400 w-14 shrink-0 ${isCat ? "" : "opacity-80"}`}>{row.codigo}</span>
-          <span className={`text-sm truncate ${isEmp ? "font-bold text-slate-900" : isCat ? "font-semibold text-slate-800" : "text-slate-600"}`}>
+      <GrowTreeNameCell indent={indent} bg={bg}>
+          <GrowTreeChevron open={expanded} visible={hasKids} onClick={onToggle} />
+          <span className={`font-mono text-xs text-slate-400 w-14 shrink-0 mt-0.5 ${isCat ? "" : "opacity-80"}`}>{row.codigo}</span>
+          <span className={`text-sm leading-snug ${isEmp ? "font-bold text-slate-900" : isCat ? "font-semibold text-slate-800" : "text-slate-600"}`}>
             {row.descricao}
           </span>
-        </div>
-      </td>
+      </GrowTreeNameCell>
       {MESES_STR.map((m) => (
         <React.Fragment key={m}>
           {active.map((key, i) => (
@@ -325,12 +317,7 @@ export default function OrcamentoDfcGerencialPage() {
   const linhas = useMemo(() => flatten(empresas, expanded), [empresas, expanded]);
   const liquido = data?.liquido ?? 0;
   const liquidoN1 = data?.liquido_n1 ?? 0;
-  const varRs = liquido - liquidoN1;
-  const varPerc = data?.ah_liquido ?? (liquidoN1 !== 0 ? varRs / Math.abs(liquidoN1) : 0);
-  const favoravel = isDesvioFavoravel(varRs, "RESULTADO");
-  const material = Math.abs(varPerc) >= MATERIALITY_THRESHOLD;
   const visaoNome = data?.visao?.nome || "Visão DFC";
-  const saidas = useMemo(() => liquido - (data?.total_entradas ?? 0), [liquido, data?.total_entradas]);
   const colSpanMes = active.length + (onAhAvMensal ? 2 : 0);
 
   const toggle = (id: string) => {
@@ -362,7 +349,7 @@ export default function OrcamentoDfcGerencialPage() {
   };
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 min-w-0 gap-4 overflow-hidden">
+    <div className={GROW_TREE_PAGE_CLASS}>
       <div className="shrink-0 space-y-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">DFC gerencial</h1>
@@ -394,23 +381,22 @@ export default function OrcamentoDfcGerencialPage() {
       </div>
 
       {!loading && (
-        <div className="shrink-0">
-          <OrcamentoHeroStrip
-            refLabel={tituloPeriodo("ly")}
-            refVal={liquidoN1}
-            realVal={liquido}
-            varRs={varRs}
-            varPerc={varPerc || 0}
-            favoravel={favoravel}
-            material={material}
-            refCaption={`Caixa líquido ${ano - 1}`}
-            caption={`Entradas ${formatMoedaCompact(data?.total_entradas || 0)} · Saídas ${formatMoedaCompact(saidas)} · MLDU ${formatMoedaCompact(data?.liquido_real_mldu || 0)} · AV sobre total de entradas`}
-          />
-        </div>
+        <DfcFluxoCards
+          ano={ano}
+          meses={meses}
+          linhas={empresas}
+          liquido={liquido}
+          liquidoN1={liquidoN1}
+          totalEntradas={data?.total_entradas}
+          liquidoMldu={data?.liquido_real_mldu}
+          liquidoN1Mldu={data?.liquido_n1_mldu}
+          comMldu
+        />
       )}
 
-      <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-100 bg-white">
+      <GrowTreeSheet
+        toolbar={
+          <>
           <h2 className="font-bold text-slate-700">
             {visaoNome}
             {data?.visao?.is_padrao ? <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">padrão</span> : null}
@@ -472,16 +458,16 @@ export default function OrcamentoDfcGerencialPage() {
               <FileSpreadsheet className="w-4 h-4 text-brand-green" /> Excel
             </button>
           </div>
-        </div>
-
+          </>
+        }
+      >
         {loading ? (
           <div className="p-6"><AppLoadingState /></div>
         ) : (
-          <div className="flex-1 min-h-0 overflow-auto">
             <table className="w-full text-sm min-w-[1800px]">
               <thead className="sticky top-0 z-20 bg-white">
                 <tr className="text-[10px] uppercase tracking-wider text-slate-400">
-                  <th rowSpan={2} className="sticky left-0 z-40 bg-white text-left px-3 py-2 font-semibold border-b border-slate-200 align-bottom">
+                  <th rowSpan={2} className={GROW_TREE_NAME_TH_CLASS}>
                     {agrupamento === "centro" ? "Empresa / CC / Visão" : "Empresa / Visão / Plano"}
                   </th>
                   {MESES_LABEL.map((m) => (
@@ -534,9 +520,8 @@ export default function OrcamentoDfcGerencialPage() {
                 ))}
               </tbody>
             </table>
-          </div>
         )}
-      </div>
+      </GrowTreeSheet>
 
       <p className="shrink-0 text-xs text-slate-400">
         Fonte: mesmos números do DFC (Orçado × Realizado pela visão do Apoio). Planos fora da visão não entram. Cheio = 100%; MLDU = participação da empresa × do centro.

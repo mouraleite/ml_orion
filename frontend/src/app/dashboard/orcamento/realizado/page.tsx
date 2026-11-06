@@ -36,6 +36,8 @@ import {
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/Table";
 import { parseCentroNome } from "@/lib/parseCentroNome";
 import { MATERIALITY_THRESHOLD } from "@/lib/orcamentoDesvioUi";
+import { SemaforoDesvio } from "@/components/orcamento/SemaforoDesvio";
+import { tipoSemaforo } from "@/lib/semaforoDesvio";
 import {
   BudgetLoadError,
   BudgetLoadingState,
@@ -1482,7 +1484,20 @@ function TabConsolidado({ ano, consolidado, deptId, filtros, holdingMldu, onData
                     </div>
                   </>
                 )}
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${tone.badge}`}>
+                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${tone.badge}`}>
+                  <SemaforoDesvio
+                    n={activeInsights.globalTotalB}
+                    ref={activeInsights.globalTotalA}
+                    tipo={tipoSemaforo(
+                      insightBloco === "despesas"
+                        ? "DESPESAS"
+                        : insightBloco === "receitas"
+                          ? "RECEITAS"
+                          : insightBloco === "vendas"
+                            ? "VENDAS"
+                            : "RESULTADO",
+                    )}
+                  />
                   {activeInsights.veredito === "favoravel" ? "Favorável" : activeInsights.veredito === "desfavoravel" ? "Requer atenção" : "Neutro"}
                 </span>
               </div>
@@ -3221,7 +3236,8 @@ function TabComparativo({
                     <span className="text-slate-400"> · {vendasMetric === "vgv" ? "VGV" : "Nº vendas"}</span>
                   )}
                 </p>
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${tone.badge}`}>
+                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wide ${tone.badge}`}>
+                  <SemaforoDesvio n={insights.globalTotalB} ref={insights.globalTotalA} tipo={tipoSemaforo(tipo)} />
                   {insights.veredito === "favoravel" ? <CheckCircle2 className="w-3 h-3" /> :
                    insights.veredito === "desfavoravel" ? <AlertCircle className="w-3 h-3" /> : null}
                   {insights.veredito === "favoravel" ? "Favorável" :

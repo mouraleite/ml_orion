@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, FileSpreadsheet, GitCompare } from "lucide-react";
+import { FileSpreadsheet, GitCompare } from "lucide-react";
+import { GROW_TREE_NAME_TH_CLASS, GrowTreeChevron, GrowTreeNameCell, GrowTreeSheet } from "@/components/shared/GrowTreeSheet";
 import { orcamentoService } from "@/services/orcamento";
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
 import { formatMoedaCompact, formatPerc } from "@/lib/orcamentoDesvioUi";
+import { SemaforoDesvio } from "@/components/orcamento/SemaforoDesvio";
 import { isDepartmentContextId } from "@/lib/useActiveDepartmentId";
 
 const MESES_STR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"] as const;
@@ -98,19 +100,11 @@ function CompLine({
   const hasKids = isCat && (row.planos?.length || 0) > 0;
   return (
     <tr className={isCat ? "bg-white hover:bg-slate-50" : "bg-slate-50/70"}>
-      <td className={`sticky left-0 z-10 px-3 py-2 border-b border-slate-100 min-w-[280px] ${isCat ? "bg-white" : "bg-slate-50"}`}>
-        <div className="flex items-center gap-1" style={{ paddingLeft: indent * 16 }}>
-          {hasKids ? (
-            <button type="button" onClick={onToggle} className="p-0.5 rounded hover:bg-slate-200">
-              {expanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-500" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-500" />}
-            </button>
-          ) : (
-            <span className="w-4" />
-          )}
-          <span className={`font-mono text-xs text-slate-400 w-14 shrink-0`}>{row.codigo}</span>
-          <span className={`text-sm truncate ${isCat ? "font-semibold text-slate-800" : "text-slate-600"}`}>{row.descricao}</span>
-        </div>
-      </td>
+      <GrowTreeNameCell indent={indent} bg={isCat ? "bg-white" : "bg-slate-50"}>
+          <GrowTreeChevron open={expanded} visible={hasKids} onClick={onToggle} />
+          <span className={`font-mono text-xs text-slate-400 w-14 shrink-0 mt-0.5`}>{row.codigo}</span>
+          <span className={`text-sm leading-snug ${isCat ? "font-semibold text-slate-800" : "text-slate-600"}`}>{row.descricao}</span>
+      </GrowTreeNameCell>
       {!porMes && (
         <>
           <td className="px-2 py-2 border-b border-slate-100 text-right text-xs whitespace-nowrap border-l border-slate-200">
@@ -234,7 +228,7 @@ export function DfcComparativoPanel({
   }, [data]);
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 min-w-0 gap-4">
+    <div className="flex flex-col min-w-0 gap-4">
       <div className="shrink-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-[200px] flex-1">
@@ -289,7 +283,10 @@ export function DfcComparativoPanel({
             <p className="text-lg font-bold tabular-nums text-slate-800 mt-1"><Num v={hero.b} /></p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-            <p className="text-[10px] font-semibold uppercase text-slate-400">Variação R$</p>
+            <div className="flex items-start justify-between gap-2">
+              <p className="text-[10px] font-semibold uppercase text-slate-400">Variação R$</p>
+              <SemaforoDesvio n={hero.b} ref={hero.a} tipo="RESULTADO" />
+            </div>
             <p className="text-lg font-bold tabular-nums mt-1"><Num v={hero.varRs} /></p>
           </div>
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
@@ -299,8 +296,9 @@ export function DfcComparativoPanel({
         </div>
       )}
 
-      <div className="flex-1 min-h-[40vh] min-w-0 flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-100">
+      <GrowTreeSheet
+        toolbar={
+          <>
           <h2 className="font-bold text-slate-700">
             {data?.visao?.nome || "Visão DFC"}
             <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">comparativo</span>
@@ -330,8 +328,9 @@ export function DfcComparativoPanel({
               <FileSpreadsheet className="w-4 h-4" /> Excel completo
             </button>
           </div>
-        </div>
-
+          </>
+        }
+      >
         {!versaoA || !versaoB ? (
           <p className="p-8 text-center text-sm text-slate-500">Selecione as duas versões para montar o DFC comparativo.</p>
         ) : loading ? (
@@ -339,11 +338,11 @@ export function DfcComparativoPanel({
         ) : erro ? (
           <p className="p-8 text-center text-sm text-amber-800">{erro}</p>
         ) : (
-          <div className="flex-1 min-h-0 overflow-auto">
+          <>
             <table className={`w-full text-sm ${porMes ? "min-w-[2800px]" : "min-w-[720px]"}`}>
               <thead className="sticky top-0 z-20 bg-white">
                 <tr className="text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-200">
-                  <th className="sticky left-0 z-40 bg-white text-left px-3 py-2 font-semibold">Categoria</th>
+                  <th className={GROW_TREE_NAME_TH_CLASS}>Categoria</th>
                   {!porMes && (
                     <>
                       <th className="px-2 py-2 text-right font-semibold border-l border-slate-200 max-w-[140px] truncate">{labelA}</th>
@@ -361,7 +360,7 @@ export function DfcComparativoPanel({
                 </tr>
                 {porMes && (
                   <tr className="text-[9px] uppercase tracking-wider text-slate-400 border-b border-slate-200">
-                    <th className="sticky left-0 z-40 bg-white" />
+                    <th className={`${GROW_TREE_NAME_TH_CLASS} border-b-0`} />
                     {MESES_STR.map((m) => (
                       <React.Fragment key={m}>
                         <th className="px-1 py-1 text-right font-semibold border-l border-slate-200 whitespace-nowrap min-w-[88px]" title={labelA}>{labelA}</th>
@@ -402,9 +401,9 @@ export function DfcComparativoPanel({
             {!linhas.length && (
               <p className="p-8 text-center text-sm text-slate-500">Sem linhas na Visão DFC para estas versões.</p>
             )}
-          </div>
+          </>
         )}
-      </div>
+      </GrowTreeSheet>
     </div>
   );
 }

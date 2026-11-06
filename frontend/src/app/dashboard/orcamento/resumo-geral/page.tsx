@@ -365,6 +365,7 @@ export default function DashboardExecutivoPage() {
             realVal={kpis.resultado_realizado || 0}
             varRs={resultadoVarRs}
             varPerc={kpis.resultado_desvio_perc ?? 0}
+            tipo="RESULTADO"
             favoravel={resultadoFavoravel}
             material={resultadoMaterial}
             refCaption="Resultado líquido"
@@ -376,6 +377,9 @@ export default function DashboardExecutivoPage() {
               realVal={fmtK(kpis.desp_realizado || 0)}
               refVal={`${modoLabel}: ${fmtK(kpis.desp_referencia || 0)}`}
               desvio={kpis.desp_desvio_perc}
+              n={kpis.desp_realizado || 0}
+              ref={kpis.desp_referencia || 0}
+              tipo="DESPESAS"
               invert
               href={buildOrcamentoHref("analitico1", { ano, modo, meses: mesesHref })}
               linkLabel="Analítico →"
@@ -385,6 +389,9 @@ export default function DashboardExecutivoPage() {
               realVal={fmtK(kpis.rec_realizado || 0)}
               refVal={`${modoLabel}: ${fmtK(kpis.rec_referencia || 0)}`}
               desvio={kpis.rec_desvio_perc}
+              n={kpis.rec_realizado || 0}
+              ref={kpis.rec_referencia || 0}
+              tipo="RECEITAS"
               href={`/dashboard/orcamento/receitas?ano=${ano}`}
               linkLabel="Receitas →"
             />
@@ -393,6 +400,9 @@ export default function DashboardExecutivoPage() {
               realVal={fmtK(kpis.vgv_realizado || 0)}
               refVal={`${modoLabel}: ${fmtK(kpis.vgv_referencia || 0)}`}
               desvio={kpis.vgv_desvio_perc}
+              n={kpis.vgv_realizado || 0}
+              ref={kpis.vgv_referencia || 0}
+              tipo="VENDAS"
               href={`/dashboard/orcamento/vendas?ano=${ano}`}
               linkLabel="Vendas →"
             />
@@ -415,6 +425,9 @@ export default function DashboardExecutivoPage() {
             varRs={resultadoVarRs}
             varPerc={kpis.resultado_desvio_perc ?? 0}
             refLabel={modoLabel.toLowerCase()}
+            n={kpis.resultado_realizado || 0}
+            ref={kpis.resultado_referencia || 0}
+            tipo="RESULTADO"
           />
           <DesvioLegend />
         </>

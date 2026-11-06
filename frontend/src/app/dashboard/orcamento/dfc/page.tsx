@@ -3,17 +3,18 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronDown, ChevronRight, FileSpreadsheet, GitCompare } from "lucide-react";
+import { FileSpreadsheet, GitCompare } from "lucide-react";
+import { GROW_TREE_NAME_TH_CLASS, GROW_TREE_PAGE_CLASS, GrowTreeChevron, GrowTreeNameCell, GrowTreeSheet } from "@/components/shared/GrowTreeSheet";
 import { orcamentoService } from "@/services/orcamento";
 import { HoldingMlduBanner } from "@/components/shared/HoldingMlduBanner";
 import { useHoldingMldu } from "@/hooks/useHoldingMldu";
 import { useActiveDepartmentId, isDepartmentContextId } from "@/lib/useActiveDepartmentId";
 import { OrcamentoFlyoutFilterBar } from "@/components/orcamento/OrcamentoFlyoutFilterBar";
-import { OrcamentoHeroStrip } from "@/components/orcamento/OrcamentoHeroStrip";
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
 import { useEmpresaCadastroFilter } from "@/hooks/useEmpresaCadastroFilter";
-import { formatMoedaCompact, formatPerc, isDesvioFavoravel, MATERIALITY_THRESHOLD } from "@/lib/orcamentoDesvioUi";
+import { formatMoedaCompact, formatPerc } from "@/lib/orcamentoDesvioUi";
 import { DfcComparativoPanel } from "@/components/orcamento/DfcComparativoPanel";
+import { DfcFluxoCards } from "@/components/orcamento/DfcFluxoCards";
 import { tituloPeriodo } from "@/lib/periodosFpa";
 
 const MESES_STR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"] as const;
@@ -45,6 +46,7 @@ type DfcRow = {
   total_forecast?: number;
   ah: number | null;
   av: number | null;
+  sentido?: string | null;
   planos?: DfcRow[];
 };
 
@@ -139,19 +141,11 @@ function DfcLine({
   const hasKids = isCat && (row.planos?.length || 0) > 0;
   return (
     <tr className={isCat ? "bg-white hover:bg-slate-50" : "bg-slate-50/70"}>
-      <td className={`sticky left-0 z-10 px-3 py-2 border-b border-slate-100 min-w-[280px] ${isCat ? "bg-white" : "bg-slate-50"}`}>
-        <div className="flex items-center gap-1" style={{ paddingLeft: indent * 16 }}>
-          {hasKids ? (
-            <button type="button" onClick={onToggle} className="p-0.5 rounded hover:bg-slate-200">
-              {expanded ? <ChevronDown className="w-3.5 h-3.5 text-slate-500" /> : <ChevronRight className="w-3.5 h-3.5 text-slate-500" />}
-            </button>
-          ) : (
-            <span className="w-4" />
-          )}
-          <span className={`font-mono text-xs text-slate-400 w-14 shrink-0 ${isCat ? "" : "opacity-80"}`}>{row.codigo}</span>
-          <span className={`text-sm truncate ${isCat ? "font-semibold text-slate-800" : "text-slate-600"}`}>{row.descricao}</span>
-        </div>
-      </td>
+      <GrowTreeNameCell indent={indent} bg={isCat ? "bg-white" : "bg-slate-50"}>
+          <GrowTreeChevron open={expanded} visible={hasKids} onClick={onToggle} />
+          <span className={`font-mono text-xs text-slate-400 w-14 shrink-0 mt-0.5 ${isCat ? "" : "opacity-80"}`}>{row.codigo}</span>
+          <span className={`text-sm leading-snug ${isCat ? "font-semibold text-slate-800" : "text-slate-600"}`}>{row.descricao}</span>
+      </GrowTreeNameCell>
       {MESES_STR.map((m) => (
         <React.Fragment key={m}>
           {active.map((key, i) => (
@@ -265,10 +259,6 @@ export default function OrcamentoDfcPage() {
   const linhas: DfcRow[] = data?.linhas || [];
   const liquido = data?.liquido ?? 0;
   const liquidoN1 = data?.liquido_n1 ?? 0;
-  const varRs = liquido - liquidoN1;
-  const varPerc = data?.ah_liquido ?? (liquidoN1 !== 0 ? varRs / Math.abs(liquidoN1) : 0);
-  const favoravel = isDesvioFavoravel(varRs, "RESULTADO");
-  const material = Math.abs(varPerc) >= MATERIALITY_THRESHOLD;
 
   const indentOf = (codigo: string) => (codigo.match(/\./g) || []).length;
 
@@ -284,11 +274,10 @@ export default function OrcamentoDfcPage() {
   const recolherTodos = () => setExpanded(new Set());
 
   const visaoNome = data?.visao?.nome || "Visão DFC";
-  const saidas = useMemo(() => liquido - (data?.total_entradas ?? 0), [liquido, data?.total_entradas]);
   const colSpanMes = active.length + (onAhAvMensal ? 2 : 0);
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 min-w-0 gap-4 overflow-hidden">
+    <div className={GROW_TREE_PAGE_CLASS}>
       <div className="shrink-0 space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -345,7 +334,6 @@ export default function OrcamentoDfcPage() {
       </div>
 
       {modoComparar ? (
-        <div className="flex-1 min-h-0 min-w-0 overflow-auto flex flex-col">
         <DfcComparativoPanel
           ano={ano}
           deptId={deptId}
@@ -355,27 +343,22 @@ export default function OrcamentoDfcPage() {
           initialVersaoA={searchParams.get("versao_a") || undefined}
           initialVersaoB={searchParams.get("versao_b") || undefined}
         />
-        </div>
       ) : (
         <>
       {!loading && (
-        <div className="shrink-0">
-        <OrcamentoHeroStrip
-          refLabel={tituloPeriodo("ly")}
-          refVal={liquidoN1}
-          realVal={liquido}
-          varRs={varRs}
-          varPerc={varPerc || 0}
-          favoravel={favoravel}
-          material={material}
-          refCaption={`Caixa líquido ${ano - 1}`}
-          caption={`Entradas ${formatMoedaCompact(data?.total_entradas || 0)} · Saídas ${formatMoedaCompact(saidas)} · AV sobre total de entradas`}
+        <DfcFluxoCards
+          ano={ano}
+          meses={meses}
+          linhas={linhas}
+          liquido={liquido}
+          liquidoN1={liquidoN1}
+          totalEntradas={data?.total_entradas}
         />
-        </div>
       )}
 
-      <div className="flex-1 min-h-0 flex flex-col bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="shrink-0 flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-slate-100 bg-white">
+      <GrowTreeSheet
+        toolbar={
+          <>
           <h2 className="font-bold text-slate-700">
             {visaoNome}
             {data?.visao?.is_padrao ? <span className="ml-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400">padrão</span> : null}
@@ -435,16 +418,16 @@ export default function OrcamentoDfcPage() {
               <FileSpreadsheet className="w-4 h-4 text-brand-green" /> Excel
             </button>
           </div>
-        </div>
-
+          </>
+        }
+      >
         {loading ? (
           <div className="p-6"><AppLoadingState /></div>
         ) : (
-          <div className="flex-1 min-h-0 overflow-auto">
           <table className="w-full text-sm min-w-[1800px]">
               <thead className="sticky top-0 z-20 bg-white">
                 <tr className="text-[10px] uppercase tracking-wider text-slate-400">
-                  <th rowSpan={2} className="sticky left-0 z-40 bg-white text-left px-3 py-2 font-semibold border-b border-slate-200 align-bottom">Categoria</th>
+                  <th rowSpan={2} className={GROW_TREE_NAME_TH_CLASS}>Categoria</th>
                   {MESES_LABEL.map((m) => (
                     <th key={m} colSpan={colSpanMes} className="px-1.5 py-1 text-center font-semibold whitespace-nowrap border-b border-l border-slate-200">
                       {m}
@@ -507,9 +490,8 @@ export default function OrcamentoDfcPage() {
                 })}
               </tbody>
             </table>
-          </div>
         )}
-      </div>
+      </GrowTreeSheet>
 
       <p className="shrink-0 text-xs text-slate-400">
         Fonte: mesmos números de Orçado × Realizado, agrupados pela visão do Apoio (lida a cada carga). Planos fora da visão não entram.

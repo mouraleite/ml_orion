@@ -286,6 +286,9 @@ export default function AnaliticoGastos2Page() {
             materialCount={execInsights.materialCount}
             comDesvioCount={execInsights.comDesvioCount}
             refLabel={modoLabel.toLowerCase()}
+            n={execInsights.realTotal}
+            ref={execInsights.refTotal}
+            tipo="DESPESAS"
           />
           <DesvioLegend className="shrink-0" />
         </>

@@ -115,6 +115,7 @@ export default function GeracaoCaixaPage() {
             realVal={realCaixa}
             varRs={varCaixa}
             varPerc={varPerc}
+            tipo="RESULTADO"
             favoravel={favoravel}
             material={material}
             refCaption="Geração de caixa"
@@ -126,6 +127,9 @@ export default function GeracaoCaixaPage() {
             varRs={varCaixa}
             varPerc={varPerc}
             refLabel={refLabel}
+            n={realCaixa}
+            ref={refCaixa}
+            tipo="RESULTADO"
           />
           <DesvioLegend />
         </>

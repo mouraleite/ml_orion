@@ -232,6 +232,9 @@ export default function AnaliticoGastosPage() {
             materialCount={execInsights.materialCount}
             comDesvioCount={execInsights.comDesvioCount}
             refLabel={modo === "orcado" ? "orçado" : "forecast"}
+            n={execInsights.realTotal}
+            ref={execInsights.refTotal}
+            tipo="DESPESAS"
           />
           <DesvioLegend className="shrink-0" />
         </>
