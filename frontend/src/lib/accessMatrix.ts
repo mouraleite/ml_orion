@@ -79,7 +79,7 @@ export const PERMISSION_ALIASES: Record<string, Record<string, string[]>> = {
     "Orçamento de Vendas": ["Vendas"],
     "Orçado x Realizado": ["Realizado", "Comparativo de Versões"],
     "DFC gerencial": ["DFC"],
-    "Despesas por empreendimento": ["DFC"],
+    "Análise de Orçamento": ["Despesas por empreendimento", "DFC"],
   },
   Forecast: {
     "Forecast de Despesas": ["Despesas"],

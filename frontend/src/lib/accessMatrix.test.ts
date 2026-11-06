@@ -86,14 +86,18 @@ describe("accessMatrix", () => {
     const names = orc?.items.map((i) => i.name) || [];
     assert.deepEqual(
       names.slice(names.indexOf("DFC"), names.indexOf("Relatórios") + 1),
-      ["DFC", "DFC gerencial", "Despesas por empreendimento", "Relatórios"],
+      ["DFC", "DFC gerencial", "Análise de Orçamento", "Relatórios"],
     );
     assert.equal(matchMenuPath("/dashboard/orcamento/dfc-gerencial")?.permKey, "DFC gerencial");
     assert.equal(matchMenuPath("/dashboard/orcamento/dfc")?.permKey, "DFC");
     assert.equal(isPathAllowed({ Orçamento: { DFC: true } }, "/dashboard/orcamento/dfc-gerencial"), true);
     assert.equal(isPathAllowed({}, "/dashboard/orcamento/dfc-gerencial"), false);
-    assert.equal(matchMenuPath("/dashboard/orcamento/despesas-empreendimento")?.permKey, "Despesas por empreendimento");
+    assert.equal(matchMenuPath("/dashboard/orcamento/despesas-empreendimento")?.permKey, "Análise de Orçamento");
     assert.equal(isPathAllowed({ Orçamento: { DFC: true } }, "/dashboard/orcamento/despesas-empreendimento"), true);
+    assert.equal(
+      isPathAllowed({ Orçamento: { "Despesas por empreendimento": true } }, "/dashboard/orcamento/despesas-empreendimento"),
+      true,
+    );
     assert.equal(isPathAllowed({}, "/dashboard/orcamento/despesas-empreendimento"), false);
   });
 

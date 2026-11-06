@@ -116,7 +116,7 @@ const RAW_MENU: MenuModuleDef[] = [
       { name: "Orçado x Realizado", icon: FileText, href: "/dashboard/orcamento/realizado" },
       { name: "DFC", icon: FileText, href: "/dashboard/orcamento/dfc" },
       { name: "DFC gerencial", icon: FileText, href: "/dashboard/orcamento/dfc-gerencial" },
-      { name: "Despesas por empreendimento", icon: FileText, href: "/dashboard/orcamento/despesas-empreendimento" },
+      { name: "Análise de Orçamento", icon: FileText, href: "/dashboard/orcamento/despesas-empreendimento" },
       { name: "Relatórios", icon: FileText, href: "/dashboard/orcamento/relatorios" },
     ],
   },

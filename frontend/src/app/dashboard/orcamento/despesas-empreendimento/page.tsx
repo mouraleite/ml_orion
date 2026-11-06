@@ -498,7 +498,7 @@ export default function DespesasEmpreendimentoPage() {
     <div className="flex flex-col min-w-0 gap-4 pb-8">
       <div className="shrink-0 space-y-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800">Despesas por empreendimento</h1>
+          <h1 className="text-2xl font-bold text-slate-800">Análise de Orçamento</h1>
           <p className="text-slate-500 text-sm mt-1">
             Real {ano} até o corte, forecast depois do corte, contra {modo === "forecast" ? "forecast" : "orçado"} {anoRef}.
             Cheio e MLDU lado a lado. Despesa positiva.
