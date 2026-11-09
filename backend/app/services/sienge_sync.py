@@ -58,14 +58,18 @@ def centros_do_sync(db: Session) -> list:
     )
 
 
-def sync_all_sienge_data(db: Session, full_load: bool = False):
+def sync_all_sienge_data(db: Session, full_load: bool = False, desde: Optional[str] = None):
     """
     Roda o sincronismo de Vendas, Recebimentos e Pagamentos.
-    Se full_load for True, busca desde 2001. Se False, busca os ltimos 3 dias por segurana.
+    Se full_load for True, busca desde 2001. Se False, busca os últimos 3 dias por segurança.
+    desde (AAAA-MM-DD): recarga a partir dessa data até hoje (ex.: preencher um buraco).
     """
     if full_load:
         start_date = "2001-01-01"
         end_date = "2050-12-31"
+    elif desde:
+        start_date = datetime.strptime(desde[:10], "%Y-%m-%d").strftime("%Y-%m-%d")
+        end_date = datetime.now().strftime("%Y-%m-%d")
     else:
         hoje = datetime.now()
         start_date = (hoje - timedelta(days=3)).strftime("%Y-%m-%d")
@@ -202,13 +206,24 @@ def precisa_sincronizar_unidades(ultima: Optional[str], tem_unidades: bool, hoje
     return (hoje - ultima_data).days >= DIAS_ENTRE_CHECAGENS_SEM_UNIDADES
 
 
+def _dia_da_primeira_checagem(cc: CostCenter, hoje) -> bool:
+    digitos = "".join(ch for ch in str(cc.id_sienge or "") if ch.isdigit())
+    base = int(digitos) if digitos else (cc.id or 0)
+    return base % DIAS_ENTRE_CHECAGENS_SEM_UNIDADES == hoje.toordinal() % DIAS_ENTRE_CHECAGENS_SEM_UNIDADES
+
+
 def sync_units_se_preciso(db: Session, cc: CostCenter, hoje=None) -> bool:
     """Chama sync_units só quando precisa; grava a data da busca no custom_data do CC.
     Retorna True se buscou."""
     hoje = hoje or datetime.now().date()
     custom = dict(cc.custom_data or {})
     tem_unidades = db.query(Unit.id).filter_by(cost_center_id=cc.id).first() is not None
-    if not precisa_sincronizar_unidades(custom.get(UNITS_SYNC_KEY), tem_unidades, hoje):
+    ultima = custom.get(UNITS_SYNC_KEY)
+    if not ultima and not tem_unidades and not _dia_da_primeira_checagem(cc, hoje):
+        # Primeira checagem de CC sem unidades espalhada pelos 7 dias da semana:
+        # na estreia não chamamos /units dos ~250 CCs sem lote no mesmo dia (cota REST).
+        return False
+    if not precisa_sincronizar_unidades(ultima, tem_unidades, hoje):
         return False
     if sync_units(db, cc):
         custom[UNITS_SYNC_KEY] = hoje.isoformat()

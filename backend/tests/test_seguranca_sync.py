@@ -74,24 +74,69 @@ def test_migracao_aceita_administrador(client, monkeypatch):
 
 def test_sync_incremental_liberado_para_usuario(client, monkeypatch):
     chamadas = []
-    monkeypatch.setattr(sync_routes, "_run_sienge_sync_job", lambda full: chamadas.append(full))
+    monkeypatch.setattr(sync_routes, "_run_sienge_sync_job", lambda full, desde=None: chamadas.append(full))
     _como("Usuário Comum")
     r = client.post("/api/v1/sync/sienge")
     assert r.status_code == 200 and chamadas == [False]
 
 
 def test_sync_carga_completa_recusa_usuario(client, monkeypatch):
-    monkeypatch.setattr(sync_routes, "_run_sienge_sync_job", lambda full: None)
+    monkeypatch.setattr(sync_routes, "_run_sienge_sync_job", lambda full, desde=None: None)
     _como("Usuário Comum")
     assert client.post("/api/v1/sync/sienge?full_load=true").status_code == 403
 
 
 def test_sync_carga_completa_aceita_admin(client, monkeypatch):
     chamadas = []
-    monkeypatch.setattr(sync_routes, "_run_sienge_sync_job", lambda full: chamadas.append(full))
+    monkeypatch.setattr(sync_routes, "_run_sienge_sync_job", lambda full, desde=None: chamadas.append(full))
     _como("Administrador")
     assert client.post("/api/v1/sync/sienge?full_load=true").status_code == 200
     assert chamadas == [True]
+
+
+def test_recarga_desde_so_admin(client, monkeypatch):
+    chamadas = []
+    monkeypatch.setattr(sync_routes, "_run_sienge_sync_job", lambda full, desde=None: chamadas.append(desde))
+    _como("Usuário Comum")
+    assert client.post("/api/v1/sync/sienge?desde=2026-09-01").status_code == 403
+    _como("Administrador")
+    r = client.post("/api/v1/sync/sienge?desde=2026-09-01")
+    assert r.status_code == 200 and chamadas == ["2026-09-01"]
+
+
+@pytest.mark.parametrize("desde", ["lixo", "2099-01-01", "2020-01-01"])
+def test_recarga_desde_rejeita_data_invalida(client, monkeypatch, desde):
+    monkeypatch.setattr(sync_routes, "_run_sienge_sync_job", lambda full, desde=None: None)
+    _como("Administrador")
+    assert client.post(f"/api/v1/sync/sienge?desde={desde}").status_code == 422
+
+
+def test_sync_all_desde_usa_a_janela_pedida(monkeypatch):
+    from app.services import sienge_sync as ss
+
+    janelas = []
+    monkeypatch.setattr(ss, "centros_do_sync", lambda db: [type("CC", (), {"id_sienge": "1", "nome": "x"})()])
+    monkeypatch.setattr(ss, "sync_single_cc_sienge_data", lambda db, cc, a, b, include_engineering: janelas.append((a, b)))
+    for nome in ("sync_bank_movements_batch",):
+        monkeypatch.setattr(ss, nome, lambda *a, **k: None)
+    import app.services.tracking_engineering as te
+    import app.services.sienge_account_balances as sab
+    monkeypatch.setattr(te, "sync_engineering_disbursements", lambda db: {})
+    monkeypatch.setattr(sab, "persist_closed_year_balances", lambda db: {})
+    monkeypatch.setattr(ss, "sync_sienge_colaboradores", lambda db: None)
+
+    class _DB:
+        def query(self, *a, **k):
+            raise RuntimeError("sem banco")
+
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pass
+
+    ss.sync_all_sienge_data(_DB(), desde="2026-09-01")
+    assert janelas and janelas[0][0] == "2026-09-01"
 
 
 # --- trava única ----------------------------------------------------------
