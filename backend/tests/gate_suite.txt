@@ -40,3 +40,4 @@ tests/test_calculo_parceiros.py
 tests/test_sync_cota_rest.py
 tests/test_sync_memoria.py
 tests/test_rotas_desativadas.py
+tests/test_sienge_busca_unica.py
