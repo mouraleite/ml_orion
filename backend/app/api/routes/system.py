@@ -9,6 +9,31 @@ from app.models.user import User
 
 router = APIRouter()
 
+# Pastas que nunca entram no zip, em qualquer nível (geradas ou instaladas).
+PASTAS_IGNORADAS_EM_QUALQUER_NIVEL = {
+    ".next",
+    "node_modules",
+    ".venv",
+    "__pycache__",
+    ".git",
+}
+
+# Pastas ignoradas só na raiz do projeto. Antes "app" estava na lista acima
+# e tirava do backup backend/app e frontend/src/app, que são o código do sistema.
+PASTAS_IGNORADAS_NA_RAIZ = {
+    "Backups",
+    ".gemini",
+    "scratch_backup",
+}
+
+
+def pasta_ignorada(root_dir: str, pasta_pai: str, nome: str) -> bool:
+    if nome in PASTAS_IGNORADAS_EM_QUALQUER_NIVEL:
+        return True
+    na_raiz = os.path.abspath(pasta_pai) == os.path.abspath(root_dir)
+    return na_raiz and nome in PASTAS_IGNORADAS_NA_RAIZ
+
+
 def get_project_root():
     # backend/app/api/routes/system.py -> 4 levels up
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -49,17 +74,6 @@ def save_new_version(_admin: User = Depends(require_admin)):
     zip_filename = os.path.join(backups_dir, "ERP_ML_ultimo.zip")
     zip_tmp = os.path.join(backups_dir, "ERP_ML_ultimo.zip.tmp")
 
-    ignore_dirs = {
-        ".next",
-        "node_modules",
-        ".venv",
-        "__pycache__",
-        "Backups",
-        ".git",
-        ".gemini",
-        "scratch_backup",
-        "app",
-    }
 
     try:
         if os.path.exists(zip_tmp):
@@ -67,9 +81,9 @@ def save_new_version(_admin: User = Depends(require_admin)):
         with zipfile.ZipFile(zip_tmp, "w", zipfile.ZIP_DEFLATED) as zipf:
             zipf.comment = f"v{new_version} {datetime.now().isoformat()}".encode("utf-8")
             for root, dirs, files in os.walk(root_dir):
-                dirs[:] = [d for d in dirs if d not in ignore_dirs]
+                dirs[:] = [d for d in dirs if not pasta_ignorada(root_dir, root, d)]
                 for file in files:
-                    if file.endswith(".zip.tmp"):
+                    if file.endswith(".zip.tmp") or file.startswith(".fuse_hidden"):
                         continue
                     # Lixo de dev na raiz não entra no zip de versão
                     if root == root_dir and (
