@@ -136,6 +136,10 @@ export const ViabilityReport: React.FC<ViabilityReportProps> = ({
     return cashflow.reduce((acc, month) => acc + (month[field] || 0), 0) * multiplier;
   };
 
+  // Custo financeiro do funding na DRE: juros e taxas. Devolver o principal é caixa, não despesa.
+  const custoFinanceiro = (cashflow: any[], multiplier: number = 1) =>
+    getCashflowTotal(cashflow, "Funding_Despesas", multiplier) - getCashflowTotal(cashflow, "Funding_Amortizacao", multiplier);
+
   // Renomear dinamicamente os cenários para numeração romana (I, II, III) cronológica
   const renamedColumns = useMemo(() => {
     const currentCols = allColumns.filter(c => c.isCurrent);
@@ -998,7 +1002,7 @@ export const ViabilityReport: React.FC<ViabilityReportProps> = ({
                             <td className="p-3 pl-4 text-slate-800">DV&A</td>
                             {renamedColumns.map(col => {
                               const m = getMultiplier(viewMode, col.rawData);
-                              const dva = getCashflowTotal(col.monthly_cashflow, "Despesas", m) + getCashflowTotal(col.monthly_cashflow, "Funding_Despesas", m);
+                              const dva = getCashflowTotal(col.monthly_cashflow, "Despesas", m) + custoFinanceiro(col.monthly_cashflow, m);
                               return <td key={`dva-${col.id}`} className="p-3 text-right text-red-600">({formatCurrency(dva)})</td>
                             })}
                           </tr>
@@ -1027,7 +1031,7 @@ export const ViabilityReport: React.FC<ViabilityReportProps> = ({
                             <td className="p-2 pl-8 text-slate-600">Captação Externa</td>
                             {renamedColumns.map(col => {
                               const m = getMultiplier(viewMode, col.rawData);
-                              return <td key={`ce-${col.id}`} className="p-2 text-right text-red-600">({formatCurrency(getCashflowTotal(col.monthly_cashflow, "Funding_Despesas", m))})</td>
+                              return <td key={`ce-${col.id}`} className="p-2 text-right text-red-600">({formatCurrency(custoFinanceiro(col.monthly_cashflow, m))})</td>
                             })}
                           </tr>
 
@@ -1039,7 +1043,7 @@ export const ViabilityReport: React.FC<ViabilityReportProps> = ({
                               const liq = getCashflowTotal(col.monthly_cashflow, "Receitas", m) - (getCashflowTotal(col.monthly_cashflow, "Impostos_PIS", m) + getCashflowTotal(col.monthly_cashflow, "Impostos_COFINS", m));
                               const cst = getCashflowTotal(col.monthly_cashflow, "Terreno", m) + getCashflowTotal(col.monthly_cashflow, "Obras", m);
                               const mb = liq - cst;
-                              const dva = getCashflowTotal(col.monthly_cashflow, "Despesas", m) + getCashflowTotal(col.monthly_cashflow, "Funding_Despesas", m);
+                              const dva = getCashflowTotal(col.monthly_cashflow, "Despesas", m) + custoFinanceiro(col.monthly_cashflow, m);
                               return <td key={`lo-${col.id}`} className="p-3 text-right text-ml-dark">{formatCurrency(mb - dva)}</td>
                             })}
                           </tr>
@@ -1050,7 +1054,7 @@ export const ViabilityReport: React.FC<ViabilityReportProps> = ({
                               const liq = getCashflowTotal(col.monthly_cashflow, "Receitas", m) - (getCashflowTotal(col.monthly_cashflow, "Impostos_PIS", m) + getCashflowTotal(col.monthly_cashflow, "Impostos_COFINS", m));
                               const cst = getCashflowTotal(col.monthly_cashflow, "Terreno", m) + getCashflowTotal(col.monthly_cashflow, "Obras", m);
                               const mb = liq - cst;
-                              const dva = getCashflowTotal(col.monthly_cashflow, "Despesas", m) + getCashflowTotal(col.monthly_cashflow, "Funding_Despesas", m);
+                              const dva = getCashflowTotal(col.monthly_cashflow, "Despesas", m) + custoFinanceiro(col.monthly_cashflow, m);
                               const perc = liq > 0 ? ((mb - dva) / liq) * 100 : 0;
                               return <td key={`lop-${col.id}`} className="p-3 text-right text-ml-dark">{formatPerc(perc)}</td>
                             })}
@@ -1074,7 +1078,7 @@ export const ViabilityReport: React.FC<ViabilityReportProps> = ({
                               const liq = getCashflowTotal(col.monthly_cashflow, "Receitas", m) - (getCashflowTotal(col.monthly_cashflow, "Impostos_PIS", m) + getCashflowTotal(col.monthly_cashflow, "Impostos_COFINS", m));
                               const cst = getCashflowTotal(col.monthly_cashflow, "Terreno", m) + getCashflowTotal(col.monthly_cashflow, "Obras", m);
                               const mb = liq - cst;
-                              const dva = getCashflowTotal(col.monthly_cashflow, "Despesas", m) + getCashflowTotal(col.monthly_cashflow, "Funding_Despesas", m);
+                              const dva = getCashflowTotal(col.monthly_cashflow, "Despesas", m) + custoFinanceiro(col.monthly_cashflow, m);
                               const irpj = getCashflowTotal(col.monthly_cashflow, "Impostos_IRPJ_CSLL", m) + getCashflowTotal(col.monthly_cashflow, "Impostos_Outros", m);
                               const ll = mb - dva - irpj;
                               return <td key={`ll-${col.id}`} className="p-3 text-right text-ml-dark">{formatCurrency(ll)}</td>
@@ -1087,7 +1091,7 @@ export const ViabilityReport: React.FC<ViabilityReportProps> = ({
                               const liq = getCashflowTotal(col.monthly_cashflow, "Receitas", m) - (getCashflowTotal(col.monthly_cashflow, "Impostos_PIS", m) + getCashflowTotal(col.monthly_cashflow, "Impostos_COFINS", m));
                               const cst = getCashflowTotal(col.monthly_cashflow, "Terreno", m) + getCashflowTotal(col.monthly_cashflow, "Obras", m);
                               const mb = liq - cst;
-                              const dva = getCashflowTotal(col.monthly_cashflow, "Despesas", m) + getCashflowTotal(col.monthly_cashflow, "Funding_Despesas", m);
+                              const dva = getCashflowTotal(col.monthly_cashflow, "Despesas", m) + custoFinanceiro(col.monthly_cashflow, m);
                               const irpj = getCashflowTotal(col.monthly_cashflow, "Impostos_IRPJ_CSLL", m) + getCashflowTotal(col.monthly_cashflow, "Impostos_Outros", m);
                               const ll = mb - dva - irpj;
                               const perc = liq > 0 ? (ll / liq) * 100 : 0;

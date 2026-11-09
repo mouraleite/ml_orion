@@ -93,6 +93,21 @@ def ensure_sienge_account_balances(engine: Engine) -> None:
         _create_sienge_account_balances(conn, engine.dialect.name)
 
 
+def ensure_phase_funding_periodicidade(engine: Engine) -> None:
+    """phase_fundings.taxa_juros_periodicidade ("a.a." ou "a.m."). Idempotente; seguro em production.
+    Linhas existentes ficam "a.a.", que é como a tela sempre pediu a taxa."""
+    if not _has_table(engine, "phase_fundings") or _has_column(engine, "phase_fundings", "taxa_juros_periodicidade"):
+        return
+    with engine.begin() as conn:
+        conn.execute(
+            text("ALTER TABLE phase_fundings ADD COLUMN taxa_juros_periodicidade VARCHAR DEFAULT 'a.a.'")
+        )
+        conn.execute(
+            text("UPDATE phase_fundings SET taxa_juros_periodicidade = 'a.a.' WHERE taxa_juros_periodicidade IS NULL")
+        )
+    logger.info("schema_patches: phase_fundings.taxa_juros_periodicidade adicionada")
+
+
 def apply_schema_patches(engine: Engine) -> None:
     """Garante colunas/tabelas da Onda B (MLDU) sem falhar se já existirem."""
     dialect = engine.dialect.name
@@ -356,3 +371,5 @@ def apply_schema_patches(engine: Engine) -> None:
 
         if not _has_table(engine, "sienge_account_balances"):
             _create_sienge_account_balances(conn, dialect)
+
+    ensure_phase_funding_periodicidade(engine)

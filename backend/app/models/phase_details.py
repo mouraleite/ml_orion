@@ -73,7 +73,8 @@ class PhaseFunding(Base):
     securitizadora = Column(String, nullable=True) # e.g. "Vórtx", "Oliveira Trust", "Opea"
     estrutura_cri = Column(String, nullable=True) # e.g. "Guarda-Chuva", "Não Guarda-Chuva"
     icvm = Column(String, default="ICVM 400") # "ICVM 400" or "ICVM 476"
-    sistema_amortizacao_banco = Column(String, default="SAC") # "SAC", "Price", "Bullet"
+    sistema_amortizacao_banco = Column(String, default="SAC") # "SAC", "Price", "Bullet" (Banco e CRI/CRA)
+    taxa_juros_periodicidade = Column(String, default="a.a.") # "a.a." ou "a.m.": como taxa_juros foi digitada
     
     # Fees & Taxes
     gross_up = Column(Float, default=9.65) # PIS/COFINS etc in %
