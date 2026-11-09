@@ -32,3 +32,4 @@ tests/test_holding_consolidation.py
 tests/test_consolidacao_mldu_access.py
 tests/test_mldu_organograma_validacao.py
 tests/test_seguranca_sync.py
+tests/test_sync_busca_antes_de_apagar.py
