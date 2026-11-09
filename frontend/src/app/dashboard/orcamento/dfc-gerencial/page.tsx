@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { FileSpreadsheet } from "lucide-react";
-import { GROW_TREE_NAME_TH_CLASS, GROW_TREE_PAGE_CLASS, GrowTreeChevron, GrowTreeNameCell, GrowTreeSheet } from "@/components/shared/GrowTreeSheet";
+import { GROW_TREE_NAME_TH_CLASS, GROW_TREE_PAGE_CLASS, GrowTreeChevron, GrowTreeNameCell, GrowTreeSheet, growTreeRowTone, type GrowTreeTone } from "@/components/shared/GrowTreeSheet";
 import { getDfcGerencial, type DfcGerencialAgrupamento } from "@/services/orcamentoDfcGerencial";
 import { useActiveDepartmentId, isDepartmentContextId } from "@/lib/useActiveDepartmentId";
 import { OrcamentoFlyoutFilterBar } from "@/components/orcamento/OrcamentoFlyoutFilterBar";
@@ -200,14 +200,21 @@ function DfcLine({
   ahAvMensal: boolean;
 }) {
   const isEmp = row.kind === "empresa";
-  const isCat = row.kind === "categoria" || isEmp;
-  const bg = isEmp ? "bg-slate-50" : isCat ? "bg-white" : "bg-slate-50/70";
+  const isCat = row.kind === "categoria";
+  const toneKey: GrowTreeTone = isEmp
+    ? "empresa"
+    : row.kind === "centro" && indent > 1
+      ? "detalhe"
+      : row.kind === "categoria" || row.kind === "plano" || row.kind === "centro"
+        ? "conta"
+        : "detalhe";
+  const tone = growTreeRowTone(toneKey);
   return (
-    <tr className={`${bg} hover:bg-slate-50`}>
-      <GrowTreeNameCell indent={indent} bg={bg}>
+    <tr className={`${tone.row} transition-colors`}>
+      <GrowTreeNameCell indent={indent} bg={tone.sticky}>
           <GrowTreeChevron open={expanded} visible={hasKids} onClick={onToggle} />
-          <span className={`font-mono text-xs text-slate-400 w-14 shrink-0 mt-0.5 ${isCat ? "" : "opacity-80"}`}>{row.codigo}</span>
-          <span className={`text-sm leading-snug ${isEmp ? "font-bold text-slate-900" : isCat ? "font-semibold text-slate-800" : "text-slate-600"}`}>
+          <span className={`font-mono text-xs text-slate-400 w-14 shrink-0 mt-0.5 ${isCat || isEmp ? "" : "opacity-80"}`}>{row.codigo}</span>
+          <span className={`text-sm leading-snug ${tone.name}`}>
             {row.descricao}
           </span>
       </GrowTreeNameCell>
@@ -236,7 +243,7 @@ function DfcLine({
       {active.map((key, i) => (
         <td
           key={`tot-${key}`}
-          className={`px-1.5 py-2 border-b border-slate-100 text-right text-[11px] font-semibold whitespace-nowrap bg-slate-50/80 ${i === 0 ? "border-l border-slate-200" : ""}`}
+          className={`px-1.5 py-2 border-b border-slate-100 text-right text-[11px] font-semibold whitespace-nowrap ${i === 0 ? "border-l border-slate-200" : ""}`}
         >
           <Num v={serieValue(row, key, refModo)} />
         </td>

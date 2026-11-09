@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { getDespesasEmpreendimento } from "@/services/orcamentoDespesasEmpreendimento";
-import { GROW_TREE_NAME_TH_CLASS, GROW_TREE_PAGE_CLASS, GrowTreeChevron, GrowTreeNameCell, GrowTreeSheet } from "@/components/shared/GrowTreeSheet";
+import { GROW_TREE_NAME_TH_CLASS, GROW_TREE_PAGE_CLASS, GrowTreeChevron, GrowTreeNameCell, GrowTreeSheet, growTreeRowTone, type GrowTreeTone } from "@/components/shared/GrowTreeSheet";
 import { useActiveDepartmentId, isDepartmentContextId } from "@/lib/useActiveDepartmentId";
 import { OrcamentoFlyoutFilterBar, type OrcamentoModo } from "@/components/orcamento/OrcamentoFlyoutFilterBar";
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
@@ -201,10 +201,11 @@ function Line({
 }) {
   const isEmp = row.kind === "empresa";
   const isGrupo = row.kind === "grupo";
-  const bg = isEmp ? "bg-slate-50" : isGrupo ? "bg-white" : "bg-slate-50/70";
+  const toneKey: GrowTreeTone = isEmp ? "empresa" : isGrupo ? "conta" : "detalhe";
+  const tone = growTreeRowTone(toneKey);
   return (
-    <tr className={`${bg} hover:bg-slate-50`}>
-      <GrowTreeNameCell indent={indent} bg={bg}>
+    <tr className={`${tone.row} transition-colors`}>
+      <GrowTreeNameCell indent={indent} bg={tone.sticky}>
           <GrowTreeChevron open={expanded} visible={hasKids} onClick={onToggle} />
           <span className={`font-mono text-xs text-slate-400 w-14 shrink-0 mt-0.5 ${isGrupo ? "" : "opacity-80"}`}>{row.codigo}</span>
           {clickCentro && row.kind === "centro" && onOpenCentro ? (
@@ -212,7 +213,7 @@ function Line({
               {row.descricao}
             </button>
           ) : (
-            <span className={`text-sm leading-snug ${isEmp ? "font-bold text-slate-900" : isGrupo ? "font-semibold text-slate-800" : "text-slate-600"}`}>
+            <span className={`text-sm leading-snug ${tone.name}`}>
               {row.descricao}
             </span>
           )}
@@ -226,7 +227,7 @@ function Line({
         return (
           <React.Fragment key={m}>
             {active.includes("n") ? (
-              <td className={`px-1.5 py-2 border-b border-slate-100 text-right text-[11px] whitespace-nowrap border-l border-slate-200 ${mi >= corte ? "bg-sky-50/40" : ""}`}>
+              <td className={`px-1.5 py-2 border-b border-slate-100 text-right text-[11px] whitespace-nowrap border-l border-slate-200 ${mi >= corte && toneKey === "detalhe" ? "bg-sky-50/55" : ""}`}>
                 <Num v={n} />
               </td>
             ) : null}
@@ -273,17 +274,17 @@ function Line({
         return (
           <React.Fragment key="tot">
             {active.includes("n") ? (
-              <td className="px-1.5 py-2 border-b border-slate-100 text-right text-[11px] font-semibold whitespace-nowrap bg-slate-50/80 border-l border-slate-200">
+              <td className="px-1.5 py-2 border-b border-slate-100 text-right text-[11px] font-semibold whitespace-nowrap border-l border-slate-200">
                 <Num v={n} />
               </td>
             ) : null}
             {active.includes("ref") ? (
-              <td className="px-1.5 py-2 border-b border-slate-100 text-right text-[11px] font-semibold whitespace-nowrap bg-slate-50/80">
+              <td className="px-1.5 py-2 border-b border-slate-100 text-right text-[11px] font-semibold whitespace-nowrap">
                 <Num v={ref} />
               </td>
             ) : null}
             {active.includes("n") && active.includes("ref") ? (
-              <td className="px-1.5 py-2 border-b border-slate-100 text-right text-[11px] font-semibold whitespace-nowrap bg-slate-50/80">
+              <td className="px-1.5 py-2 border-b border-slate-100 text-right text-[11px] font-semibold whitespace-nowrap">
                 <span className="inline-flex items-center justify-end gap-1">
                   <SemaforoDesvio n={n} ref={ref} tipo="DESPESAS" />
                   <Num v={n - ref} />
@@ -291,17 +292,17 @@ function Line({
               </td>
             ) : null}
             {showMldu && active.includes("n_mldu") ? (
-              <td className="px-1.5 py-2 border-b border-slate-100 text-right text-[11px] font-semibold whitespace-nowrap bg-slate-50/80">
+              <td className="px-1.5 py-2 border-b border-slate-100 text-right text-[11px] font-semibold whitespace-nowrap">
                 <Num v={nM} />
               </td>
             ) : null}
             {showMldu && active.includes("ref_mldu") ? (
-              <td className="px-1.5 py-2 border-b border-slate-100 text-right text-[11px] font-semibold whitespace-nowrap bg-slate-50/80">
+              <td className="px-1.5 py-2 border-b border-slate-100 text-right text-[11px] font-semibold whitespace-nowrap">
                 <Num v={refM} />
               </td>
             ) : null}
             {showMldu && active.includes("n_mldu") && active.includes("ref_mldu") ? (
-              <td className="px-1.5 py-2 border-b border-slate-100 text-right text-[11px] font-semibold whitespace-nowrap bg-slate-50/80">
+              <td className="px-1.5 py-2 border-b border-slate-100 text-right text-[11px] font-semibold whitespace-nowrap">
                 <span className="inline-flex items-center justify-end gap-1">
                   <SemaforoDesvio n={nM} ref={refM} tipo="DESPESAS" />
                   <Num v={nM - refM} />
