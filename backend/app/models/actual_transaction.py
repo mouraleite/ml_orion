@@ -10,7 +10,8 @@ class ActualTransaction(Base):
     """
     __tablename__ = "actual_transactions"
 
-    id = Column(Integer, primary_key=True, index=True)
+    # Sem index=True: a chave primária já indexa o id (o índice extra ocupava ~62 MB no Neon).
+    id = Column(Integer, primary_key=True)
     cost_center_id = Column(Integer, ForeignKey("cost_centers.id", ondelete="CASCADE"), index=True)
     
     # ID nico que vem da origem (ex: ID da parcela no Sienge ou Contrato) 
