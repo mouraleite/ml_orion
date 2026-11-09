@@ -27,11 +27,13 @@ def _run_sienge_sync_job(full_load: bool) -> None:
     """Abre sessão própria: a do request já fecha antes do background task.
     Usa a mesma trava do sync agendado: dois syncs nunca rodam juntos."""
     from app.core.scheduler import run_with_sync_lock
+    from app.core.sync_keepalive import manter_acordado
 
     def _job():
         db = SessionLocal()
         try:
-            sync_all_sienge_data(db, full_load)
+            with manter_acordado():
+                sync_all_sienge_data(db, full_load)
         finally:
             db.close()
 
@@ -78,9 +80,22 @@ def trigger_cron_sync(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Segredo de cron inválido.",
         )
+    from app.core.scheduler import HORAS_SYNC_RECENTE, sync_concluido_recentemente
+
+    db = SessionLocal()
+    try:
+        recente = sync_concluido_recentemente(db)
+    finally:
+        db.close()
+    if recente:
+        return {
+            "message": f"Sync já concluído há menos de {HORAS_SYNC_RECENTE}h. Nada a fazer.",
+            "iniciado": False,
+        }
     background_tasks.add_task(daily_sienge_sync)
     return {
         "message": "Sync diário iniciado em background.",
+        "iniciado": True,
         "schedule_hint": "09:00 e 14:00 America/Sao_Paulo",
     }
 
