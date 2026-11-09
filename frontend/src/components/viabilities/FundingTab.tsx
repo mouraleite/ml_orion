@@ -27,6 +27,7 @@ export function FundingTab({ phaseId, isReadonly }: FundingTabProps) {
     taxa_estruturacao: 0.0,
     diluir_custos: false,
     sistema_amortizacao_banco: "SAC",
+    taxa_juros_periodicidade: "a.a.",
   });
   
   const { setHasUnsavedChanges } = useUnsavedChanges();
@@ -68,6 +69,7 @@ export function FundingTab({ phaseId, isReadonly }: FundingTabProps) {
           taxa_estruturacao: result.taxa_estruturacao || 0.0,
           diluir_custos: result.diluir_custos || false,
           sistema_amortizacao_banco: result.sistema_amortizacao_banco || "SAC",
+          taxa_juros_periodicidade: result.taxa_juros_periodicidade === "a.m." ? "a.m." : "a.a.",
         };
         setData(mergedData);
         setInitialData(mergedData);
@@ -211,16 +213,27 @@ export function FundingTab({ phaseId, isReadonly }: FundingTabProps) {
               )}
 
               <div className="space-y-1">
-                <label className="text-sm font-medium text-slate-700">Taxa de Juros (% a.a.)</label>
-                <div className="relative">
-                  <span className="absolute right-3 top-2.5 text-slate-500 font-medium">%</span>
-                  <Input 
-                    type="number" step="0.01"
-                    className="font-medium pr-8"
-                    value={data.taxa_juros}
+                <label className="text-sm font-medium text-slate-700">Taxa de Juros</label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <span className="absolute right-3 top-2.5 text-slate-500 font-medium">%</span>
+                    <Input 
+                      type="number" step="0.01"
+                      className="font-medium pr-8"
+                      value={data.taxa_juros}
+                      disabled={isReadonly}
+                      onChange={(e) => setData({ ...data, taxa_juros: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <select
+                    className="ml-select w-28"
+                    value={data.taxa_juros_periodicidade}
                     disabled={isReadonly}
-                    onChange={(e) => setData({ ...data, taxa_juros: parseFloat(e.target.value) || 0 })}
-                  />
+                    onChange={(e) => setData({ ...data, taxa_juros_periodicidade: e.target.value })}
+                  >
+                    <option value="a.a.">% a.a.</option>
+                    <option value="a.m.">% a.m.</option>
+                  </select>
                 </div>
               </div>
               
@@ -239,7 +252,7 @@ export function FundingTab({ phaseId, isReadonly }: FundingTabProps) {
                 </select>
               </div>
 
-              {!isCriCra && (
+              {(
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-slate-700">Sistema de Amortização</label>
                   <select 
@@ -386,13 +399,15 @@ export function FundingTab({ phaseId, isReadonly }: FundingTabProps) {
             ) : (
               <div className="space-y-4">
                 <p className="text-sm text-slate-400">
-                  Operação bancária tradicional baseada em juros compostos da taxa de {data.taxa_juros}% a.a + {data.indexador}.
+                  Operação bancária tradicional baseada em juros compostos da taxa de {data.taxa_juros}% {data.taxa_juros_periodicidade} + {data.indexador}.
                 </p>
                 <div className="pt-4 border-t border-slate-700 mt-4">
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-400">Taxa Equivalente Mensal</span>
+                    <span className="text-slate-400">{data.taxa_juros_periodicidade === "a.m." ? "Taxa Equivalente Anual" : "Taxa Equivalente Mensal"}</span>
                     <span className="font-medium text-slate-200">
-                      {(((1 + data.taxa_juros / 100) ** (1/12) - 1) * 100).toFixed(2)}% a.m.
+                      {data.taxa_juros_periodicidade === "a.m."
+                        ? `${(((1 + data.taxa_juros / 100) ** 12 - 1) * 100).toFixed(2)}% a.a.`
+                        : `${(((1 + data.taxa_juros / 100) ** (1/12) - 1) * 100).toFixed(2)}% a.m.`}
                     </span>
                   </div>
                 </div>

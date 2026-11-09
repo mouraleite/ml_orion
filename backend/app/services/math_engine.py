@@ -76,6 +76,52 @@ def calcular_custos_funding(db: Session, funding, custo_obras_total: float, vgv_
     
     return volume, custo_estruturacao, custo_recorrente_total
 
+TIPOS_FUNDING_COM_CRONOGRAMA = ("Plano Empresarial (Banco)", "CRI", "CRA")
+
+
+def taxa_mensal_funding(funding) -> float:
+    """Taxa de juros do funding em decimal ao mês.
+    taxa_juros_periodicidade: "a.a." (padrão) converte por (1+i)^(1/12) - 1; "a.m." usa direto."""
+    taxa = (getattr(funding, "taxa_juros", 0.0) or 0.0) / 100.0
+    periodicidade = (getattr(funding, "taxa_juros_periodicidade", None) or "a.a.").strip().lower()
+    if taxa <= 0:
+        return 0.0
+    if periodicidade in ("a.m.", "am", "mensal"):
+        return taxa
+    return (1 + taxa) ** (1 / 12) - 1
+
+
+def cronograma_funding(volume: float, taxa_mensal: float, prazo: int, sistema: str) -> list[tuple[float, float]]:
+    """Lista de (juros, amortização) por mês de pagamento, do 1º ao último.
+    A soma das amortizações é sempre o volume captado."""
+    if volume <= 0 or prazo <= 0:
+        return []
+    sistema = sistema or "SAC"
+    linhas = []
+    if sistema == "Bullet":
+        for j in range(prazo):
+            juros = volume * taxa_mensal
+            linhas.append((juros, volume if j == prazo - 1 else 0.0))
+        return linhas
+    if taxa_mensal <= 0:
+        return [(0.0, volume / prazo) for _ in range(prazo)]
+    saldo = volume
+    if sistema == "Price":
+        pmt = volume * (taxa_mensal / (1 - (1 + taxa_mensal) ** -prazo))
+        for j in range(prazo):
+            juros = saldo * taxa_mensal
+            amort = saldo if j == prazo - 1 else pmt - juros
+            linhas.append((juros, amort))
+            saldo -= amort
+        return linhas
+    amort = volume / prazo  # SAC
+    for j in range(prazo):
+        juros = saldo * taxa_mensal
+        linhas.append((juros, amort))
+        saldo -= amort
+    return linhas
+
+
 def _extract_curve(json_field) -> tuple[list, int]:
     """
     Busca a curva vinculada à fase a partir do próprio JSON da linha.
@@ -114,22 +160,6 @@ from app.models.scenario import Scenario
 def calculate_viability_results(db: Session, phase_id: int, scenario_id: int = None):
     phase = db.query(Phase).filter(Phase.id == phase_id).first()
     if not phase:
-        total_investimento = df_calc["Obras"].sum() + df_calc["Despesas"].sum() + df_calc["Terreno"].sum()
-        vgv_global_bruto = vgv_bruto # We have vgv_bruto in scope!
-        
-        expo_inv = abs(exposicao_maxima) / total_investimento * 100 if total_investimento > 0 else 0.0
-        expo_vgv = abs(exposicao_maxima) / vgv_global_bruto * 100 if vgv_global_bruto > 0 else 0.0
-        
-        retorno_com_juros = (lucro_liquido / total_investimento * 100) if total_investimento > 0 else 0.0
-        
-        receita_total = df_calc["Receitas"].sum()
-        receita_vendas = df_calc["Receitas_Vendas"].sum()
-        prop_vendas = (receita_vendas / receita_total) if receita_total > 0 else 1.0
-        impostos_vendas = df_calc["Impostos"].sum() * prop_vendas
-        
-        lucro_sem_juros = receita_vendas - total_investimento - impostos_vendas - df_calc["Funding_Despesas"].sum()
-        retorno_sem_juros = (lucro_sem_juros / total_investimento * 100) if total_investimento > 0 else 0.0
-
         return {"error": "Phase not found"}
 
     # Extrair Cenário se fornecido
@@ -781,58 +811,47 @@ def calculate_viability_results(db: Session, phase_id: int, scenario_id: int = N
 
     # Funding (CRI/CRA/Banco)
     df["Funding_Entrada"] = 0.0
-    df["Funding_Despesas"] = 0.0
-    
-    if phase.funding:
-        volume, custo_estruturacao, custo_recorrente_total = calcular_custos_funding(db, phase.funding, custo_obras_total, vgv_total)
-        
+    df["Funding_Despesas"] = 0.0      # tudo o que sai do caixa por causa do funding
+    df["Funding_Amortizacao"] = 0.0   # parte de Funding_Despesas que é devolução do principal
+
+    funding = phase.funding
+    if funding and (funding.tipo_funding or "") != "Nenhum":
+        volume, custo_estruturacao, custo_recorrente_total = calcular_custos_funding(db, funding, custo_obras_total, vgv_total)
+
         # A entrada do Funding (dinheiro captado)
         if volume > 0:
             df.loc[0, "Funding_Entrada"] = volume
-            
-        if phase.funding.tipo_funding == "Plano Empresarial (Banco)" and volume > 0 and phase.funding.prazo_meses > 0:
-            sis_amort = getattr(phase.funding, 'sistema_amortizacao_banco', 'SAC') or 'SAC'
-            tx_banco = (phase.funding.taxa_juros or 0.0) / 100.0
-            pz_banco = phase.funding.prazo_meses
-            
-            for j in range(pz_banco):
-                mes_pgto = 1 + j
-                if mes_pgto >= prazo:
-                    break
-                if sis_amort == "Price" and tx_banco > 0:
-                    pmt = volume * (tx_banco / (1 - (1 + tx_banco) ** -pz_banco))
-                    df.loc[mes_pgto, "Funding_Despesas"] += pmt
-                elif sis_amort == "SAC" and tx_banco > 0:
-                    amort = volume / pz_banco
-                    saldo = volume - (amort * j)
-                    juros = saldo * tx_banco
-                    df.loc[mes_pgto, "Funding_Despesas"] += amort + juros
-                elif sis_amort == "Bullet":
-                    juros = volume * tx_banco
-                    if j == pz_banco - 1:
-                        df.loc[mes_pgto, "Funding_Despesas"] += volume + juros
-                    else:
-                        df.loc[mes_pgto, "Funding_Despesas"] += juros
+
+        # Juros + devolução do principal (Banco e CRI/CRA), pelo sistema escolhido.
+        if funding.tipo_funding in TIPOS_FUNDING_COM_CRONOGRAMA and volume > 0 and (funding.prazo_meses or 0) > 0:
+            sis_amort = getattr(funding, 'sistema_amortizacao_banco', 'SAC') or 'SAC'
+            parcelas = cronograma_funding(volume, taxa_mensal_funding(funding), funding.prazo_meses, sis_amort)
+            ultimo_mes = len(parcelas)  # pagamentos nos meses 1..n (índice 0 é a captação)
+            if ultimo_mes + 1 > len(df):
+                # Parcelas além do horizonte: estende o fluxo com meses zerados em vez de descartá-las.
+                novo_tam = ultimo_mes + 1
+                df = df.reindex(range(novo_tam), fill_value=0.0)
+                df["Mes"] = range(1, novo_tam + 1)
+            for j, (juros, amort) in enumerate(parcelas):
+                df.loc[1 + j, "Funding_Despesas"] += juros + amort
+                df.loc[1 + j, "Funding_Amortizacao"] += amort
+
+        # Custos de estruturação e recorrentes (CRI/CRA; no Banco são zero)
+        custo_total_funding = custo_estruturacao + custo_recorrente_total
+        if custo_total_funding > 0:
+            if getattr(funding, 'diluir_custos', False):
+                # Dilui nos meses da obra — normaliza para garantir que soma = custo_total_funding
+                total_obras_perc = sum(obras_dist[i] for i in range(prazo) if obras_dist[i] > 0)
+                if total_obras_perc > 0:
+                    for i in range(prazo):
+                        if obras_dist[i] > 0:
+                            df.loc[i, "Funding_Despesas"] += custo_total_funding * (obras_dist[i] / total_obras_perc)
                 else:
-                    df.loc[mes_pgto, "Funding_Despesas"] += volume / pz_banco
-        else:
-            custo_total_funding = custo_estruturacao + custo_recorrente_total
-            
-            # A despesa financeira do Funding
-            if custo_total_funding > 0:
-                if getattr(phase.funding, 'diluir_custos', False):
-                    # Dilui nos meses da obra — normaliza para garantir que soma = custo_total_funding
-                    total_obras_perc = sum(obras_dist[i] for i in range(prazo) if obras_dist[i] > 0)
-                    if total_obras_perc > 0:
-                        for i in range(prazo):
-                            if obras_dist[i] > 0:
-                                df.loc[i, "Funding_Despesas"] = custo_total_funding * (obras_dist[i] / total_obras_perc)
-                    else:
-                        df.loc[0, "Funding_Despesas"] = custo_total_funding
-                else:
-                    # Mês 1 (Desembolso upfront)
-                    df.loc[0, "Funding_Despesas"] = custo_total_funding
-                
+                    df.loc[0, "Funding_Despesas"] += custo_total_funding
+            else:
+                # Mês 1 (Desembolso upfront)
+                df.loc[0, "Funding_Despesas"] += custo_total_funding
+
     df["Fluxo_de_Caixa"] = df["Receitas"] - df["Obras"] - df["Despesas"] - df["Impostos"] - df["Terreno"] + df["Funding_Entrada"] - df["Funding_Despesas"]
 
     # --- CÁLCULO DE INDICADORES (Helper) ---
@@ -877,7 +896,9 @@ def calculate_viability_results(db: Session, phase_id: int, scenario_id: int = N
                 payback = j + 1
                 break
 
-        lucro_liquido = df_calc["Receitas"].sum() - df_calc["Obras"].sum() - df_calc["Despesas"].sum() - df_calc["Impostos"].sum() - df_calc["Terreno"].sum() - df_calc["Funding_Despesas"].sum()
+        # Devolver o principal do funding é caixa, não custo: o lucro só desconta juros e taxas.
+        custo_financeiro = df_calc["Funding_Despesas"].sum() - df_calc["Funding_Amortizacao"].sum()
+        lucro_liquido = df_calc["Receitas"].sum() - df_calc["Obras"].sum() - df_calc["Despesas"].sum() - df_calc["Impostos"].sum() - df_calc["Terreno"].sum() - custo_financeiro
         vgv_calc = df_calc["Receitas"].sum()
         margem = (lucro_liquido / vgv_calc * 100) if vgv_calc > 0 else 0.0
 
@@ -894,12 +915,19 @@ def calculate_viability_results(db: Session, phase_id: int, scenario_id: int = N
         prop_vendas = (receita_vendas / receita_total) if receita_total > 0 else 1.0
         impostos_vendas = df_calc["Impostos"].sum() * prop_vendas
         
-        lucro_sem_juros = receita_vendas - total_investimento - impostos_vendas - df_calc["Funding_Despesas"].sum()
+        lucro_sem_juros = receita_vendas - total_investimento - impostos_vendas - custo_financeiro
         retorno_sem_juros = (lucro_sem_juros / total_investimento * 100) if total_investimento > 0 else 0.0
 
         return {
             "vgv_total": vgv_calc,
             "custo_obras": df_calc["Obras"].sum(),
+            # Linhas da DRE de obras, tiradas do próprio fluxo: somam exatamente "Obras".
+            "dre_obras_infraestrutura": float(df_calc["Obras_Custo"].sum()),
+            "dre_obras_projetos": float(df_calc["Obras_Proj"].sum()),
+            "dre_obras_aquisicao": float(df_calc["Obras_Aq"].sum()),
+            "dre_obras_adm": float(df_calc["Obras_Adm"].sum()),
+            "dre_obras_extras": float(df_calc["Obras"].sum() - df_calc["Obras_Custo"].sum() - df_calc["Obras_Proj"].sum() - df_calc["Obras_Aq"].sum() - df_calc["Obras_Adm"].sum()),
+            "custo_financeiro_funding": float(custo_financeiro),
             "custo_projetos": custo_projetos, # Fixos não escalonados aqui, DRE usa soma
             "aquisicao_area": aquisicao_area,
             "adm_obras": adm_obras,
@@ -946,6 +974,8 @@ def calculate_viability_results(db: Session, phase_id: int, scenario_id: int = N
         
         if rateios.get("custo_obras", False):
             df_emp["Obras"] *= fator_empreendedor
+            for _col in [c for c in df_emp.columns if c.startswith("Obras_")]:
+                df_emp[_col] *= fator_empreendedor
             
         if rateios.get("marketing", False):
             df_emp["Despesas"] *= fator_empreendedor
@@ -1033,6 +1063,7 @@ def calculate_viability_results(db: Session, phase_id: int, scenario_id: int = N
             
         df_p["Funding_Entrada"] *= fator_global
         df_p["Funding_Despesas"] *= fator_global
+        df_p["Funding_Amortizacao"] *= fator_global
         
         df_p["Fluxo_de_Caixa"] = df_p["Receitas"] - df_p["Obras"] - df_p["Despesas"] - df_p["Impostos"] - df_p["Terreno"] + df_p["Funding_Entrada"] - df_p["Funding_Despesas"]
         

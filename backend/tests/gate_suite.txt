@@ -35,3 +35,4 @@ tests/test_seguranca_sync.py
 tests/test_sync_busca_antes_de_apagar.py
 tests/test_backup_versao.py
 tests/test_sync_gratuito.py
+tests/test_calculo_funding.py

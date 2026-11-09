@@ -242,6 +242,10 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
       return cashflow.reduce((acc, month) => acc + (month[field] || 0), 0) * multiplier;
   };
 
+  // Custo financeiro do funding na DRE: juros e taxas. Devolver o principal é caixa, não despesa.
+  const custoFinanceiro = (cashflow: any[]) =>
+      getCashflowTotal(cashflow, "Funding_Despesas") - getCashflowTotal(cashflow, "Funding_Amortizacao");
+
   return (
     <div className="p-8 print:px-8 print:pt-4 print:pb-0 print:m-0 space-y-8 print:space-y-4 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row md:items-center justify-between border-b pb-4 print:border-none print:pb-2 gap-4">
@@ -644,7 +648,7 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
                       <td className="py-1 px-4 border-b border-slate-50 text-slate-500 pl-8">Aquisição de Área (CAPEX)</td>
                       <td className="py-1 px-4 border-b border-slate-50 text-slate-400 text-xs">R$</td>
                       {columns.map(col => {
-                          const val = col.ind?.aquisicao_area || 0;
+                          const val = col.ind?.dre_obras_aquisicao ?? col.ind?.aquisicao_area ?? 0;
                           return (
                           <td key={col.id} className={`py-1 px-4 border-b border-slate-50 text-right text-red-600 ${(col.isCurrent || (col as any).isFamily) ? 'bg-ml-green/10' : ''}`}>
                               ({formatCurrency(val * multiplier)})
@@ -655,7 +659,7 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
                       <td className="py-1 px-4 border-b border-slate-100 text-slate-500 pl-8">Projetos</td>
                       <td className="py-1 px-4 border-b border-slate-100 text-slate-400 text-xs">R$</td>
                       {columns.map(col => {
-                          const val = col.ind?.custo_projetos || 0;
+                          const val = col.ind?.dre_obras_projetos ?? col.ind?.custo_projetos ?? 0;
                           return (
                           <td key={col.id} className={`py-1 px-4 border-b border-slate-100 text-right text-red-600 ${(col.isCurrent || (col as any).isFamily) ? 'bg-ml-green/10' : ''}`}>
                               ({formatCurrency(val * multiplier)})
@@ -666,7 +670,7 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
                       <td className="py-1 px-4 border-b border-slate-50 text-slate-500 pl-8">Obras de Infraestrutura</td>
                       <td className="py-1 px-4 border-b border-slate-50 text-slate-400 text-xs">R$</td>
                       {columns.map(col => {
-                          const val = col.ind?.custo_obras || 0;
+                          const val = col.ind?.dre_obras_infraestrutura ?? col.ind?.custo_obras ?? 0;
                           return (
                           <td key={col.id} className={`py-1 px-4 border-b border-slate-50 text-right text-red-600 ${(col.isCurrent || (col as any).isFamily) ? 'bg-ml-green/10' : ''}`}>
                               ({formatCurrency(val * multiplier)})
@@ -677,7 +681,7 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
                       <td className="py-1 px-4 border-b border-slate-100 text-slate-500 pl-8">Administração da Obra</td>
                       <td className="py-1 px-4 border-b border-slate-100 text-slate-400 text-xs">R$</td>
                       {columns.map(col => {
-                          const val = col.ind?.adm_obras || 0;
+                          const val = col.ind?.dre_obras_adm ?? col.ind?.adm_obras ?? 0;
                           return (
                           <td key={col.id} className={`py-1 px-4 border-b border-slate-100 text-right text-red-600 ${(col.isCurrent || (col as any).isFamily) ? 'bg-ml-green/10' : ''}`}>
                               ({formatCurrency(val * multiplier)})
@@ -688,7 +692,7 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
                       <td className="py-1 px-4 border-b border-slate-50 text-slate-500 pl-8">Custos Extras de Obras</td>
                       <td className="py-1 px-4 border-b border-slate-50 text-slate-400 text-xs">R$</td>
                       {columns.map(col => {
-                          const val = col.ind?.extra_constructions_total || 0;
+                          const val = col.ind?.dre_obras_extras ?? col.ind?.extra_constructions_total ?? 0;
                           return (
                           <td key={col.id} className={`py-1 px-4 border-b border-slate-50 text-right text-red-600 ${(col.isCurrent || (col as any).isFamily) ? 'bg-ml-green/10' : ''}`}>
                               ({formatCurrency(val * multiplier)})
@@ -745,7 +749,7 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
                       <td className="py-2 px-4 border-b border-slate-100 text-slate-400 font-medium pt-4">R$</td>
                       {columns.map(col => {
                           const desp = getCashflowTotal(col.monthly_cashflow, "Despesas");
-                          const funding = getCashflowTotal(col.monthly_cashflow, "Funding_Despesas");
+                          const funding = custoFinanceiro(col.monthly_cashflow);
                           return (
                           <td key={col.id} className={`py-2 px-4 border-b border-slate-100 text-right font-bold text-red-600 pt-4 ${(col.isCurrent || (col as any).isFamily) ? 'bg-ml-green/10' : ''}`}>
                               ({formatCurrency(desp + funding)})
@@ -800,7 +804,7 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
                       <td className="py-1 px-4 border-b border-slate-50 text-slate-500 pl-8">Funding (Juros / Estruturação)</td>
                       <td className="py-1 px-4 border-b border-slate-50 text-slate-400 text-xs">R$</td>
                       {columns.map(col => {
-                          const val = getCashflowTotal(col.monthly_cashflow, "Funding_Despesas");
+                          const val = custoFinanceiro(col.monthly_cashflow);
                           return (
                           <td key={col.id} className={`py-1 px-4 border-b border-slate-50 text-right text-red-600 ${(col.isCurrent || (col as any).isFamily) ? 'bg-ml-green/10' : ''}`}>
                               ({formatCurrency(val * multiplier)})
@@ -822,7 +826,7 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
                           const obras = getCashflowTotal(col.monthly_cashflow, "Obras");
                           const terreno = getCashflowTotal(col.monthly_cashflow, "Terreno");
                           const desp = getCashflowTotal(col.monthly_cashflow, "Despesas");
-                          const funding = getCashflowTotal(col.monthly_cashflow, "Funding_Despesas");
+                          const funding = custoFinanceiro(col.monthly_cashflow);
                           
                           const liq = rec - (pis + cofins + outros);
                           const mb = liq - (obras + terreno);
@@ -845,7 +849,7 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
                            const obras = getCashflowTotal(col.monthly_cashflow, "Obras");
                            const terreno = getCashflowTotal(col.monthly_cashflow, "Terreno");
                            const desp = getCashflowTotal(col.monthly_cashflow, "Despesas");
-                           const funding = getCashflowTotal(col.monthly_cashflow, "Funding_Despesas");
+                           const funding = custoFinanceiro(col.monthly_cashflow);
                            
                            const liq = rec - (pis + cofins + outros);
                            const mb = liq - (obras + terreno);
@@ -877,7 +881,7 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
                           const obras = getCashflowTotal(col.monthly_cashflow, "Obras");
                           const terreno = getCashflowTotal(col.monthly_cashflow, "Terreno");
                           const desp = getCashflowTotal(col.monthly_cashflow, "Despesas");
-                          const funding = getCashflowTotal(col.monthly_cashflow, "Funding_Despesas");
+                          const funding = custoFinanceiro(col.monthly_cashflow);
                           
                           const ll = rec - imp - obras - terreno - desp - funding;
                           
@@ -900,7 +904,7 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
                           const obras = getCashflowTotal(col.monthly_cashflow, "Obras");
                           const terreno = getCashflowTotal(col.monthly_cashflow, "Terreno");
                           const desp = getCashflowTotal(col.monthly_cashflow, "Despesas");
-                          const funding = getCashflowTotal(col.monthly_cashflow, "Funding_Despesas");
+                          const funding = custoFinanceiro(col.monthly_cashflow);
                           
                           const ll = rec - imp - obras - terreno - desp - funding;
                           const liq = rec - (pis + cofins + outros);

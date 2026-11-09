@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Literal, Optional
 
 # ---- TAXES ----
 class PhaseTaxesBase(BaseModel):
@@ -73,6 +73,7 @@ class PhaseFundingBase(BaseModel):
     taxa_estruturacao: Optional[float] = 0.0
     diluir_custos: Optional[bool] = False
     sistema_amortizacao_banco: Optional[str] = "SAC"
+    taxa_juros_periodicidade: Optional[Literal["a.a.", "a.m."]] = "a.a."
 
 class PhaseFundingCreate(PhaseFundingBase):
     phase_id: int
