@@ -252,6 +252,11 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
         <div>
           <h2 className="text-xl font-bold text-slate-900">Dashboard de Resultados</h2>
           <p className="text-sm text-slate-500">Comparativo de Cenários, DRE e Indicadores de Rentabilidade.</p>
+          {(data as any).aviso_parceiros && (
+            <p className="mt-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-1.5 print:hidden">
+              {(data as any).aviso_parceiros}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-4 print:hidden">
           <div className="flex bg-slate-100 p-1 rounded-lg">
@@ -760,7 +765,7 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
                       <td className="py-1 px-4 border-b border-slate-50 text-slate-500 pl-8">Marketing</td>
                       <td className="py-1 px-4 border-b border-slate-50 text-slate-400 text-xs">R$</td>
                       {columns.map(col => {
-                          const val = col.ind?.marketing || 0;
+                          const val = col.ind?.dre_despesas_marketing ?? (col.ind?.marketing || 0);
                           return (
                           <td key={col.id} className={`py-1 px-4 border-b border-slate-50 text-right text-red-600 ${(col.isCurrent || (col as any).isFamily) ? 'bg-ml-green/10' : ''}`}>
                               ({formatCurrency(val * multiplier)})
@@ -771,7 +776,7 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
                       <td className="py-1 px-4 border-b border-slate-100 text-slate-500 pl-8">Comercial</td>
                       <td className="py-1 px-4 border-b border-slate-100 text-slate-400 text-xs">R$</td>
                       {columns.map(col => {
-                          const val = (col.ind?.comercial || 0);
+                          const val = col.ind?.dre_despesas_comercial ?? ((col.ind?.comercial || 0));
                           return (
                           <td key={col.id} className={`py-1 px-4 border-b border-slate-100 text-right text-red-600 ${(col.isCurrent || (col as any).isFamily) ? 'bg-ml-green/10' : ''}`}>
                               ({formatCurrency(val * multiplier)})
@@ -782,7 +787,7 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
                       <td className="py-1 px-4 border-b border-slate-50 text-slate-500 pl-8">Administrativas</td>
                       <td className="py-1 px-4 border-b border-slate-50 text-slate-400 text-xs">R$</td>
                       {columns.map(col => {
-                          const val = col.ind?.adm_despesas || 0;
+                          const val = col.ind?.dre_despesas_adm ?? (col.ind?.adm_despesas || 0);
                           return (
                           <td key={col.id} className={`py-1 px-4 border-b border-slate-50 text-right text-red-600 ${(col.isCurrent || (col as any).isFamily) ? 'bg-ml-green/10' : ''}`}>
                               ({formatCurrency(val * multiplier)})
@@ -793,7 +798,7 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
                       <td className="py-1 px-4 border-b border-slate-100 text-slate-500 pl-8">Despesas Extras</td>
                       <td className="py-1 px-4 border-b border-slate-100 text-slate-400 text-xs">R$</td>
                       {columns.map(col => {
-                          const val = col.ind?.extra_expenses_total || 0;
+                          const val = col.ind?.dre_despesas_extras ?? (col.ind?.extra_expenses_total || 0);
                           return (
                           <td key={col.id} className={`py-1 px-4 border-b border-slate-100 text-right text-red-600 ${(col.isCurrent || (col as any).isFamily) ? 'bg-ml-green/10' : ''}`}>
                               ({formatCurrency(val * multiplier)})
