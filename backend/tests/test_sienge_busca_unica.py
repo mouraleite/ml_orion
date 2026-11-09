@@ -97,3 +97,44 @@ def test_fetch_do_sync_usa_a_busca_unica_quando_ativa(monkeypatch):
 def test_fora_da_busca_unica_o_fetch_e_o_de_sempre(monkeypatch):
     monkeypatch.setattr(ss, "_fetch_paginated_bulk_direto", lambda url: iter([[{"id": 9}]]))
     assert _ids(ss._fetch_paginated_bulk(BASE + "&costCentersId=200")) == [9]
+
+
+# --- item 4: todos os centros de custo -------------------------------------------
+
+def test_sync_inclui_todos_os_ccs_com_codigo_sienge(db_session):
+    from app.models.cost_center import CostCenter
+
+    db_session.add_all([
+        CostCenter(nome="Acompanhado", id_sienge="14100", track_in_dashboard=True),
+        CostCenter(nome="Fora do prefixo", id_sienge="72801", track_in_dashboard=False),
+        CostCenter(nome="Sem código", id_sienge=None),
+    ])
+    db_session.flush()
+    ids = {c.id_sienge for c in ss.centros_do_sync(db_session)}
+    assert {"14100", "72801"} <= ids
+    assert None not in ids
+
+
+def test_vendas_so_para_cc_com_unidades(db_session, monkeypatch):
+    from app.models.cost_center import CostCenter
+    from app.models.unit import Unit
+
+    vendas = []
+    monkeypatch.setattr(ss, "sync_units_se_preciso", lambda db, cc: False)
+    monkeypatch.setattr(ss, "sync_sales", lambda db, cc, a, b: vendas.append(cc.id_sienge))
+    for nome in ("sync_outcomes", "sync_incomes"):
+        monkeypatch.setattr(ss, nome, lambda db, cc, a, b: None)
+    for nome in ("mirror_afac_income_as_outcome",):
+        monkeypatch.setattr(ss, nome, lambda db, cc, a, b: None)
+    for nome in ("sync_receivables_forecast", "sync_payables_forecast", "sync_overdue_open_tracking"):
+        monkeypatch.setattr(ss, nome, lambda db, cc, *a, **k: None)
+
+    com = CostCenter(nome="Com lotes", id_sienge="88801")
+    sem = CostCenter(nome="Sem lotes", id_sienge="88802")
+    db_session.add_all([com, sem])
+    db_session.flush()
+    db_session.add(Unit(cost_center_id=com.id, id_sienge=1, name="L1"))
+    db_session.flush()
+    for cc in (com, sem):
+        ss.sync_single_cc_sienge_data(db_session, cc, "2026-11-01", "2026-11-09", include_engineering=False)
+    assert vendas == ["88801"]
