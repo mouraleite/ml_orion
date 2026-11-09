@@ -26,10 +26,22 @@ def outcome_contas_pagar_url(cost_center_sienge_id: str, start_date: str, end_da
         f"&costCentersId={cost_center_sienge_id}&withAuthorizations=true&withBankMovements=true"
     )
 
-def _fetch_paginated_bulk(url: str):
-    """Auxiliar para buscar todas as páginas de um endpoint Bulk Data. Retorna em blocos."""
+def _fetch_paginated_bulk_direto(url: str):
     # strict: se uma página falhar, levanta erro e a transação é desfeita (nada é apagado com leitura parcial)
     yield from get_default_client().paginate_bulk(url, strict=True)
+
+
+def _fetch_paginated_bulk(url: str):
+    """Auxiliar para buscar todas as páginas de um endpoint Bulk Data. Retorna em blocos.
+    Dentro de sienge_busca_unica.busca_unica(), URLs com costCentersId são servidas
+    pela busca única da empresa toda (ver sienge_busca_unica.py)."""
+    from app.services.sienge_busca_unica import ativa
+
+    cache = ativa()
+    if cache is not None:
+        yield from cache.paginas_do_cc(url)
+        return
+    yield from _fetch_paginated_bulk_direto(url)
 
 def sync_all_sienge_data(db: Session, full_load: bool = False):
     """
@@ -62,15 +74,19 @@ def sync_all_sienge_data(db: Session, full_load: bool = False):
         centros = tracked
     
     falhas: list[str] = []
-    for cc in centros:
-        if not cc.id_sienge:
-            continue
-        try:
-            sync_single_cc_sienge_data(db, cc, start_date, end_date, include_engineering=False)
-        except Exception as exc:
-            db.rollback()
-            falhas.append(f"{cc.id_sienge}: {exc}")
-            print(f"[Sienge Sync] Falha no CC {cc.id_sienge} ({cc.nome}): {exc}")
+    from app.services.sienge_busca_unica import busca_unica
+
+    # Uma busca bulk para a empresa toda em vez de ~34 por centro de custo (passo 5).
+    with busca_unica(_fetch_paginated_bulk_direto):
+        for cc in centros:
+            if not cc.id_sienge:
+                continue
+            try:
+                sync_single_cc_sienge_data(db, cc, start_date, end_date, include_engineering=False)
+            except Exception as exc:
+                db.rollback()
+                falhas.append(f"{cc.id_sienge}: {exc}")
+                print(f"[Sienge Sync] Falha no CC {cc.id_sienge} ({cc.nome}): {exc}")
 
     print("Sincronizando cronograma de engenharia (TRK-ENG, só acompanhamento)...")
     try:
