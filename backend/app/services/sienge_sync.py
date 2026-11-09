@@ -63,6 +63,21 @@ def _fetch_paginated_bulk(url: str):
         return
     yield from _fetch_paginated_bulk_direto(url)
 
+def centros_do_sync(db: Session) -> list:
+    """Todos os centros de custo com código no Sienge (passo 5, 09/11/2026).
+
+    Antes eram só os CCs com o mesmo prefixo de 3 dígitos dos acompanhados no
+    dashboard (~10 grupos); os demais ficavam sem realizado novo. Com a busca
+    única, incluir todos não aumenta as buscas no Sienge.
+    """
+    return (
+        db.query(CostCenter)
+        .filter(CostCenter.id_sienge.isnot(None), CostCenter.id_sienge != "")
+        .order_by(CostCenter.id_sienge)
+        .all()
+    )
+
+
 def sync_all_sienge_data(db: Session, full_load: bool = False):
     """
     Roda o sincronismo de Vendas, Recebimentos e Pagamentos.
@@ -76,22 +91,7 @@ def sync_all_sienge_data(db: Session, full_load: bool = False):
         start_date = (hoje - timedelta(days=3)).strftime("%Y-%m-%d")
         end_date = hoje.strftime("%Y-%m-%d")
 
-    # 1. Pega todos os Centros de Custo rastreados no Dashboard
-    tracked = db.query(CostCenter).filter(CostCenter.track_in_dashboard == True).all()
-    
-    # 2. Extrai os prefixos (3 primeiros dígitos) dos CCs rastreados
-    prefixes = set()
-    for cc in tracked:
-        if cc.id_sienge and len(cc.id_sienge) >= 3:
-            prefixes.add(cc.id_sienge[:3])
-            
-    # 3. Busca todos os CCs que compartilham o mesmo prefixo (para incluir OBRAS, MLDU, etc.)
-    if prefixes:
-        from sqlalchemy import or_
-        conditions = [CostCenter.id_sienge.like(f"{p}%") for p in prefixes]
-        centros = db.query(CostCenter).filter(or_(*conditions)).all()
-    else:
-        centros = tracked
+    centros = centros_do_sync(db)
     
     falhas: list[str] = []
     from app.services.sienge_busca_unica import busca_unica
@@ -165,8 +165,11 @@ def sync_single_cc_sienge_data(db: Session, cc: CostCenter, start_date: str = "2
     # CC com unidades 1x/dia; CC sem unidades 1x/semana (para achar obra nova).
     sync_units_se_preciso(db, cc)
     
-    # 1. SINCRONIZAR VENDAS (Sales) - realizadas
-    sync_sales(db, cc, start_date, end_date)
+    # 1. SINCRONIZAR VENDAS (Sales) - realizadas. /sales exige enterpriseId (uma busca
+    # por CC), então só para CC com unidades: em 09/11/2026 todo CC com venda tinha
+    # unidades; obra nova ganha unidades na checagem semanal acima e entra no mesmo dia.
+    if db.query(Unit.id).filter_by(cost_center_id=cc.id).first() is not None:
+        sync_sales(db, cc, start_date, end_date)
     
     # 2. SINCRONIZAR PAGAMENTOS REALIZADOS (Outcome - baixas bancárias)
     sync_outcomes(db, cc, start_date, end_date)
