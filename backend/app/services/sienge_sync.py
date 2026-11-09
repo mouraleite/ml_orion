@@ -28,7 +28,8 @@ def outcome_contas_pagar_url(cost_center_sienge_id: str, start_date: str, end_da
 
 def _fetch_paginated_bulk(url: str):
     """Auxiliar para buscar todas as páginas de um endpoint Bulk Data. Retorna em blocos."""
-    yield from get_default_client().paginate_bulk(url)
+    # strict: se uma página falhar, levanta erro e a transação é desfeita (nada é apagado com leitura parcial)
+    yield from get_default_client().paginate_bulk(url, strict=True)
 
 def sync_all_sienge_data(db: Session, full_load: bool = False):
     """
@@ -903,14 +904,15 @@ def sync_incomes(db: Session, cc: CostCenter, start_date: str, end_date: str):
     db.commit()
 
 def _clear_open_forecast(db: Session, cost_center_id: int, transaction_type: str) -> None:
-    """Apaga só FCST-* (previsão futura). Não apaga TRK-VENC-* do DFC de empreendimentos."""
+    """Apaga só FCST-* (previsão futura). Não apaga TRK-VENC-* do DFC de empreendimentos.
+    Só flush: a exclusão vale apenas se a nova busca terminar (commit no fim da função chamadora)."""
     db.query(ActualTransaction).filter(
         ActualTransaction.cost_center_id == cost_center_id,
         ActualTransaction.transaction_type == transaction_type,
         ActualTransaction.is_forecast.is_(True),
         ActualTransaction.source_id.like("FCST-%"),
     ).delete(synchronize_session=False)
-    db.commit()
+    db.flush()
 
 
 def sync_receivables_forecast(db: Session, cc: CostCenter):
@@ -978,6 +980,8 @@ def sync_receivables_forecast(db: Session, cc: CostCenter):
             
     except Exception as e:
         print(f"[Sienge Sync] Exception forecast income: {str(e)}")
+        db.rollback()
+        raise
 
     db.commit()
     print(f"[Forecast] {count} parcelas de recebimento futuras sincronizadas para CC {cc.id_sienge}")
@@ -1060,6 +1064,8 @@ def sync_payables_forecast(db: Session, cc: CostCenter):
             
     except Exception as e:
         print(f"[Sienge Sync] Exception forecast outcome: {str(e)}")
+        db.rollback()
+        raise
 
     db.commit()
     db.commit()
@@ -1110,6 +1116,8 @@ def sync_overdue_open_tracking(db: Session, cc: CostCenter, start_year: Optional
                     count += n
     except Exception as exc:
         print(f"[Sienge Sync] Exception overdue tracking CC {cc.id_sienge}: {exc}")
+        db.rollback()
+        raise
     db.commit()
     print(f"[Tracking] {count} títulos vencidos em aberto para CC {cc.id_sienge}")
     return count

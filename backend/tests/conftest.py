@@ -5,6 +5,10 @@ from fastapi.testclient import TestClient
 
 import sys
 import os
+
+# Testes nunca disparam o sync real do Sienge ao subir a API (janela 9h/14h).
+os.environ["ERP_ML_DISABLE_SCHEDULER"] = "1"
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.main import app

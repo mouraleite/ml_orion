@@ -25,6 +25,10 @@ DEFAULT_BULK_LIMIT = 200
 DEFAULT_V1_LIMIT = 200
 
 
+class SiengeFetchError(RuntimeError):
+    """A API do Sienge não respondeu uma página. Nada deve ser apagado com base em leitura parcial."""
+
+
 def bulk_base_url(subdomain: str | None = None) -> str:
     sub = subdomain or settings.SIENGE_SUBDOMAIN
     return f"https://api.sienge.com.br/{sub}/public/api/bulk-data/v1"
@@ -141,8 +145,13 @@ class SiengeClient:
         *,
         limit: int = DEFAULT_BULK_LIMIT,
         timeout: int = DEFAULT_TIMEOUT,
+        strict: bool = False,
     ) -> Iterator[list[dict[str, Any]]]:
-        """Busca páginas bulk-data; retorna blocos (compatível com sienge_sync)."""
+        """Busca páginas bulk-data; retorna blocos (compatível com sienge_sync).
+
+        strict=True: falha de rede/HTTP vira SiengeFetchError (com 3 tentativas),
+        em vez de encerrar a paginação em silêncio com dados parciais.
+        """
         offset = 0
         seen_first_keys: set[str | int] = set()
 
@@ -151,28 +160,34 @@ class SiengeClient:
             paged_url = f"{url}{separator}limit={limit}&offset={offset}"
 
             try:
-                data = self.get_json(paged_url, timeout=timeout, retries=1)
-                if not data:
-                    break
-
-                page_results = data.get("data", data.get("results", []))
-                if not page_results:
-                    break
-
-                first_item = page_results[0]
-                first_key = first_item.get("id") or f"{first_item.get('billId')}-{first_item.get('installmentId')}"
-                if first_key in seen_first_keys:
-                    break
-                seen_first_keys.add(first_key)
-
-                yield page_results
-
-                if len(page_results) < limit:
-                    break
-                offset += limit
+                data = self.get_json(paged_url, timeout=timeout, retries=3 if strict else 1)
             except Exception as e:
+                if strict:
+                    raise SiengeFetchError(f"Falha ao ler o Sienge em {paged_url.split('?')[0]}: {e}") from e
                 print(f"[Sienge Sync] Exception na URL {paged_url}: {str(e)}")
                 break
+            if data is None:
+                if strict:
+                    raise SiengeFetchError(
+                        f"Sienge não respondeu a página offset={offset} de {paged_url.split('?')[0]}"
+                    )
+                break
+
+            page_results = data.get("data", data.get("results", []))
+            if not page_results:
+                break
+
+            first_item = page_results[0]
+            first_key = first_item.get("id") or f"{first_item.get('billId')}-{first_item.get('installmentId')}"
+            if first_key in seen_first_keys:
+                break
+            seen_first_keys.add(first_key)
+
+            yield page_results
+
+            if len(page_results) < limit:
+                break
+            offset += limit
 
     def paginate_v1_collect(
         self,

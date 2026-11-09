@@ -19,10 +19,17 @@ logger = logging.getLogger(__name__)
 _SYNC_LOCK_KEY = 867530901
 
 
+_LOCAL_SYNC_LOCK = threading.Lock()
+
+
 def _hold_sync_lock():
-    """Trava no Postgres enquanto a conexão ficar aberta. None = banco sem trava."""
+    """Trava do sync. Postgres: advisory lock (vale entre processos).
+    Outros bancos: trava em memória (vale dentro do processo).
+    Retorna False se já houver sync em execução."""
     if engine.dialect.name != "postgresql":
-        return None
+        if not _LOCAL_SYNC_LOCK.acquire(blocking=False):
+            return False
+        return "local"
     conn = engine.connect().execution_options(isolation_level="AUTOCOMMIT")
     locked = conn.execute(
         text("SELECT pg_try_advisory_lock(:key)"),
@@ -35,7 +42,10 @@ def _hold_sync_lock():
 
 
 def _release_sync_lock(lock_conn) -> None:
-    if lock_conn is None:
+    if lock_conn is None or lock_conn is False:
+        return
+    if lock_conn == "local":
+        _LOCAL_SYNC_LOCK.release()
         return
     try:
         lock_conn.execute(
@@ -44,6 +54,22 @@ def _release_sync_lock(lock_conn) -> None:
         )
     finally:
         lock_conn.close()
+
+
+def run_with_sync_lock(fn, nome: str) -> bool:
+    """Roda fn() com a mesma trava do sync diário. False = já havia sync rodando."""
+    lock_conn = _hold_sync_lock()
+    if lock_conn is False:
+        logger.info("%s ignorado: já existe sincronização Sienge em execução.", nome)
+        return False
+    try:
+        fn()
+        return True
+    finally:
+        try:
+            _release_sync_lock(lock_conn)
+        except Exception:
+            logger.exception("Falha ao liberar a trava da sincronização Sienge")
 
 
 def daily_sienge_sync():
@@ -104,7 +130,13 @@ scheduler = BackgroundScheduler(timezone=TZ_BRASILIA)
 
 
 def start_scheduler():
-    """Inicia o agendador e registra os jobs."""
+    """Inicia o agendador e registra os jobs.
+    ERP_ML_DISABLE_SCHEDULER=1 desliga tudo (testes): nada de sync real ao subir a API."""
+    import os
+
+    if os.getenv("ERP_ML_DISABLE_SCHEDULER", "").strip() == "1":
+        logger.info("APScheduler desligado por ERP_ML_DISABLE_SCHEDULER=1.")
+        return
     if not scheduler.running:
         # 09:00 e 14:00 no horário de Brasília
         scheduler.add_job(

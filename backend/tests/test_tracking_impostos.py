@@ -4,6 +4,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.models.tax_regime import TaxRegime
+from app.models.auditoria import Auditoria  # o listener de auditoria grava a cada flush
 from app.services.tracking_impostos import (
     aliquotas_lucro_presumido,
     lancar_tributos_no_fluxo,
@@ -53,6 +54,7 @@ def test_mudar_aliquota_muda_o_caixa():
 def test_le_percentual_vigente_no_apoio():
     engine = create_engine("sqlite:///:memory:")
     TaxRegime.__table__.create(engine)
+    Auditoria.__table__.create(engine)
     db = sessionmaker(bind=engine)()
     db.add(TaxRegime(nome="Lucro Presumido", pis=0.65, cofins=3.0, irpj=2.2, csll=1.19, ativo=True))
     db.commit()

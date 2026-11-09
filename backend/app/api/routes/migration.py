@@ -5,7 +5,7 @@ from sqlalchemy import desc
 from pydantic import BaseModel
 from datetime import datetime
 
-from app.api.deps import get_db, get_current_active_admin
+from app.api.deps import get_db, get_current_active_admin, require_admin
 from app.models.migration import MigrationMapping
 router = APIRouter()
 
@@ -71,7 +71,7 @@ def _run_migration_task():
         db.close()
 
 @router.post("/run")
-def run_migration(background_tasks: BackgroundTasks):
+def run_migration(background_tasks: BackgroundTasks, _admin=Depends(require_admin)):
     background_tasks.add_task(_run_migration_task)
     return {"message": "Migração iniciada, cheque o terminal em alguns minutos"}
 
@@ -84,7 +84,7 @@ def _run_forecast_migration_task():
         db.close()
 
 @router.post("/run-forecast")
-def run_forecast_migration(background_tasks: BackgroundTasks):
+def run_forecast_migration(background_tasks: BackgroundTasks, _admin=Depends(require_admin)):
     background_tasks.add_task(_run_forecast_migration_task)
     return {"message": "Migração de forecast iniciada, cheque o terminal em alguns minutos"}
 
