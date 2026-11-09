@@ -125,8 +125,9 @@ def sync_single_cc_sienge_data(db: Session, cc: CostCenter, start_date: str = "2
         
     print(f"Sincronizando CC {cc.nome} (Sienge ID: {cc.id_sienge})...")
     
-    # 0. SINCRONIZAR UNIDADES (Estoque)
-    sync_units(db, cc)
+    # 0. SINCRONIZAR UNIDADES (Estoque) — API REST tem cota diária curta:
+    # CC com unidades 1x/dia; CC sem unidades 1x/semana (para achar obra nova).
+    sync_units_se_preciso(db, cc)
     
     # 1. SINCRONIZAR VENDAS (Sales) - realizadas
     sync_sales(db, cc, start_date, end_date)
@@ -160,8 +161,45 @@ def sync_single_cc_sienge_data(db: Session, cc: CostCenter, start_date: str = "2
         except Exception as e:
             print(f"[Sienge Sync] Aviso TRK-ENG {cc.id_sienge}: {e}")
 
-def sync_units(db: Session, cc: CostCenter):
-    """Sincroniza as unidades (Lotes/Apartamentos) do Centro de Custo"""
+UNITS_SYNC_KEY = "__units_sync_at"
+DIAS_ENTRE_CHECAGENS_SEM_UNIDADES = 7
+
+
+def precisa_sincronizar_unidades(ultima: Optional[str], tem_unidades: bool, hoje) -> bool:
+    """Decide se busca as unidades do CC hoje (a API REST do Sienge tem cota diária).
+
+    ultima: data ISO (AAAA-MM-DD) da última busca bem-sucedida, ou None.
+    """
+    if not ultima:
+        return True
+    try:
+        ultima_data = datetime.strptime(str(ultima)[:10], "%Y-%m-%d").date()
+    except ValueError:
+        return True
+    if ultima_data >= hoje:
+        return False
+    if tem_unidades:
+        return True
+    return (hoje - ultima_data).days >= DIAS_ENTRE_CHECAGENS_SEM_UNIDADES
+
+
+def sync_units_se_preciso(db: Session, cc: CostCenter, hoje=None) -> bool:
+    """Chama sync_units só quando precisa; grava a data da busca no custom_data do CC.
+    Retorna True se buscou."""
+    hoje = hoje or datetime.now().date()
+    custom = dict(cc.custom_data or {})
+    tem_unidades = db.query(Unit.id).filter_by(cost_center_id=cc.id).first() is not None
+    if not precisa_sincronizar_unidades(custom.get(UNITS_SYNC_KEY), tem_unidades, hoje):
+        return False
+    if sync_units(db, cc):
+        custom[UNITS_SYNC_KEY] = hoje.isoformat()
+        cc.custom_data = custom  # novo dict: o SQLAlchemy percebe a mudança no JSON
+        db.commit()
+    return True
+
+
+def sync_units(db: Session, cc: CostCenter) -> bool:
+    """Sincroniza as unidades (Lotes/Apartamentos) do Centro de Custo. Retorna True se leu sem erro."""
     from app.services.sienge_client import api_v1_base_url
 
     url = f"{api_v1_base_url()}/units?enterpriseId={cc.id_sienge}"
@@ -193,8 +231,11 @@ def sync_units(db: Session, cc: CostCenter):
                 unit.private_area = float(item.get("privateArea", 0))
     except Exception as e:
         print(f"[Sienge Sync] Erro lendo Units: {e}")
+        db.commit()
+        return False
 
     db.commit()
+    return True
 
 def sync_sales(db: Session, cc: CostCenter, start_date: str, end_date: str):
     """Sincroniza Contratos de Vendas e Distratos"""

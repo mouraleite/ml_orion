@@ -11,7 +11,6 @@ from app.api.routes.apoio import run_sync_centros_custo, run_sync_empresas, run_
 from app.core.sienge_sync_schedule import TZ_BRASILIA, na_janela_do_sync
 from app.services.depara_autorizacao import run_sync_departamentos_sienge
 from app.services.sienge_sync import sync_all_sienge_data
-from app.services.integracao_sienge import run_integracao_sienge
 from app.core.sync_keepalive import manter_acordado
 
 logger = logging.getLogger(__name__)
@@ -168,13 +167,10 @@ def _executar_sync_diario() -> None:
             lambda: sync_all_sienge_data(db, full_load=False),
         )
 
-        def _integracao():
-            hoje = datetime.now(TZ_BRASILIA)
-            start_date = (hoje - timedelta(days=3)).strftime("%Y-%m-%d")
-            end_date = hoje.strftime("%Y-%m-%d")
-            run_integracao_sienge(db, start_date, end_date)
-
-        _etapa("Integração Formal", _integracao)
+        # A "Integração Formal" saiu do job diário em 09/11/2026:
+        # nunca concluiu (erro em todas as execuções desde agosto), gastava 7-12 min de
+        # chamadas ao Sienge e só alimenta a tela de pendências. Continua no botão manual
+        # (POST /integracao/reprocessar).
     except Exception:
         logger.exception("Erro durante a sincronização diária do Sienge")
         raise

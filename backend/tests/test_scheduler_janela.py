@@ -33,4 +33,5 @@ def test_job_das_09h_e_14h_inclui_departamentos():
     assert "run_sync_centros_custo" in src
     assert "run_sync_planos_financeiros" in src
     assert "sync_all_sienge_data" in src
-    assert "run_integracao_sienge" in src
+    # Integração Formal saiu do job diário em 09/11/2026 (só no botão manual)
+    assert "run_integracao_sienge" not in src
