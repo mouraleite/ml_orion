@@ -1,19 +1,38 @@
-# Acorda a API no plano free nos horários do sync (09:00 e 14:00 Brasília).
-# Sem o Cron Job pago do Render, o relógio interno só dispara se o serviço estiver ligado.
-# O job financeiro é incremental (últimos 3 dias). Não faz full_load e não reescreve o histórico.
+# Acorda a API no plano free e dispara o sync Sienge perto das 09:00 e 14:00 (Brasília).
+#
+# O agendador gratuito do GitHub atrasa e às vezes descarta execuções, sobretudo
+# em hora cheia. Por isso há 3 tentativas por janela, em minutos quebrados.
+# A API ignora a chamada se já houver sync rodando ou se um terminou há menos
+# de 2 horas, então tentativas extras não repetem o trabalho.
+#
+# Durante o sync a própria API se mantém acordada (keep-alive interno). Este
+# workflow só acorda, dispara e confere que a API continua no ar: poucos minutos
+# por execução, em vez de ~1 hora como antes.
+# O job financeiro é incremental (últimos 3 dias). Não faz full_load.
 name: Sienge daily sync
 
 on:
   schedule:
-    - cron: "0 12,17 * * *"
+    # UTC. 11:47, 12:37, 13:27 = 08:47, 09:37, 10:27 em Brasília
+    - cron: "47 11 * * *"
+    - cron: "37 12 * * *"
+    - cron: "27 13 * * *"
+    # 16:47, 17:37, 18:27 = 13:47, 14:37, 15:27 em Brasília
+    - cron: "47 16 * * *"
+    - cron: "37 17 * * *"
+    - cron: "27 18 * * *"
   workflow_dispatch:
+
+concurrency:
+  group: sienge-daily-sync
+  cancel-in-progress: false
 
 jobs:
   wake-and-sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 15
     steps:
-      - name: Acorda a API e dispara o job incremental
+      - name: Acorda a API e dispara o sync
         env:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
@@ -22,7 +41,7 @@ jobs:
           echo "Acordando a API..."
           up=0
           for i in 1 2 3 4 5 6 8 10; do
-            if curl -sf --max-time 60 "$URL/health"; then
+            if curl -sf --max-time 60 "$URL/health" >/dev/null; then
               echo "API no ar."
               up=1
               break
@@ -34,31 +53,17 @@ jobs:
             echo "API não respondeu /health."
             exit 1
           fi
-          if [ -n "$CRON_SECRET" ]; then
-            echo "Disparando POST /api/v1/sync/cron (incremental 3 dias)"
-            curl -sf --max-time 120 -X POST "$URL/api/v1/sync/cron" \
-              -H "X-Cron-Secret: $CRON_SECRET"
-            echo
-          else
-            echo "Secret CRON_SECRET ausente no GitHub: a API foi acordada; o job sobe pela janela do scheduler."
-          fi
-          echo "Mantendo a API acordada até last_api_sync gravar a data de hoje (máx. 80 min)."
-          today_utc=$(date -u +%Y-%m-%d)
-          ok=0
-          for i in $(seq 1 80); do
-            sleep 60
-            curl -sf --max-time 30 "$URL/health" >/dev/null || true
-            status=$(curl -sf --max-time 30 "$URL/api/v1/sync/status" || true)
-            echo "min=$i status=${status}"
-            case "$status" in
-              *"$today_utc"*)
-                echo "Sync incremental concluído (last_api_sync de hoje)."
-                ok=1
-                break
-                ;;
-            esac
-          done
-          if [ "$ok" != "1" ]; then
-            echo "last_api_sync não avançou para ${today_utc} em 80 min. O job de 3 dias não terminou."
+          echo "Último sync concluído: $(curl -sf --max-time 30 "$URL/api/v1/sync/status" || echo '?')"
+          if [ -z "$CRON_SECRET" ]; then
+            echo "Secret CRON_SECRET ausente no GitHub."
             exit 1
           fi
+          echo "Disparando POST /api/v1/sync/cron"
+          curl -sf --max-time 120 -X POST "$URL/api/v1/sync/cron" \
+            -H "X-Cron-Secret: $CRON_SECRET"
+          echo
+          # Confere por alguns minutos que a API segue no ar com o sync rodando.
+          for i in 1 2 3 4 5; do
+            sleep 60
+            curl -sf --max-time 30 "$URL/health" >/dev/null && echo "min=$i API no ar" || echo "min=$i sem resposta"
+          done

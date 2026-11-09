@@ -2,7 +2,7 @@ import inspect
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from app.core.scheduler import daily_sienge_sync
+from app.core.scheduler import _executar_sync_diario
 from app.core.sienge_sync_schedule import TZ_BRASILIA, na_janela_do_sync
 
 
@@ -26,7 +26,8 @@ def test_converte_utc_para_brasilia():
 
 
 def test_job_das_09h_e_14h_inclui_departamentos():
-    src = inspect.getsource(daily_sienge_sync)
+    # o job (daily_sienge_sync) delega as etapas a _executar_sync_diario
+    src = inspect.getsource(_executar_sync_diario)
     assert "run_sync_departamentos_sienge" in src
     assert "run_sync_empresas" in src
     assert "run_sync_centros_custo" in src

@@ -12,6 +12,7 @@ from app.core.sienge_sync_schedule import TZ_BRASILIA, na_janela_do_sync
 from app.services.depara_autorizacao import run_sync_departamentos_sienge
 from app.services.sienge_sync import sync_all_sienge_data
 from app.services.integracao_sienge import run_integracao_sienge
+from app.core.sync_keepalive import manter_acordado
 
 logger = logging.getLogger(__name__)
 
@@ -72,13 +73,72 @@ def run_with_sync_lock(fn, nome: str) -> bool:
             logger.exception("Falha ao liberar a trava da sincronização Sienge")
 
 
-def daily_sienge_sync():
-    """Job diário para sincronizar dados do Sienge no banco de dados local."""
+HORAS_SYNC_RECENTE = 2
+
+
+def ultimo_sync_concluido(db) -> datetime | None:
+    """Horário (do servidor) do último sync financeiro concluído sem falhas."""
+    from app.models.system_settings import SystemSettings
+
+    try:
+        setting = db.query(SystemSettings).filter_by(key="last_api_sync").first()
+    except Exception:
+        return None
+    if not setting or not setting.value:
+        return None
+    ts = setting.value.get("timestamp") if isinstance(setting.value, dict) else str(setting.value)
+    try:
+        return datetime.fromisoformat(str(ts))
+    except ValueError:
+        return None
+
+
+def sync_concluido_recentemente(db, horas: float = HORAS_SYNC_RECENTE, agora: datetime | None = None) -> bool:
+    """True se um sync terminou com sucesso há menos de `horas`.
+    O timestamp é gravado com datetime.now() do servidor; comparamos no mesmo relógio."""
+    ultimo = ultimo_sync_concluido(db)
+    if ultimo is None:
+        return False
+    agora = agora or datetime.now()
+    return timedelta(0) <= agora - ultimo < timedelta(hours=horas)
+
+
+def daily_sienge_sync(pular_se_recente: bool = True) -> str:
+    """Job diário para sincronizar dados do Sienge no banco de dados local.
+
+    Vários gatilhos chamam este job (relógio interno, API acordando na janela,
+    GitHub Actions com tentativas repetidas). Por isso:
+    - a trava impede dois syncs ao mesmo tempo;
+    - se um sync terminou há menos de HORAS_SYNC_RECENTE, a chamada é ignorada;
+    - enquanto roda, a API se mantém acordada no Render gratuito.
+    Retorna "executado", "em_execucao" ou "recente".
+    """
     logger.info("Iniciando sincronização diária (Empresas e Centros de Custo)...")
     lock_conn = _hold_sync_lock()
     if lock_conn is False:
         logger.info("Sincronização Sienge já está em execução. Esta chamada foi ignorada.")
-        return
+        return "em_execucao"
+    try:
+        if pular_se_recente:
+            db_check = SessionLocal()
+            try:
+                recente = sync_concluido_recentemente(db_check)
+            finally:
+                db_check.close()
+            if recente:
+                logger.info("Sync concluído há menos de %sh. Esta chamada foi ignorada.", HORAS_SYNC_RECENTE)
+                return "recente"
+        with manter_acordado():
+            _executar_sync_diario()
+        return "executado"
+    finally:
+        try:
+            _release_sync_lock(lock_conn)
+        except Exception:
+            logger.exception("Falha ao liberar a trava da sincronização Sienge")
+
+
+def _executar_sync_diario() -> None:
     db = SessionLocal()
     try:
         def _etapa(nome: str, fn) -> None:
@@ -120,10 +180,6 @@ def daily_sienge_sync():
         raise
     finally:
         db.close()
-        try:
-            _release_sync_lock(lock_conn)
-        except Exception:
-            logger.exception("Falha ao liberar a trava da sincronização Sienge")
 
 
 scheduler = BackgroundScheduler(timezone=TZ_BRASILIA)
