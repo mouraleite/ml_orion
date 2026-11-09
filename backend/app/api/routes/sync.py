@@ -24,23 +24,34 @@ def get_sync_status(db: Session = Depends(get_db)):
     return {"last_sync_at": None}
 
 def _run_sienge_sync_job(full_load: bool) -> None:
-    """Abre sessão própria: a do request já fecha antes do background task."""
-    db = SessionLocal()
-    try:
-        sync_all_sienge_data(db, full_load)
-    finally:
-        db.close()
+    """Abre sessão própria: a do request já fecha antes do background task.
+    Usa a mesma trava do sync agendado: dois syncs nunca rodam juntos."""
+    from app.core.scheduler import run_with_sync_lock
+
+    def _job():
+        db = SessionLocal()
+        try:
+            sync_all_sienge_data(db, full_load)
+        finally:
+            db.close()
+
+    run_with_sync_lock(_job, "Sync manual")
 
 
 @router.post("/sienge")
 def trigger_sienge_sync(
     background_tasks: BackgroundTasks,
     full_load: bool = False,
-    current_user: UserResponse = Depends(deps.get_current_active_user) # Apenas admin
+    current_user: UserResponse = Depends(deps.get_current_active_user),
 ):
     """
     Dispara o sincronismo manual com as APIs do Sienge (Vendas, Entradas, Saídas).
+    Incremental (3 dias): qualquer usuário ativo. Carga completa: só administrador.
     """
+    from app.core.roles import is_admin_user
+
+    if full_load and not is_admin_user(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Carga completa: apenas administrador.")
     background_tasks.add_task(_run_sienge_sync_job, full_load)
 
     return {"message": "Sincronismo com Sienge iniciado em background.", "full_load": full_load}
@@ -84,7 +95,9 @@ def trigger_pmt_historico_rateio(
 
     if not is_admin_user(current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Apenas administrador.")
-    background_tasks.add_task(run_rewrite_pmt_historico_rateio_job)
+    from app.core.scheduler import run_with_sync_lock
+
+    background_tasks.add_task(run_with_sync_lock, run_rewrite_pmt_historico_rateio_job, "Regravação PMT legado")
     return {
         "message": "Regravação do PMT legado iniciada em background.",
         "nota": "Não altera OP1 nem orçamento/forecast.",

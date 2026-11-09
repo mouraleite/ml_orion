@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.models.sienge_api_call import SiengeApiCall
+from app.models.auditoria import Auditoria  # o listener de auditoria grava a cada flush
 from app.services.sienge_client import SiengeClient
 from app.services.sienge_usage import (
     BULK_DAILY_LIMIT,
@@ -59,6 +60,7 @@ def _engine():
 def _session():
     engine = _engine()
     SiengeApiCall.__table__.create(engine)
+    Auditoria.__table__.create(engine)
     return sessionmaker(bind=engine)()
 
 
@@ -195,6 +197,7 @@ def test_dia_acima_do_limite(monkeypatch):
 def test_record_grava_familia_e_path(monkeypatch):
     engine = _engine()
     SiengeApiCall.__table__.create(engine)
+    Auditoria.__table__.create(engine)
     Session = sessionmaker(bind=engine)
     monkeypatch.setattr("app.db.database.SessionLocal", Session)
     record_sienge_http_call(
