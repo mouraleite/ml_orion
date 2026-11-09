@@ -140,6 +140,26 @@ def _extract_curve(json_field) -> tuple[list, int]:
     return (meses, mes_inicio)
 
 
+def _acelerar_curva(meses: list, fator: float) -> list:
+    """Cenário de velocidade de vendas: fator 2 vende o mesmo total na metade do tempo;
+    0,5 leva o dobro. Redistribui o acumulado da curva no novo prazo; a soma não muda."""
+    if not meses or not fator or fator <= 0 or abs(fator - 1.0) < 1e-9:
+        return list(meses)
+    n = len(meses)
+    acum = [0.0]
+    for v in meses:
+        acum.append(acum[-1] + v)
+
+    def acumulado_ate(t: float) -> float:
+        if t >= n:
+            return acum[n]
+        i = int(t)
+        return acum[i] + (t - i) * meses[i]
+
+    novo_n = max(1, int(round(n / fator)))
+    return [acumulado_ate(min(n, (k + 1) * fator)) - acumulado_ate(min(n, k * fator)) for k in range(novo_n)]
+
+
 def _apply_offset(distribution: list, mes_inicio: int, prazo: int) -> list:
     """
     Aplica o offset do mês de início na distribuição.
@@ -412,7 +432,11 @@ def calculate_viability_results(db: Session, phase_id: int, scenario_id: int = N
             taxa_incc_mensal = taxa_incc_dec
 
     # ---- Distribuição por Curvas Dinâmicas ----
-    vendas_raw, vendas_offset = _extract_curve(phase.revenue.velocidade_vendas_json if phase.revenue else None)
+    def _curva_vendas(json_field):
+        raw, offset = _extract_curve(json_field)
+        return _acelerar_curva(raw, speed_mult), offset
+
+    vendas_raw, vendas_offset = _curva_vendas(phase.revenue.velocidade_vendas_json if phase.revenue else None)
     obras_raw, obras_offset = _extract_curve(phase.construction.curva_obras_json if phase.construction else None)
     projetos_raw, proj_offset = _extract_curve(phase.construction.curva_projetos_json if phase.construction else None)
     aquisicao_raw, aq_offset = _extract_curve(phase.construction.curva_aquisicao_json if phase.construction else None)
@@ -438,7 +462,7 @@ def calculate_viability_results(db: Session, phase_id: int, scenario_id: int = N
     # Considera a curva global de vendas e as específicas de cada condição
     for cond in condicoes:
         if cond.get("curve_json"):
-            c_raw, c_offset = _extract_curve(cond.get("curve_json"))
+            c_raw, c_offset = _curva_vendas(cond.get("curve_json"))
             c_offset = vendas_offset + max(0, c_offset - 1)
         else:
             c_raw, c_offset = vendas_raw, vendas_offset
@@ -506,7 +530,7 @@ def calculate_viability_results(db: Session, phase_id: int, scenario_id: int = N
         if cond["perc"] <= 0: continue
         
         if cond.get("curve_json"):
-            c_raw, c_offset = _extract_curve(cond.get("curve_json"))
+            c_raw, c_offset = _curva_vendas(cond.get("curve_json"))
             c_offset = vendas_offset + max(0, c_offset - 1)
         else:
             c_raw, c_offset = vendas_raw, vendas_offset
@@ -928,6 +952,11 @@ def calculate_viability_results(db: Session, phase_id: int, scenario_id: int = N
             "dre_obras_adm": float(df_calc["Obras_Adm"].sum()),
             "dre_obras_extras": float(df_calc["Obras"].sum() - df_calc["Obras_Custo"].sum() - df_calc["Obras_Proj"].sum() - df_calc["Obras_Aq"].sum() - df_calc["Obras_Adm"].sum()),
             "custo_financeiro_funding": float(custo_financeiro),
+            # Linhas da DRE de despesas, tiradas do fluxo (acompanham a visão de cada parceiro).
+            "dre_despesas_marketing": float(df_calc["Despesas_Mkt"].sum()),
+            "dre_despesas_comercial": float(df_calc["Despesas_Com"].sum()),
+            "dre_despesas_adm": float(df_calc["Despesas_Adm"].sum()),
+            "dre_despesas_extras": float(df_calc["Despesas"].sum() - df_calc["Despesas_Mkt"].sum() - df_calc["Despesas_Com"].sum() - df_calc["Despesas_Adm"].sum()),
             "custo_projetos": custo_projetos, # Fixos não escalonados aqui, DRE usa soma
             "aquisicao_area": aquisicao_area,
             "adm_obras": adm_obras,
@@ -960,117 +989,86 @@ def calculate_viability_results(db: Session, phase_id: int, scenario_id: int = N
     # Calcula Indicadores Globais
     ind_global = calc_indicadores(df)
     
+    # --- VISÕES POR PARCEIRO (regra de 09/11/2026) ---
+    # O percentual de cada parceiro vale sobre o projeto inteiro.
+    # Receitas, impostos e funding: pelo percentual.
+    # Custos marcados como rateados: pelo percentual.
+    # Custos não rateados: 100% dos empreendedores, repartidos na proporção de cada um.
+    abertura_json = getattr(phase.exchanges, "abertura_terrenistas_json", []) or []
+    perc_inv = getattr(phase.exchanges, 'perc_parceria_investidor', 0.0) or 0.0
+
+    parceiros = []
+    for idx_parc, parceiro in enumerate(abertura_json):
+        nome_base = (parceiro.get("nome") or f"Parceiro {idx_parc+1}").strip()
+        tipo = parceiro.get("tipo") or "Proprietário"
+        parceiros.append({
+            "nome": f"{nome_base} ({tipo})",
+            "tipo": tipo,
+            "perc": (parceiro.get("percentual", 0.0) or 0.0) / 100.0,
+        })
+    soma_emp = sum(p["perc"] for p in parceiros if p["tipo"] == "Empreendedor")
+    soma_total = sum(p["perc"] for p in parceiros)
+
+    COLS_RECEITA = ["Receitas", "Receitas_Vendas", "Receitas_Entrada", "Receitas_Parcelas", "Receitas_Juros",
+                    "Impostos", "Impostos_PIS", "Impostos_COFINS", "Impostos_IRPJ_CSLL", "Impostos_Outros",
+                    "Funding_Entrada", "Funding_Despesas", "Funding_Amortizacao"]
+    obras_rateio = [("Obras_Custo", "custo_obras"), ("Obras_Proj", "custo_projetos"),
+                    ("Obras_Aq", "aquisicao_area"), ("Obras_Adm", "adm_obras")]
+    obras_rateio += [(f"Obras_Extra_{i}", f"extra_obra_{i}") for i in range(len(extra_obr_dists))]
+    desp_rateio = [("Despesas_Mkt", "marketing"), ("Despesas_Com", "comercial"), ("Despesas_Adm", "adm")]
+    desp_rateio += [(f"Despesas_Extra_{i}", f"extra_despesa_{i}") for i in range(len(extra_mkt_dists))]
+
+    def _visao(fator: float, fator_nao_rateado: float):
+        """fator: participação no projeto; fator_nao_rateado: parte dos custos não rateados."""
+        dv = df.copy()
+        for col in COLS_RECEITA:
+            if col in dv.columns:
+                dv[col] = df[col] * fator
+
+        def _f(chave):
+            return fator if rateios.get(chave, False) else fator_nao_rateado
+
+        def _agrupa(total_col, partes, chave_resto):
+            soma_partes = 0.0
+            for col, chave in partes:
+                if col in dv.columns:
+                    dv[col] = df[col] * _f(chave)
+                    soma_partes = soma_partes + dv[col]
+            # Sobra que não está em nenhuma sub-coluna segue a regra do primeiro item
+            resto = df[total_col] - sum(df[c] for c, _ in partes if c in df.columns)
+            dv[total_col] = soma_partes + resto * _f(chave_resto)
+
+        _agrupa("Obras", obras_rateio, "custo_obras")
+        _agrupa("Despesas", desp_rateio, "marketing")
+        dv["Terreno"] = df["Terreno"] * _f("aquisicao_area")
+        dv["Fluxo_de_Caixa"] = dv["Receitas"] - dv["Obras"] - dv["Despesas"] - dv["Impostos"] - dv["Terreno"] + dv["Funding_Entrada"] - dv["Funding_Despesas"]
+        return dv
+
     # --- VISÃO EMPREENDEDOR ---
-    df_emp = df.copy()
-    if perc_terr > 0:
-        df_emp["Receitas"] *= fator_empreendedor
-        df_emp["Receitas_Vendas"] *= fator_empreendedor
-        df_emp["Receitas_Juros"] *= fator_empreendedor
-        df_emp["Impostos"] *= fator_empreendedor
-        df_emp["Impostos_PIS"] *= fator_empreendedor
-        df_emp["Impostos_COFINS"] *= fator_empreendedor
-        df_emp["Impostos_IRPJ_CSLL"] *= fator_empreendedor
-        df_emp["Impostos_Outros"] *= fator_empreendedor
-        
-        if rateios.get("custo_obras", False):
-            df_emp["Obras"] *= fator_empreendedor
-            for _col in [c for c in df_emp.columns if c.startswith("Obras_")]:
-                df_emp[_col] *= fator_empreendedor
-            
-        if rateios.get("marketing", False):
-            df_emp["Despesas"] *= fator_empreendedor
-            
-        df_emp["Fluxo_de_Caixa"] = df_emp["Receitas"] - df_emp["Obras"] - df_emp["Despesas"] - df_emp["Impostos"] - df_emp["Terreno"] + df_emp["Funding_Entrada"] - df_emp["Funding_Despesas"]
-    
+    # Soma dos empreendedores da abertura; sem empreendedor na abertura, o que sobra
+    # depois de Proprietário e Investidor (como antes).
+    if parceiros and soma_emp > 0:
+        fator_emp = soma_emp
+    else:
+        fator_emp = max(0.0, 1.0 - (perc_terr + perc_inv) / 100.0)
+    df_emp = _visao(fator_emp, 1.0)
     ind_empreendedor = calc_indicadores(df_emp)
 
     # --- VISÕES INDIVIDUAIS DE PARCEIROS ---
     monthly_cashflow_parceiros = {}
     indicators_parceiros = {}
-    
-    abertura_json = getattr(phase.exchanges, "abertura_terrenistas_json", []) or []
-    perc_terr = getattr(phase.exchanges, 'perc_parceria_terrenista', 0.0) or 0.0
-    perc_inv = getattr(phase.exchanges, 'perc_parceria_investidor', 0.0) or 0.0
-    perc_emp = getattr(phase.exchanges, 'perc_parceria_empreendedor', 0.0) or 0.0
-    
-    for idx_parc, parceiro in enumerate(abertura_json):
-        nome_base = parceiro.get("nome", f"Parceiro {idx_parc+1}").strip()
-        tipo = parceiro.get("tipo", "Proprietário")
-        nome = f"{nome_base} ({tipo})"
-        perc = parceiro.get("percentual", 0.0) / 100.0
-        
-        # Matematica igual ao Excel: percentual do grupo * percentual dele
-        if tipo == "Proprietário":
-            perc_grupo = (perc_terr / 100.0) if perc_terr > 0 else 0.0
-        elif tipo == "Investidor":
-            perc_grupo = (perc_inv / 100.0) if perc_inv > 0 else 0.0
-        elif tipo == "Empreendedor":
-            perc_grupo = (perc_emp / 100.0) if perc_emp > 0 else 0.0
-        else:
-            perc_grupo = 0.0
-            
-        fator_grupo = perc
-        fator_global = perc_grupo * perc
-        
-        df_p = df.copy()
-        
-        df_p["Receitas"] *= fator_global
-        df_p["Receitas_Vendas"] *= fator_global
-        df_p["Receitas_Juros"] *= fator_global
-        df_p["Impostos"] *= fator_global
-        df_p["Impostos_PIS"] *= fator_global
-        df_p["Impostos_COFINS"] *= fator_global
-        df_p["Impostos_IRPJ_CSLL"] *= fator_global
-        df_p["Impostos_Outros"] *= fator_global
-        
-        def calc_obra(col, is_rateado):
-            if is_rateado: return df[col] * fator_global
-            else: return df[col] * perc if tipo == "Empreendedor" else 0.0
-                
-        df_p["Obras_Custo"] = calc_obra("Obras_Custo", rateios.get("custo_obras", False))
-        df_p["Obras_Proj"] = calc_obra("Obras_Proj", rateios.get("custo_projetos", False))
-        df_p["Obras_Aq"] = calc_obra("Obras_Aq", rateios.get("aquisicao_area", False))
-        df_p["Obras_Adm"] = calc_obra("Obras_Adm", rateios.get("adm_obras", False))
-        
-        total_obras = df_p["Obras_Custo"] + df_p["Obras_Proj"] + df_p["Obras_Aq"] + df_p["Obras_Adm"]
-        for idx_ext, d in enumerate(extra_obr_dists):
-            if f"Obras_Extra_{idx_ext}" in df.columns:
-                df_p[f"Obras_Extra_{idx_ext}"] = calc_obra(f"Obras_Extra_{idx_ext}", rateios.get(f"extra_obra_{idx_ext}", False))
-                total_obras += df_p[f"Obras_Extra_{idx_ext}"]
-        
-        df_p["Obras"] = total_obras
-        
-        def calc_desp(col, is_rateado):
-            if is_rateado: return df[col] * fator_global
-            else: return df[col] * perc if tipo == "Empreendedor" else 0.0
-                
-        df_p["Despesas_Mkt"] = calc_desp("Despesas_Mkt", rateios.get("marketing", False))
-        df_p["Despesas_Com"] = calc_desp("Despesas_Com", rateios.get("comercial", False))
-        df_p["Despesas_Adm"] = calc_desp("Despesas_Adm", rateios.get("adm", False))
-        
-        total_desp = df_p["Despesas_Mkt"] + df_p["Despesas_Com"] + df_p["Despesas_Adm"]
-        for idx_ext, d in enumerate(extra_mkt_dists):
-            if f"Despesas_Extra_{idx_ext}" in df.columns:
-                df_p[f"Despesas_Extra_{idx_ext}"] = calc_desp(f"Despesas_Extra_{idx_ext}", rateios.get(f"extra_despesa_{idx_ext}", False))
-                total_desp += df_p[f"Despesas_Extra_{idx_ext}"]
-            
-        df_p["Despesas"] = total_desp
-        
-        if rateios.get("aquisicao_area", False):
-            df_p["Terreno"] = df["Terreno"] * fator_global
-        else:
-            df_p["Terreno"] = df["Terreno"] * perc if tipo == "Empreendedor" else 0.0
-            
-        df_p["Funding_Entrada"] *= fator_global
-        df_p["Funding_Despesas"] *= fator_global
-        df_p["Funding_Amortizacao"] *= fator_global
-        
-        df_p["Fluxo_de_Caixa"] = df_p["Receitas"] - df_p["Obras"] - df_p["Despesas"] - df_p["Impostos"] - df_p["Terreno"] + df_p["Funding_Entrada"] - df_p["Funding_Despesas"]
-        
-        ind_p = calc_indicadores(df_p)
-        monthly_cashflow_parceiros[nome] = df_p.to_dict(orient="records")
-        indicators_parceiros[nome] = ind_p
-        
+    for p in parceiros:
+        nao_rateado = (p["perc"] / soma_emp) if (p["tipo"] == "Empreendedor" and soma_emp > 0) else 0.0
+        df_p = _visao(p["perc"], nao_rateado)
+        indicators_parceiros[p["nome"]] = calc_indicadores(df_p)
+        monthly_cashflow_parceiros[p["nome"]] = df_p.to_dict(orient="records")
+
+    aviso_parceiros = None
+    if parceiros and abs(soma_total - 1.0) > 1e-6:
+        aviso_parceiros = f"A abertura de parceiros soma {soma_total * 100:.2f}% do projeto (deveria somar 100%)."
+    elif parceiros and soma_emp <= 0:
+        aviso_parceiros = "Não há empreendedor na abertura: os custos não rateados não ficam com nenhum parceiro."
+
     return {
         "indicators": ind_global,
         "indicators_empreendedor": ind_empreendedor,
@@ -1078,6 +1076,7 @@ def calculate_viability_results(db: Session, phase_id: int, scenario_id: int = N
         "monthly_cashflow_empreendedor": df_emp.to_dict(orient="records"),
         "monthly_cashflow_parceiros": monthly_cashflow_parceiros,
         "indicators_parceiros": indicators_parceiros,
+        "aviso_parceiros": aviso_parceiros,
         "phase": {
             "revenue": {
                 "condicoes_pagamento_json": phase.revenue.condicoes_pagamento_json if phase.revenue else [],
