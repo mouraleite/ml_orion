@@ -24,6 +24,8 @@ interface ViabilityReportProps {
 const formatCurrency = (val: any) => (Number(val) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatNumber = (val: any) => (Number(val) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const formatPerc = (val: any) => (Number(val) || 0).toFixed(2) + "%";
+// TIR que não converge vem nula do motor: "n/d", nunca 0%
+const formatTir = (val: any) => (val === null || val === undefined || Number.isNaN(Number(val)) ? "n/d" : formatPerc(val));
 const formatDate = (val: string) => val ? new Date(val).toLocaleDateString('pt-BR', { timeZone: 'UTC' }) : "-";
 const formatArea = (val: any) => (Number(val) || 0).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
@@ -1206,13 +1208,13 @@ export const ViabilityReport: React.FC<ViabilityReportProps> = ({
                             <tr className="border-b border-slate-100">
                               <td className="p-2 pl-4 text-slate-700">TIR MENSAL</td>
                               {renamedColumns.map(col => (
-                                <td key={`tm-${col.id}`} className={`p-2 text-right font-bold ${col.isCurrent ? 'bg-ml-green/5 text-ml-dark' : 'text-slate-800'}`}>{formatPerc(col.ind?.tir_am)}</td>
+                                <td key={`tm-${col.id}`} className={`p-2 text-right font-bold ${col.isCurrent ? 'bg-ml-green/5 text-ml-dark' : 'text-slate-800'}`}>{formatTir(col.ind?.tir_am)}</td>
                               ))}
                             </tr>
                             <tr className="border-b border-slate-100">
                               <td className="p-2 pl-4 text-slate-700">TIR ANUAL</td>
                               {renamedColumns.map(col => (
-                                <td key={`ta-${col.id}`} className={`p-2 text-right font-bold ${col.isCurrent ? 'bg-ml-green/5 text-ml-dark' : 'text-slate-800'}`}>{formatPerc(col.ind?.tir_aa)}</td>
+                                <td key={`ta-${col.id}`} className={`p-2 text-right font-bold ${col.isCurrent ? 'bg-ml-green/5 text-ml-dark' : 'text-slate-800'}`}>{formatTir(col.ind?.tir_aa)}</td>
                               ))}
                             </tr>
                             <tr className="border-b border-slate-100">

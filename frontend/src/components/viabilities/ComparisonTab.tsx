@@ -19,7 +19,7 @@ interface ScenarioResult {
     valor_terreno: number;
     lucro_liquido: number;
     margem_perc: number;
-    tir_aa: number;
+    tir_aa: number | null;
     vpl: number;
     exposicao_maxima: number;
   };
@@ -28,8 +28,10 @@ interface ScenarioResult {
 const formatCurrency = (val: number) =>
   new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val || 0);
 
-const formatPercent = (val: number) =>
-  new Intl.NumberFormat("pt-BR", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 }).format((val || 0) / 100);
+const formatPercent = (val: number | null) =>
+  val === null || val === undefined
+    ? "n/d"
+    : new Intl.NumberFormat("pt-BR", { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 }).format((val || 0) / 100);
 
 export function ComparisonTab({ viabilityId }: { viabilityId: number }) {
   const [data, setData] = useState<ScenarioResult[]>([]);
@@ -140,7 +142,7 @@ export function ComparisonTab({ viabilityId }: { viabilityId: number }) {
                 </div>
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-slate-500 font-medium">TIR (a.a.):</span>
-                  <span className={`font-bold ${scenario.indicators.tir_aa >= 15 ? 'text-green-600' : 'text-red-600'}`}>
+                  <span className={`font-bold ${(scenario.indicators.tir_aa ?? -Infinity) >= 15 ? 'text-green-600' : 'text-red-600'}`}>
                     {formatPercent(scenario.indicators.tir_aa)}
                   </span>
                 </div>
