@@ -12,6 +12,9 @@ Comparação feita em 09/11/2026 com 24 centros de custo (comparar_busca_unica.p
 
 Memória: as páginas são processadas uma a uma e gravadas em disco; nada da
 resposta global fica inteiro na memória (o Render gratuito tem 512 MB).
+Disco: cada bloco é compactado (zlib). No ensaio de 10/11/2026 com os 311 CCs,
+sem compactar, o disco temporário chegou a ~2 GB (item rateado entre muitos CCs
+é gravado uma vez em cada um).
 """
 from __future__ import annotations
 
@@ -22,6 +25,7 @@ import pickle
 import re
 import shutil
 import tempfile
+import zlib
 from contextlib import contextmanager
 from typing import Any, Callable, Iterable, Iterator, Optional
 
@@ -91,8 +95,10 @@ class BuscaUnica:
                     for cc in ccs_do_item(item):
                         por_cc.setdefault(cc, []).append(item)
                 for cc, itens in por_cc.items():
+                    bloco = zlib.compress(pickle.dumps(itens, protocol=pickle.HIGHEST_PROTOCOL), 1)
                     with open(os.path.join(temp, _nome_arquivo(cc)), "ab") as f:
-                        pickle.dump(itens, f, protocol=pickle.HIGHEST_PROTOCOL)
+                        f.write(len(bloco).to_bytes(4, "big"))
+                        f.write(bloco)
         except Exception as e:
             shutil.rmtree(temp, ignore_errors=True)
             self._falhas[url_global] = e
@@ -111,10 +117,10 @@ class BuscaUnica:
             return
         with open(arq, "rb") as f:
             while True:
-                try:
-                    yield pickle.load(f)
-                except EOFError:
+                tamanho = f.read(4)
+                if len(tamanho) < 4:
                     break
+                yield pickle.loads(zlib.decompress(f.read(int.from_bytes(tamanho, "big"))))
 
     def limpar(self) -> None:
         shutil.rmtree(self._pasta, ignore_errors=True)
