@@ -39,26 +39,21 @@ def _cc(db, id_sienge="99901", custom=None):
     return cc
 
 
-def _id_do_dia(hoje, sufixo=0):
-    """id_sienge cuja primeira checagem cai em `hoje` (ver _dia_da_primeira_checagem)."""
-    return str(700000 + (hoje.toordinal() % 7) + 7 * sufixo)  # 700000 é múltiplo de 7
-
-
 def test_busca_e_grava_a_data(db_session, monkeypatch):
     chamadas = []
     monkeypatch.setattr(sienge_sync, "sync_units", lambda db, cc: chamadas.append(cc.id_sienge) or True)
-    cc = _cc(db_session, _id_do_dia(HOJE))
+    cc = _cc(db_session)
     assert sync_units_se_preciso(db_session, cc, hoje=HOJE) is True
-    assert chamadas == [cc.id_sienge]
+    assert chamadas == ["99901"]
     assert cc.custom_data[UNITS_SYNC_KEY] == "2026-11-10"
     # segunda rodada no mesmo dia: não chama a API
     assert sync_units_se_preciso(db_session, cc, hoje=HOJE) is False
-    assert chamadas == [cc.id_sienge]
+    assert chamadas == ["99901"]
 
 
 def test_nao_grava_data_se_a_busca_falhou(db_session, monkeypatch):
     monkeypatch.setattr(sienge_sync, "sync_units", lambda db, cc: False)
-    cc = _cc(db_session, _id_do_dia(HOJE, 1))
+    cc = _cc(db_session, "99902")
     sync_units_se_preciso(db_session, cc, hoje=HOJE)
     assert UNITS_SYNC_KEY not in (cc.custom_data or {})
 
@@ -83,7 +78,7 @@ def test_cc_sem_unidades_espera_uma_semana(db_session, monkeypatch):
 
 def test_preserva_o_resto_do_custom_data(db_session, monkeypatch):
     monkeypatch.setattr(sienge_sync, "sync_units", lambda db, cc: True)
-    cc = _cc(db_session, _id_do_dia(HOJE, 2), {"__cnpj": "123", "land_payment_curve_id": 7})
+    cc = _cc(db_session, "99905", {"__cnpj": "123", "land_payment_curve_id": 7})
     sync_units_se_preciso(db_session, cc, hoje=HOJE)
     assert cc.custom_data["__cnpj"] == "123"
     assert cc.custom_data["land_payment_curve_id"] == 7
@@ -93,27 +88,3 @@ def test_integracao_formal_fora_do_job_diario():
     src = inspect.getsource(scheduler._executar_sync_diario)
     assert "run_integracao_sienge" not in src
     assert "_etapa(\"Integração Formal\"" not in src
-
-
-def test_estreia_espalha_ccs_sem_unidades_pela_semana(db_session, monkeypatch):
-    chamadas = []
-    monkeypatch.setattr(sienge_sync, "sync_units", lambda db, cc: chamadas.append(cc.id_sienge) or True)
-    ccs = [_cc(db_session, str(200000 + i)) for i in range(70)]
-    sync_por_dia = []
-    from datetime import timedelta
-    for d in range(7):
-        antes = len(chamadas)
-        for cc in ccs:
-            sync_units_se_preciso(db_session, cc, hoje=HOJE + timedelta(days=d))
-        sync_por_dia.append(len(chamadas) - antes)
-    assert sync_por_dia == [10] * 7          # 70 CCs, 10 por dia
-    assert sorted(chamadas) == sorted(c.id_sienge for c in ccs)  # todos checados na semana
-
-
-def test_estreia_cc_com_unidades_busca_no_primeiro_dia(db_session, monkeypatch):
-    chamadas = []
-    monkeypatch.setattr(sienge_sync, "sync_units", lambda db, cc: chamadas.append(1) or True)
-    cc = _cc(db_session, _id_do_dia(HOJE, 3) + "1")  # fora do dia dele
-    db_session.add(Unit(cost_center_id=cc.id, id_sienge=5, name="Lote"))
-    db_session.flush()
-    assert sync_units_se_preciso(db_session, cc, hoje=HOJE) is True

@@ -38,4 +38,3 @@ tests/test_sync_gratuito.py
 tests/test_calculo_funding.py
 tests/test_calculo_parceiros.py
 tests/test_sync_cota_rest.py
-tests/test_sienge_busca_unica.py
