@@ -151,3 +151,47 @@ def test_blocos_compactados_em_disco_e_varias_paginas():
         assert _ids(cache.paginas_do_cc(BASE + "&costCentersId=100")) == list(range(1000))
         tamanho = sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(cache._pasta) for f in fs)
     assert tamanho < 1000 * 500 / 5  # compactado: bem menor que os ~500 KB de texto
+
+
+# --- janelas mensais (10/11/2026: o Bulk Data ignora limit/offset) -------------
+
+def test_janelas_mensais_cobrem_o_periodo_sem_sobrepor():
+    from app.services.sienge_busca_unica import janelas_mensais
+
+    url = "https://x/income?startDate=2027-01-15&endDate=2027-03-10&selectionType=D"
+    assert janelas_mensais(url) == [
+        "https://x/income?startDate=2027-01-15&endDate=2027-01-31&selectionType=D",
+        "https://x/income?startDate=2027-02-01&endDate=2027-02-28&selectionType=D",
+        "https://x/income?startDate=2027-03-01&endDate=2027-03-10&selectionType=D",
+    ]
+
+
+def test_janela_de_um_mes_ou_sem_datas_fica_igual():
+    from app.services.sienge_busca_unica import janelas_mensais
+
+    assert janelas_mensais("https://x/o?startDate=2026-11-07&endDate=2026-11-10") == ["https://x/o?startDate=2026-11-07&endDate=2026-11-10"]
+    assert janelas_mensais("https://x/o?a=1") == ["https://x/o?a=1"]
+
+
+def test_ano_inteiro_vira_12_buscas_e_dezembro_fecha_no_dia_31():
+    from app.services.sienge_busca_unica import janelas_mensais
+
+    j = janelas_mensais("https://x/o?startDate=2027-01-01&endDate=2027-12-31")
+    assert len(j) == 12 and j[-1].endswith("startDate=2027-12-01&endDate=2027-12-31")
+
+
+def test_busca_global_e_feita_mes_a_mes_e_conta_como_uma(tmp_path):
+    from app.services.sienge_busca_unica import BuscaUnica
+
+    pedidas = []
+
+    def buscar(url):
+        pedidas.append(url)
+        mes = url.split("startDate=")[1][5:7]
+        yield [{"billId": int(mes), "installmentId": 1, "costCenterId": 100}]
+
+    bu = BuscaUnica(buscar, pasta=str(tmp_path))
+    itens = [i for p in bu.paginas_do_cc("https://x/income?startDate=2027-01-01&endDate=2027-04-30&costCentersId=100") for i in p]
+    assert len(pedidas) == 4
+    assert [i["billId"] for i in itens] == [1, 2, 3, 4]
+    assert bu.buscas_globais == 1

@@ -10,8 +10,11 @@ parte. Os parsers do sync continuam fazendo o rateio exatamente como antes.
 Comparação feita em 09/11/2026 com 24 centros de custo (comparar_busca_unica.py):
 289.221 lançamentos iguais nos dois modos, zero diferenças; 34 buscas contra 816.
 
-Memória: as páginas são processadas uma a uma e gravadas em disco; nada da
-resposta global fica inteiro na memória (o Render gratuito tem 512 MB).
+Memória: o Bulk Data ignora limit/offset e devolve o período inteiro numa resposta
+só (sonda de 10/11/2026: contas a receber de 2027 da empresa toda = 287 MB de JSON,
+~1 GB ao ler; o ensaio chegou a 2,3 GB). Por isso a busca global é feita MÊS A MÊS
+(jan/2027 = 24 MB, ~90 MB ao ler, o mesmo de um CC grande no modo antigo) e cada
+resposta é repartida e gravada em disco antes da próxima.
 Disco: cada bloco é compactado (zlib). No ensaio de 10/11/2026 com os 311 CCs,
 sem compactar, o disco temporário chegou a ~2 GB (item rateado entre muitos CCs
 é gravado uma vez em cada um).
@@ -27,11 +30,40 @@ import shutil
 import tempfile
 import zlib
 from contextlib import contextmanager
+from datetime import date, timedelta
 from typing import Any, Callable, Iterable, Iterator, Optional
 
 logger = logging.getLogger(__name__)
 
 _FILTRO_CC = re.compile(r"[&?]costCentersId=([^&]*)")
+_DATA = re.compile(r"([&?])(startDate|endDate)=(\d{4}-\d{2}-\d{2})")
+
+
+def janelas_mensais(url: str) -> list[str]:
+    """Divide uma URL com startDate/endDate em URLs de no máximo um mês-calendário.
+
+    As janelas são contíguas e não se sobrepõem (dia a dia, inclusive nas pontas),
+    então a união dos itens é exatamente a do período original.
+    """
+    datas = {m.group(2): m.group(3) for m in _DATA.finditer(url)}
+    if "startDate" not in datas or "endDate" not in datas:
+        return [url]
+    ini = date.fromisoformat(datas["startDate"])
+    fim = date.fromisoformat(datas["endDate"])
+    if fim < ini or (ini.year, ini.month) == (fim.year, fim.month):
+        return [url]
+    urls = []
+    atual = ini
+    while atual <= fim:
+        prox_mes = date(atual.year + (atual.month == 12), atual.month % 12 + 1, 1)
+        fim_janela = min(fim, prox_mes - timedelta(days=1))
+        u = _DATA.sub(
+            lambda m: f"{m.group(1)}{m.group(2)}={(atual if m.group(2) == 'startDate' else fim_janela).isoformat()}",
+            url,
+        )
+        urls.append(u)
+        atual = fim_janela + timedelta(days=1)
+    return urls
 
 
 def url_sem_filtro_de_cc(url: str) -> tuple[str, Optional[str]]:
@@ -89,7 +121,7 @@ class BuscaUnica:
         os.makedirs(temp)
         self.buscas_globais += 1
         try:
-            for pagina in self._buscar(url_global):
+            for pagina in (p for janela in janelas_mensais(url_global) for p in self._buscar(janela)):
                 por_cc: dict[str, list] = {}
                 for item in pagina:
                     for cc in ccs_do_item(item):
@@ -99,6 +131,8 @@ class BuscaUnica:
                     with open(os.path.join(temp, _nome_arquivo(cc)), "ab") as f:
                         f.write(len(bloco).to_bytes(4, "big"))
                         f.write(bloco)
+                # solta a página antes de baixar a próxima janela (senão ficam duas na memória)
+                pagina = por_cc = itens = bloco = None
         except Exception as e:
             shutil.rmtree(temp, ignore_errors=True)
             self._falhas[url_global] = e
