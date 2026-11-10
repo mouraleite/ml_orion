@@ -185,7 +185,11 @@ class SiengeClient:
 
             yield page_results
 
-            if len(page_results) < limit:
+            # O Bulk Data do Sienge ignora limit/offset e devolve tudo de uma vez
+            # (sonda de 10/11/2026: limit=5 trouxe 12.709 itens, e offset=5 trouxe os
+            # mesmos). Página maior que o limite = resposta completa; pedir a "próxima"
+            # baixaria tudo de novo só para descobrir a repetição.
+            if len(page_results) < limit or len(page_results) > limit:
                 break
             offset += limit
 
