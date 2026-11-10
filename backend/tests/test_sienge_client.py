@@ -102,3 +102,18 @@ def test_from_auth_string():
     client = SiengeClient.from_auth_string("mouraleite", "user:secret")
     assert client.user == "user"
     assert client.password == "secret"
+
+
+def test_paginate_bulk_nao_repete_quando_o_sienge_ignora_o_limite():
+    """Sonda de 10/11/2026: limit=5 trouxe 12.709 itens. Página maior que o limite = resposta completa."""
+    client = SiengeClient(subdomain="mouraleite", user="u", password="p")
+    chamadas = []
+
+    class Cli(SiengeClient):
+        def get_json(self, url, **kw):
+            chamadas.append(url)
+            return {"data": [{"id": i} for i in range(250)]}
+
+    pages = list(Cli("mouraleite", "u", "p").paginate_bulk("https://example.com/outcome?a=1", limit=200))
+    assert len(chamadas) == 1
+    assert len(pages) == 1 and len(pages[0]) == 250
