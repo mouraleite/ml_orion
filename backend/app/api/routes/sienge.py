@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, BackgroundTasks
+from fastapi import APIRouter, Depends, BackgroundTasks, HTTPException, status
 from sqlalchemy.orm import Session
 from datetime import datetime
 from app.api.deps import get_db, require_admin
@@ -14,19 +14,15 @@ def background_sync(db: Session, subdomain: str, auth_string: str, start_date: s
     service.sync_realizado_income(start_date, end_date)
 
 @router.post("/sync")
-def sync_sienge(
-    background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_user=Depends(require_admin),
-):
-    """Inicia a sincronização do Sienge no background (somente administrador)."""
-    hoje = datetime.now()
-    start_date = f"{hoje.year}-01-01"
-    end_date = f"{hoje.year}-12-31"
+def sync_sienge(current_user=Depends(require_admin)):
+    """DESATIVADA em 10/11/2026.
 
-    subdomain = settings.SIENGE_SUBDOMAIN
-    auth_string = SiengeClient.auth_string_from_user_pass(settings.SIENGE_USER, settings.SIENGE_PASS)
-
-    background_tasks.add_task(background_sync, db, subdomain, auth_string, start_date, end_date)
-
-    return {"message": "Sincronização iniciada no background."}
+    Sync antigo (Títulos do Contas a Pagar, API REST): buscava os títulos do ano e,
+    para cada título, mais 2 chamadas REST (parcelas e apropriação) — uma execução
+    esgotaria a cota diária do Sienge. Nenhuma tela chamava; o realizado vem do sync
+    diário (POST /sync/sienge e o agendador).
+    """
+    raise HTTPException(
+        status_code=status.HTTP_410_GONE,
+        detail="Rota desativada: use o sync diário (POST /api/v1/sync/sienge).",
+    )

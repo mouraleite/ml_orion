@@ -54,38 +54,8 @@ def get_actuals(
 @router.post("/phases/{phase_id}/actuals/sync")
 def sync_actuals(
     phase_id: int,
-    db: Session = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_active_user),
 ) -> Any:
-    from app.services.erp_integration import erp_service
-    
-    # Mock parameters
-    project_code = f"PROJ-{phase_id}"
-    
-    mock_data = erp_service.fetch_actuals_for_phase(project_code, phase_id)
-    
-    inserted = 0
-    for item in mock_data:
-        existing = db.query(PhaseActuals).filter(
-            PhaseActuals.phase_id == phase_id,
-            PhaseActuals.categoria == item["categoria"],
-            PhaseActuals.mes_referencia == item["mes"]
-        ).first()
-
-        if existing:
-            existing.valor_realizado = item["valor_realizado"]
-            existing.observacao = f"Sincronizado via ERP ({item['origem']})"
-        else:
-            new_actual = PhaseActuals(
-                phase_id=phase_id,
-                categoria=item["categoria"],
-                mes_referencia=item["mes"],
-                valor_realizado=item["valor_realizado"],
-                observacao=f"Sincronizado via ERP ({item['origem']})"
-            )
-            db.add(new_actual)
-            inserted += 1
-
-    db.commit()
-    
-    return {"status": "success", "message": f"Sincronização concluída. {inserted} novos registros, os demais atualizados."}
+    """DESATIVADA em 10/11/2026: era um protótipo com dados simulados e chamava uma
+    função que não existe mais (fetch_actuals_for_phase). O botão saiu da tela."""
+    raise HTTPException(status_code=410, detail="Sincronização desta tela desativada: o realizado vem do sync diário com o Sienge.")
