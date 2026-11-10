@@ -16,7 +16,6 @@ export function TrackingTab({ phaseId }: TrackingTabProps) {
   const [actuals, setActuals] = useState<any[]>([]);
   const [baseline, setBaseline] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false);
 
   // Form states
   const [categoria, setCategoria] = useState("Obras");
@@ -63,19 +62,6 @@ export function TrackingTab({ phaseId }: TrackingTabProps) {
     }
   };
 
-  const handleSyncERP = async () => {
-    setIsSyncing(true);
-    try {
-      const res = await api.post(`/viabilities/phases/${phaseId}/actuals/sync`, {});
-      alert(res.data.message);
-      fetchData(); // recarrega após sincronizar
-    } catch (error) {
-      alert("Erro ao sincronizar com ERP.");
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
   const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val || 0);
 
   // PREPARAÇÃO DOS DADOS PARA O GRÁFICO
@@ -115,11 +101,6 @@ export function TrackingTab({ phaseId }: TrackingTabProps) {
         <div>
           <h2 className="text-xl font-bold text-slate-900">Acompanhamento (Real vs Orçado)</h2>
           <p className="text-sm text-slate-500">Compare a execução física/financeira contra o Baseline oficial do projeto.</p>
-        </div>
-        <div>
-          <Button onClick={handleSyncERP} disabled={isSyncing || !baseline} className="bg-slate-800 hover:bg-slate-900 text-white shadow-sm flex items-center gap-2">
-            {isSyncing ? "Sincronizando..." : "Sincronizar com ERP"}
-          </Button>
         </div>
       </div>
 
@@ -182,7 +163,7 @@ export function TrackingTab({ phaseId }: TrackingTabProps) {
               Lançamentos Extraordinários (Manual)
             </h3>
             <p className="text-sm text-slate-500 mb-4">
-              A alimentação principal ocorre via botão &quot;Sincronizar com ERP&quot; acima. Utilize este quadro 
+              O realizado vem do sync diário com o Sienge. Utilize este quadro
               apenas para inserir &quot;Realizados&quot; não registrados no sistema de origem.
             </p>
             <div className="flex items-end gap-4">
