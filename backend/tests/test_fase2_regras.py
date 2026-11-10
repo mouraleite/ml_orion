@@ -141,3 +141,15 @@ def test_sem_plano_de_venda_de_lotes_nao_faz_nada(db_session):
     db_session.flush()
     if inj.plano_receita_venda_lotes(db_session) is None:
         assert inj.injetar_vendas_em_receitas(fv, db_session)["linhas"] == 0
+
+
+def test_venda_de_mes_passado_nao_e_projetada_de_novo(cenario):
+    db, fv, cc, plano = cenario
+    pp = db.query(PaymentPlan).get(9401)
+    # venda de maio já está no Sienge (INC/FCST-INC); projetá-la de novo contaria em dobro
+    db.add(ForecastVendaItem(forecast_id=fv.id, produto_id=cc.id, plano_venda_id=pp.id, mes=5, numero_vendas=1, ticket_medio=600, vgv=600))
+    db.flush()
+    inj.injetar_vendas_em_receitas(fv, db, hoje=HOJE)
+    (item,) = _linha_auto(db, plano, cc)
+    assert item.jun == pytest.approx(0.0)
+    assert item.total_anual == pytest.approx(1000.0 + 300.0 + 100.0)

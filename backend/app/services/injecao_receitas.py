@@ -8,8 +8,10 @@ Corrige a injeção que nunca rodou (procurava o plano 1.01.01.01; no banco é 1
 - realizado: só INC-* (recebimentos do sync atual) e FCST-INC-* (parcelas em aberto),
   com a categoria do plano. SP-MIG-* (carga antiga do SharePoint) fica de fora, senão
   o realizado entraria em dobro;
-- recorte: só os produtos do forecast de vendas e os centros liberados para o
-  departamento (departamento_cost_centers), nunca a empresa toda;
+- recorte: só os produtos que estão no forecast de vendas, nunca a empresa toda;
+- vendas de meses que já passaram não são projetadas de novo: elas já estão no
+  Sienge como recebimento (INC-*) ou parcela em aberto (FCST-INC-*); projetar as
+  duas contaria em dobro. Só entram as vendas do mês atual em diante;
 - soma no banco (GROUP BY), sem carregar as linhas em memória.
 Linhas digitadas à mão (is_auto_generated = False) continuam tendo prioridade.
 """
@@ -106,6 +108,16 @@ def distribuir_venda_no_ano(vgv: float, mes_venda: int, condicoes_json) -> Dict[
     return meses
 
 
+def _venda_ainda_nao_realizada(ano: int, mes: int, hoje=None) -> bool:
+    """Venda prevista do mês atual em diante. Meses passados já estão no Sienge."""
+    hoje = hoje or datetime.now()
+    if ano > hoje.year:
+        return True
+    if ano < hoje.year:
+        return False
+    return mes >= hoje.month
+
+
 def _produtos_do_departamento(db: Session, dept_id: Optional[int]) -> set:
     if not dept_id:
         return set()
@@ -182,12 +194,13 @@ def injetar_vendas_em_receitas(forecast_vendas: Forecast, db: Session, hoje=None
         produtos.add(iv.produto_id)
         if not iv.vgv or iv.vgv <= 0:
             continue
+        if not _venda_ainda_nao_realizada(ano, int(iv.mes or 0), hoje):
+            continue
         plano_venda = planos.get(iv.plano_venda_id)
         cond = plano_venda.condicoes_json if plano_venda else None
         for mes, valor in distribuir_venda_no_ano(float(iv.vgv), int(iv.mes or 0), cond).items():
             acumulador[iv.produto_id][mes] += valor
 
-    produtos |= _produtos_do_departamento(db, dept_id)
     for cc_id, meses in realizado_e_em_aberto(db, ano, produtos, plano, hoje).items():
         for mes, valor in meses.items():
             acumulador[cc_id][mes] += valor
