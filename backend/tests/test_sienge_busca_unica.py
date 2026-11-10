@@ -138,3 +138,16 @@ def test_vendas_so_para_cc_com_unidades(db_session, monkeypatch):
     for cc in (com, sem):
         ss.sync_single_cc_sienge_data(db_session, cc, "2026-11-01", "2026-11-09", include_engineering=False)
     assert vendas == ["88801"]
+
+
+def test_blocos_compactados_em_disco_e_varias_paginas():
+    itens = [{"id": i, "cats": [{"costCenterId": 100}], "texto": "x" * 500} for i in range(1000)]
+
+    def buscar(url):
+        for k in range(0, 1000, 200):
+            yield itens[k:k + 200]
+
+    with bu.busca_unica(buscar) as cache:
+        assert _ids(cache.paginas_do_cc(BASE + "&costCentersId=100")) == list(range(1000))
+        tamanho = sum(os.path.getsize(os.path.join(r, f)) for r, _, fs in os.walk(cache._pasta) for f in fs)
+    assert tamanho < 1000 * 500 / 5  # compactado: bem menor que os ~500 KB de texto
