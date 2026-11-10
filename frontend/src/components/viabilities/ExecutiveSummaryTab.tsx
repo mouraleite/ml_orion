@@ -36,19 +36,15 @@ const ExecutiveSummaryTab: React.FC<Props> = ({ viabilityId, parecerExecutivo, p
   };
 
   const handleGenerate = async () => {
-    if (!apiKey) {
-      setShowApiInput(true);
-      setError('Por favor, insira sua chave da API do Gemini.');
-      return;
-    }
-    
-    localStorage.setItem('GEMINI_API_KEY', apiKey);
+    // A chave pode estar no servidor (GEMINI_API_KEY no Render): tenta sem pedir nada;
+    // só pede a chave na tela se o servidor responder que não tem.
+    if (apiKey) localStorage.setItem('GEMINI_API_KEY', apiKey);
     setLoading(true);
     setError('');
     onChange(''); // Limpa o texto antigo instantaneamente enquanto carrega
     
     try {
-      const response = await api.post(`/viabilities/${viabilityId}/generate-summary`, { api_key: apiKey });
+      const response = await api.post(`/viabilities/${viabilityId}/generate-summary`, apiKey ? { api_key: apiKey } : {});
       if (response.data && response.data.summary) {
         onChange(response.data.summary);
         if (onSave) {
@@ -58,7 +54,13 @@ const ExecutiveSummaryTab: React.FC<Props> = ({ viabilityId, parecerExecutivo, p
       }
     } catch (err: any) {
       console.error("Erro ao gerar:", err);
-      setError(err.response?.data?.detail || 'Ocorreu um erro ao gerar o resumo.');
+      const detalhe: string = err.response?.data?.detail || 'Ocorreu um erro ao gerar o resumo.';
+      if (typeof detalhe === 'string' && detalhe.startsWith('GEMINI_SEM_CHAVE')) {
+        setShowApiInput(true);
+        setError('O servidor ainda não tem a chave do Gemini. Informe a sua chave abaixo ou peça ao administrador para cadastrá-la no Render.');
+      } else {
+        setError(detalhe);
+      }
     } finally {
       setLoading(false);
     }

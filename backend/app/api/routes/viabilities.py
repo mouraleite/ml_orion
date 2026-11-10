@@ -775,10 +775,14 @@ def update_phase_dates(
 # ---- AI SUMMARY GENERATION ----
 import os
 import json
-try:
-    import google.generativeai as genai
-except ImportError:
-    genai = None
+# A biblioteca do Gemini é importada só quando o parecer é gerado: carregá-la na
+# subida do servidor custaria memória à toa no Render gratuito (512 MB).
+def _carregar_gemini():
+    try:
+        import google.generativeai as genai  # noqa: WPS433
+        return genai
+    except ImportError:
+        return None
 
 from pydantic import BaseModel
 
@@ -793,17 +797,18 @@ def generate_viability_summary(
     current_user: User = Depends(deps.get_current_active_user)
 ) -> Any:
     try:
-        if genai is None:
-            raise HTTPException(status_code=500, detail="A biblioteca do Google Gemini não está instalada no servidor.")
-
         viability = db.query(Viability).filter(Viability.id == id).first()
         if not viability:
             raise HTTPException(status_code=404, detail="Viabilidade não encontrada.")
             
-        api_key = request.api_key or os.getenv("GEMINI_API_KEY")
+        # Chave do servidor (GEMINI_API_KEY no Render) primeiro; a digitada na tela só como reserva.
+        api_key = os.getenv("GEMINI_API_KEY") or request.api_key
         if not api_key:
-            raise HTTPException(status_code=400, detail="Chave de API do Gemini não configurada. Por favor, forneça a chave.")
-            
+            raise HTTPException(status_code=400, detail="GEMINI_SEM_CHAVE: chave de API do Gemini não configurada no servidor. Informe a chave ou peça ao administrador para cadastrar GEMINI_API_KEY no Render.")
+
+        genai = _carregar_gemini()
+        if genai is None:
+            raise HTTPException(status_code=500, detail="A biblioteca do Google Gemini não está instalada no servidor.")
         genai.configure(api_key=api_key)
         
         # Coletar dados dos cenários (phases) e snapshots se houver
