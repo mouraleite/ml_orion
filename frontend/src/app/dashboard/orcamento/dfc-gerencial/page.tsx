@@ -144,7 +144,7 @@ async function exportarExcel(
   ano: number,
   ahAvMensal: boolean,
 ) {
-  const XLSX = await import("xlsx");
+  const { baixarXlsx } = await import("@/lib/planilha");
   const headers = ["Nível", "Código", "Descrição"];
   for (const mes of MESES_LABEL) {
     for (const key of active) headers.push(`${mes} ${serieMeta(key, refModo).short}`);
@@ -174,10 +174,7 @@ async function exportarExcel(
     line.push(percExcel(row.av));
     rows.push(line);
   }
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "DFC gerencial");
-  XLSX.writeFile(wb, `DFC_gerencial_${ano}.xlsx`);
+  await baixarXlsx([headers, ...rows], "DFC gerencial", `DFC_gerencial_${ano}.xlsx`);
 }
 
 function DfcLine({

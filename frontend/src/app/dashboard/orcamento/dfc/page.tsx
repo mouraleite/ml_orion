@@ -84,7 +84,7 @@ function percExcel(v: number | null | undefined) {
 }
 
 async function exportarDfcExcel(linhas: DfcRow[], active: SerieKey[], ano: number, ahAvMensal: boolean) {
-  const XLSX = await import("xlsx");
+  const { baixarXlsx } = await import("@/lib/planilha");
   const nomeSerie = (key: SerieKey) => SERIES.find((s) => s.key === key)?.short || key;
   const headers = ["Código", "Descrição", "Tipo"];
   for (const mes of MESES_LABEL) {
@@ -116,10 +116,7 @@ async function exportarDfcExcel(linhas: DfcRow[], active: SerieKey[], ano: numbe
     for (const plano of linha.planos || []) pushRow(plano, "Plano");
   }
 
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "DFC");
-  XLSX.writeFile(wb, `DFC_${ano}.xlsx`);
+  await baixarXlsx([headers, ...rows], "DFC", `DFC_${ano}.xlsx`);
 }
 
 function DfcLine({

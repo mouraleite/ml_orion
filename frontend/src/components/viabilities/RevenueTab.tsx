@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Save, Activity, Download, Upload } from "lucide-react";
 import { apoioService } from "@/services/apoio";
-import * as XLSX from 'xlsx';
+import { baixarXlsx, lerPrimeiraAba } from '@/lib/planilha';
 
 interface RevenueTabProps {
   phaseId: number;
@@ -730,11 +730,7 @@ export function RevenueTab({ phaseId, project, onUpdateProject, isReadonly }: Re
                   }
                   wsData.push(rowData);
                 });
-                const ws = XLSX.utils.aoa_to_sheet(wsData);
-                ws['!cols'] = [{ wch: 20 }, ...Array(salesMatrixColumns).fill({ wch: 10 })];
-                const wb = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(wb, ws, "MatrizVendas");
-                XLSX.writeFile(wb, `matriz_vendas_${data.plano_ativo.replace(/\s+/g, '_')}.xlsx`);
+                void baixarXlsx(wsData, "MatrizVendas", `matriz_vendas_${data.plano_ativo.replace(/\s+/g, '_')}.xlsx`, [20, ...Array(salesMatrixColumns).fill(10)]);
               }}
               className="text-sm"
               disabled={isReadonly}
@@ -760,12 +756,9 @@ export function RevenueTab({ phaseId, project, onUpdateProject, isReadonly }: Re
                 const file = e.target.files?.[0];
                 if (!file) return;
                 const reader = new FileReader();
-                reader.onload = (evt) => {
+                reader.onload = async (evt) => {
                   try {
-                    const dataBuffer = new Uint8Array(evt.target?.result as ArrayBuffer);
-                    const workbook = XLSX.read(dataBuffer, { type: 'array' });
-                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-                    const rows: any[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+                    const rows: any[][] = await lerPrimeiraAba(evt.target?.result as ArrayBuffer, file.name);
                     
                     const dataRows = rows.slice(1).filter(r => r.length >= 1 && r[0]);
                     const newCondicoes = JSON.parse(JSON.stringify(data.condicoes_pagamento_json));

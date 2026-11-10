@@ -50,11 +50,8 @@ const MESES = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "O
 const MESES_STR = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
 async function exportDataToExcel(headers: string[], rows: any[][], filename: string) {
-  const XLSX = await import("xlsx");
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Dados");
-  XLSX.writeFile(wb, filename);
+  const { baixarXlsx } = await import("@/lib/planilha");
+  await baixarXlsx([headers, ...rows], "Dados", filename);
 }
 
 const formatMoeda = (v: number) => {
