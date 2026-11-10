@@ -41,3 +41,4 @@ tests/test_sync_cota_rest.py
 tests/test_sync_memoria.py
 tests/test_rotas_desativadas.py
 tests/test_fase2_regras.py
+tests/test_auditoria_usuario.py
