@@ -26,51 +26,71 @@ def outcome_contas_pagar_url(cost_center_sienge_id: str, start_date: str, end_da
         f"&costCentersId={cost_center_sienge_id}&withAuthorizations=true&withBankMovements=true"
     )
 
-def _fetch_paginated_bulk(url: str):
-    """Auxiliar para buscar todas as páginas de um endpoint Bulk Data. Retorna em blocos."""
+def _fetch_paginated_bulk_direto(url: str):
     # strict: se uma página falhar, levanta erro e a transação é desfeita (nada é apagado com leitura parcial)
     yield from get_default_client().paginate_bulk(url, strict=True)
 
-def sync_all_sienge_data(db: Session, full_load: bool = False):
+
+def _fetch_paginated_bulk(url: str):
+    """Auxiliar para buscar todas as páginas de um endpoint Bulk Data. Retorna em blocos.
+    Dentro de sienge_busca_unica.busca_unica(), URLs com costCentersId são servidas
+    pela busca única da empresa toda (ver sienge_busca_unica.py)."""
+    from app.services.sienge_busca_unica import ativa
+
+    cache = ativa()
+    if cache is not None:
+        yield from cache.paginas_do_cc(url)
+        return
+    yield from _fetch_paginated_bulk_direto(url)
+
+def centros_do_sync(db: Session) -> list:
+    """Todos os centros de custo com código no Sienge (passo 5, 09/11/2026).
+
+    Antes eram só os CCs com o mesmo prefixo de 3 dígitos dos acompanhados no
+    dashboard (~10 grupos); os demais ficavam sem realizado novo. Com a busca
+    única, incluir todos não aumenta as buscas no Sienge.
+    """
+    return (
+        db.query(CostCenter)
+        .filter(CostCenter.id_sienge.isnot(None), CostCenter.id_sienge != "")
+        .order_by(CostCenter.id_sienge)
+        .all()
+    )
+
+
+def sync_all_sienge_data(db: Session, full_load: bool = False, desde: Optional[str] = None):
     """
     Roda o sincronismo de Vendas, Recebimentos e Pagamentos.
-    Se full_load for True, busca desde 2001. Se False, busca os ltimos 3 dias por segurana.
+    Se full_load for True, busca desde 2001. Se False, busca os últimos 3 dias por segurança.
+    desde (AAAA-MM-DD): recarga a partir dessa data até hoje (ex.: preencher um buraco).
     """
     if full_load:
         start_date = "2001-01-01"
         end_date = "2050-12-31"
+    elif desde:
+        start_date = datetime.strptime(desde[:10], "%Y-%m-%d").strftime("%Y-%m-%d")
+        end_date = datetime.now().strftime("%Y-%m-%d")
     else:
         hoje = datetime.now()
         start_date = (hoje - timedelta(days=3)).strftime("%Y-%m-%d")
         end_date = hoje.strftime("%Y-%m-%d")
 
-    # 1. Pega todos os Centros de Custo rastreados no Dashboard
-    tracked = db.query(CostCenter).filter(CostCenter.track_in_dashboard == True).all()
-    
-    # 2. Extrai os prefixos (3 primeiros dígitos) dos CCs rastreados
-    prefixes = set()
-    for cc in tracked:
-        if cc.id_sienge and len(cc.id_sienge) >= 3:
-            prefixes.add(cc.id_sienge[:3])
-            
-    # 3. Busca todos os CCs que compartilham o mesmo prefixo (para incluir OBRAS, MLDU, etc.)
-    if prefixes:
-        from sqlalchemy import or_
-        conditions = [CostCenter.id_sienge.like(f"{p}%") for p in prefixes]
-        centros = db.query(CostCenter).filter(or_(*conditions)).all()
-    else:
-        centros = tracked
+    centros = centros_do_sync(db)
     
     falhas: list[str] = []
-    for cc in centros:
-        if not cc.id_sienge:
-            continue
-        try:
-            sync_single_cc_sienge_data(db, cc, start_date, end_date, include_engineering=False)
-        except Exception as exc:
-            db.rollback()
-            falhas.append(f"{cc.id_sienge}: {exc}")
-            print(f"[Sienge Sync] Falha no CC {cc.id_sienge} ({cc.nome}): {exc}")
+    from app.services.sienge_busca_unica import busca_unica
+
+    # Uma busca bulk para a empresa toda em vez de ~34 por centro de custo (passo 5).
+    with busca_unica(_fetch_paginated_bulk_direto):
+        for cc in centros:
+            if not cc.id_sienge:
+                continue
+            try:
+                sync_single_cc_sienge_data(db, cc, start_date, end_date, include_engineering=False)
+            except Exception as exc:
+                db.rollback()
+                falhas.append(f"{cc.id_sienge}: {exc}")
+                print(f"[Sienge Sync] Falha no CC {cc.id_sienge} ({cc.nome}): {exc}")
 
     print("Sincronizando cronograma de engenharia (TRK-ENG, só acompanhamento)...")
     try:
@@ -129,8 +149,11 @@ def sync_single_cc_sienge_data(db: Session, cc: CostCenter, start_date: str = "2
     # CC com unidades 1x/dia; CC sem unidades 1x/semana (para achar obra nova).
     sync_units_se_preciso(db, cc)
     
-    # 1. SINCRONIZAR VENDAS (Sales) - realizadas
-    sync_sales(db, cc, start_date, end_date)
+    # 1. SINCRONIZAR VENDAS (Sales) - realizadas. /sales exige enterpriseId (uma busca
+    # por CC), então só para CC com unidades: em 09/11/2026 todo CC com venda tinha
+    # unidades; obra nova ganha unidades na checagem semanal acima e entra no mesmo dia.
+    if db.query(Unit.id).filter_by(cost_center_id=cc.id).first() is not None:
+        sync_sales(db, cc, start_date, end_date)
     
     # 2. SINCRONIZAR PAGAMENTOS REALIZADOS (Outcome - baixas bancárias)
     sync_outcomes(db, cc, start_date, end_date)
@@ -183,13 +206,24 @@ def precisa_sincronizar_unidades(ultima: Optional[str], tem_unidades: bool, hoje
     return (hoje - ultima_data).days >= DIAS_ENTRE_CHECAGENS_SEM_UNIDADES
 
 
+def _dia_da_primeira_checagem(cc: CostCenter, hoje) -> bool:
+    digitos = "".join(ch for ch in str(cc.id_sienge or "") if ch.isdigit())
+    base = int(digitos) if digitos else (cc.id or 0)
+    return base % DIAS_ENTRE_CHECAGENS_SEM_UNIDADES == hoje.toordinal() % DIAS_ENTRE_CHECAGENS_SEM_UNIDADES
+
+
 def sync_units_se_preciso(db: Session, cc: CostCenter, hoje=None) -> bool:
     """Chama sync_units só quando precisa; grava a data da busca no custom_data do CC.
     Retorna True se buscou."""
     hoje = hoje or datetime.now().date()
     custom = dict(cc.custom_data or {})
     tem_unidades = db.query(Unit.id).filter_by(cost_center_id=cc.id).first() is not None
-    if not precisa_sincronizar_unidades(custom.get(UNITS_SYNC_KEY), tem_unidades, hoje):
+    ultima = custom.get(UNITS_SYNC_KEY)
+    if not ultima and not tem_unidades and not _dia_da_primeira_checagem(cc, hoje):
+        # Primeira checagem de CC sem unidades espalhada pelos 7 dias da semana:
+        # na estreia não chamamos /units dos ~250 CCs sem lote no mesmo dia (cota REST).
+        return False
+    if not precisa_sincronizar_unidades(ultima, tem_unidades, hoje):
         return False
     if sync_units(db, cc):
         custom[UNITS_SYNC_KEY] = hoje.isoformat()
