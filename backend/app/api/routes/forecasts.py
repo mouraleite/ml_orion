@@ -17,7 +17,7 @@ from app.models.actual_transaction import ActualTransaction
 from app.schemas.forecast import ForecastCreateRequest, ForecastDespesasSaveRequest, ForecastStatusRequest
 from app.core.roles import is_admin_user
 from app.services.auth_matrix import validate_budget_allocation
-from app.services.periodos import MESES_STR, skip_linha_total_zero
+from app.services.periodos import MESES_STR, mudou, skip_linha_total_zero
 from app.services.budget_shared import (
     STATUS_ORCAMENTO_BLOQUEADO,
     build_empresas_map,
@@ -555,7 +555,7 @@ def salvar_forecast_despesas(
             valor_novo = getattr(item_data, mes_str)
             if mes_idx in meses_fechados_idx:
                 valor_base = getattr(linha_base, mes_str) if linha_base else 0.0
-                if valor_novo != valor_base:
+                if mudou(valor_novo, valor_base):
                     raise HTTPException(403, f"Mês {mes_str} está fechado, não pode ser alterado.")
                 item_final[mes_str] = valor_base
             else:
@@ -760,7 +760,7 @@ def salvar_forecast_receitas(
             valor_novo = getattr(item_data, mes_str)
             if mes_idx in meses_fechados_idx:
                 valor_base = getattr(linha_base, mes_str) if linha_base else 0.0
-                if valor_novo != valor_base:
+                if mudou(valor_novo, valor_base):
                     raise HTTPException(403, f"Mês {mes_str} está fechado, não pode ser alterado.")
                 item_final[mes_str] = valor_base
             else:
@@ -973,7 +973,7 @@ def salvar_forecast_vendas(
                 vendas_val = linha_base.numero_vendas if linha_base else 0
                 vgv_val = linha_base.vgv if linha_base else 0.0
                 
-                if (mes_data.ticket_medio != ticket_val) or (mes_data.numero_vendas != vendas_val):
+                if mudou(mes_data.ticket_medio, ticket_val) or mudou(mes_data.numero_vendas, vendas_val):
                     raise HTTPException(403, f"Mês {mes_data.mes} está fechado, não pode ser alterado.")
             else:
                 ticket_val = mes_data.ticket_medio
@@ -1440,7 +1440,7 @@ async def importar_excel(
                 ticket_val = linha_base.ticket_medio if linha_base else 0.0
                 vendas_val = linha_base.numero_vendas if linha_base else 0
                 vgv_val = linha_base.vgv if linha_base else 0.0
-                if linha["ticket_medio"] != ticket_val or linha["numero_vendas"] != vendas_val:
+                if mudou(linha["ticket_medio"], ticket_val) or mudou(linha["numero_vendas"], vendas_val):
                     db.rollback()
                     raise HTTPException(status_code=403, detail=f"Mês {mes} está fechado, não pode ser alterado.")
             else:
@@ -1492,7 +1492,7 @@ async def importar_excel(
                 valor_novo = linha.get(mes_str, 0.0) or 0.0
                 if mes_idx in meses_fechados_idx:
                     valor_base = getattr(linha_base, mes_str) if linha_base else 0.0
-                    if valor_novo != valor_base:
+                    if mudou(valor_novo, valor_base):
                         db.rollback()
                         raise HTTPException(status_code=403, detail=f"Mês {mes_str} está fechado, não pode ser alterado.")
                     item_final[mes_str] = valor_base

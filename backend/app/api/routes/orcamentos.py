@@ -15,7 +15,7 @@ from app.models.payment_plan import PaymentPlan
 from app.models.auditoria import Auditoria
 from app.models.forecast import Forecast, ForecastItem, ForecastVendaItem
 from app.services.periodos import (
-    MESES_STR, mes_fechado_alterado, meses_fechados_do_ano,
+    MESES_STR, mes_fechado_alterado, meses_fechados_do_ano, mudou,
     soma_meses_obj,
 )
 from app.services.auth_matrix import validate_budget_allocation
@@ -784,7 +784,7 @@ def salvar_orcamento_vendas(
                 atual = atuais.get((linha.produto_id, linha.plano_venda_id, mes_data.mes))
                 ticket_val = atual.ticket_medio if atual else 0.0
                 vendas_val = atual.numero_vendas if atual else 0
-                if mes_data.ticket_medio != ticket_val or mes_data.numero_vendas != vendas_val:
+                if mudou(mes_data.ticket_medio, ticket_val) or mudou(mes_data.numero_vendas, vendas_val):
                     raise HTTPException(403, f"O mês {mes_data.mes} está fechado e não pode ser alterado.")
 
     for orc in orcamentos_do_grupo:
