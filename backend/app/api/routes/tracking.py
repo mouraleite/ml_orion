@@ -76,6 +76,20 @@ def _tma_por_cc(db) -> dict:
     return mapa
 
 
+RECEITA_MINIMA_RENTABILIDADE = 10_000.0
+
+
+def _rentabilidade(lucro, receita_bruta):
+    """Rentabilidade do investimento = lucro líquido operacional ÷ receita bruta (%).
+
+    None (a tela mostra "—") quando a receita bruta é menor que R$ 10 mil: com receita
+    quase zero a divisão gera números sem sentido (ex.: -861.863%)."""
+    receita = float(receita_bruta or 0.0)
+    if receita < RECEITA_MINIMA_RENTABILIDADE:
+        return None
+    return float(lucro or 0.0) / receita * 100
+
+
 def _tma_anual(db, cc_ids) -> float:
     """TMA do primeiro centro de custo da lista que tiver viabilidade ligada; senão 12%."""
     mapa = _tma_por_cc(db)
@@ -1600,7 +1614,7 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
 
     # Mesma fórmula do consolidado e da margem da viabilidade: lucro líquido operacional ÷ receita bruta
-    rent_inv = (lucro_liq_operacional / vgv_liquido) * 100 if vgv_liquido > 0 else 0.0
+    rent_inv = _rentabilidade(lucro_liq_operacional, vgv_liquido)
 
     if kpis_only:
         return {
@@ -3724,7 +3738,7 @@ def _get_tracking_details_logic(db, id: str, view_mode: str = 'consolidado'):
 
         # Calculate rent_inv
 
-        rent_inv = (combined_actuals["lucro_liq_operacional"] / combined_actuals["receita_bruta"]) * 100 if combined_actuals["receita_bruta"] > 0 else 0.0
+        rent_inv = _rentabilidade(combined_actuals["lucro_liq_operacional"], combined_actuals["receita_bruta"])
 
         
 

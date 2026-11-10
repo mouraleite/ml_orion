@@ -153,3 +153,9 @@ def test_venda_de_mes_passado_nao_e_projetada_de_novo(cenario):
     (item,) = _linha_auto(db, plano, cc)
     assert item.jun == pytest.approx(0.0)
     assert item.total_anual == pytest.approx(1000.0 + 300.0 + 100.0)
+
+
+def test_rentabilidade_sem_receita_relevante_vira_traco():
+    assert tr._rentabilidade(-500_000.0, 58.0) is None
+    assert tr._rentabilidade(100.0, 0.0) is None
+    assert tr._rentabilidade(50_000.0, 200_000.0) == pytest.approx(25.0)
