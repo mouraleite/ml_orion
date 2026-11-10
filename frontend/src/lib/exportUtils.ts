@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import { baixarXlsxDeObjetos } from './planilha';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -21,10 +21,7 @@ export function exportToExcel(data: any[], columns: ColumnDef[], filename: strin
     return row;
   });
 
-  const worksheet = XLSX.utils.json_to_sheet(exportData);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Relatório');
-  XLSX.writeFile(workbook, `${filename}.xlsx`);
+  void baixarXlsxDeObjetos(exportData, 'Relatório', `${filename}.xlsx`);
 }
 
 export function exportToPDF(

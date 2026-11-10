@@ -635,7 +635,7 @@ def calculate_viability_results(db: Session, phase_id: int, scenario_id: int = N
                                 imp_pis_vetor[idx_fin] += imp_atual * prop_pis
                                 imp_cofins_vetor[idx_fin] += imp_atual * prop_cofins
                                 imp_irpj_csll_vetor[idx_fin] += imp_atual * prop_irpj_csll
-                                imp_outros_vetor[i + j] += imp_atual * prop_outros
+                                imp_outros_vetor[idx_fin] += imp_atual * prop_outros
                 
                 elif sistema_amortizacao == "SAC" and cond_taxa_juros > 0:
                     amort_mensal = val_financiado / inst
@@ -882,14 +882,19 @@ def calculate_viability_results(db: Session, phase_id: int, scenario_id: int = N
     def calc_indicadores(df_calc):
         cf_array = df_calc["Fluxo_de_Caixa"].tolist()
         
-        tir_mensal = 0.0
-        tir_anual = 0.0
+        # TIR que não converge (fluxo sem troca de sinal, por exemplo) fica None: a tela mostra
+        # "n/d" em vez de 0%, que parecia um resultado.
+        tir_mensal = None
+        tir_anual = None
         try:
             tir_mensal = npf.irr(cf_array)
-            tir_anual = ((1 + tir_mensal) ** 12 - 1) * 100 if tir_mensal is not None and not pd.isna(tir_mensal) and tir_mensal > -1 else 0.0
+            if tir_mensal is None or pd.isna(tir_mensal) or tir_mensal <= -1:
+                tir_mensal = None
+            else:
+                tir_anual = ((1 + tir_mensal) ** 12 - 1) * 100
         except Exception:
-            tir_mensal = 0.0
-            tir_anual = 0.0
+            tir_mensal = None
+            tir_anual = None
 
         tma_anual = (phase.viability.taxa_desconto_vpl / 100.0) if phase.viability and phase.viability.taxa_desconto_vpl else 0.12
         tma_mensal = (1 + tma_anual) ** (1/12) - 1
@@ -971,7 +976,7 @@ def calculate_viability_results(db: Session, phase_id: int, scenario_id: int = N
             "lucro_liquido": lucro_liquido,
             "margem_perc": margem,
             "tir_aa": tir_anual,
-            "tir_am": float(tir_mensal * 100) if tir_mensal is not None and not pd.isna(tir_mensal) and tir_mensal > -1 else 0.0,
+            "tir_am": float(tir_mensal * 100) if tir_mensal is not None else None,
             "mtir_am": float(mtir_mensal),
             "mtir_aa": float(mtir_anual),
             "vpl": float(vpl) if not pd.isna(vpl) else 0.0,

@@ -101,7 +101,7 @@ async function exportarExcel(
   labels: string[],
   nome: string,
 ) {
-  const XLSX = await import("xlsx");
+  const { baixarXlsx } = await import("@/lib/planilha");
   const headers = ["Código", "Descrição", "Tipo", ...labels, "Vida"];
   const rows: (string | number)[][] = [];
   const push = (row: { codigo: string; descricao: string; valores?: Record<string, number>; valores_mes?: Record<string, number>; total: number }, tipo: string) => {
@@ -117,10 +117,7 @@ async function exportarExcel(
     push(linha, "Categoria");
     for (const plano of linha.planos || []) push(plano, "Plano");
   }
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "DFC");
-  XLSX.writeFile(wb, `DFC_empreendimentos_${nome || "vida"}.xlsx`);
+  await baixarXlsx([headers, ...rows], "DFC", `DFC_empreendimentos_${nome || "vida"}.xlsx`);
 }
 
 function TrackingDfcInner() {

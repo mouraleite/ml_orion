@@ -1515,9 +1515,9 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
                 
 
-    tir_mensal_final = 0.0
+    tir_mensal_final = None  # TIR que não converge = "n/d" na tela, nunca 0%
 
-    tir_anual = 0.0
+    tir_anual = None
 
     mtir_mensal_final = 0.0
 
@@ -2316,9 +2316,9 @@ def _calc_slice_actuals(db, macro_prefix, native_cc_id, pct, view_mode, cached_c
 
     slice_act["lucro_operacional"] = lucro
 
-    slice_act["tir_anual"] = ind.get("tir_anual") or 0.0
+    slice_act["tir_anual"] = ind.get("tir_anual")
 
-    slice_act["tir_mensal"] = ind.get("tir_mensal") or 0.0
+    slice_act["tir_mensal"] = ind.get("tir_mensal")
 
     slice_act["mtir_anual"] = ind.get("mtir_anual") or 0.0
 
@@ -2521,7 +2521,7 @@ def _kpis_do_consolidado(acts, tma_anual: float = TMA_PADRAO):
         "vendas_acumuladas": vendas_ativas,
         "perc_vendido": (vendas_ativas / vgv_total * 100) if vgv_total > 0 else 0.0,
         "lucro": lucro,
-        "tir_anual": indicators.get("tir_anual") or 0.0,
+        "tir_anual": indicators.get("tir_anual"),
         "mtir_anual": indicators.get("mtir_anual") or 0.0,
         "payback": indicators.get("payback") or 0,
         "exposicao_max_caixa": exposicao,
@@ -2542,7 +2542,7 @@ def _kpis_da_fatia(slice_act):
         "vendas_acumuladas": vendas_ativas,
         "perc_vendido": (vendas_ativas / vgv_total * 100) if vgv_total > 0 else 0.0,
         "lucro": slice_act.get("lucro_liq_operacional", 0.0) or 0.0,
-        "tir_anual": slice_act.get("tir_anual", 0.0) or 0.0,
+        "tir_anual": slice_act.get("tir_anual"),
         "mtir_anual": slice_act.get("mtir_anual", 0.0) or 0.0,
         "payback": slice_act.get("payback", 0) or 0,
         "exposicao_max_caixa": exposicao,
@@ -2693,7 +2693,7 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
 
             "lucro": calc.get("lucro_liquido", 0.0),
 
-            "tir_anual": calc.get("tir_aa", 0.0),
+            "tir_anual": calc.get("tir_aa"),
 
             "mtir_anual": calc.get("mtir_aa", 0.0),
 
@@ -2832,7 +2832,7 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
             "vendas_acumuladas": kpis.get("vendas_acumuladas", 0.0),
             "perc_vendido": kpis.get("perc_vendido", 0.0),
             "lucro": kpis.get("lucro", 0.0) if "lucro" in kpis else kpis.get("lucro_operacional", 0.0),
-            "tir_anual": kpis.get("tir_anual", 0.0),
+            "tir_anual": kpis.get("tir_anual"),
             "mtir_anual": kpis.get("mtir_anual", 0.0),
             "payback_anos": kpis.get("payback", 0.0),
             "exposicao_max_caixa": kpis.get("exposicao_max_caixa", 0.0),
@@ -3102,7 +3102,7 @@ def _get_tracking_details_logic(db, id: str, view_mode: str = 'consolidado'):
 
                 "lucro": slice_act.get("lucro_liq_operacional", 0.0),
 
-                "tir_anual": slice_act.get("tir_anual", 0.0),
+                "tir_anual": slice_act.get("tir_anual"),
 
                 "mtir_anual": slice_act.get("mtir_anual", 0.0),
 
@@ -3344,9 +3344,9 @@ def _get_tracking_details_logic(db, id: str, view_mode: str = 'consolidado'):
 
         indicators = _calculate_financial_indicators(combined_final_cf or {0: 0.0}, tma_anual=_tma_anual(db, [c.id for c in ccs if c is not None]))
 
-        combined_actuals["tir_anual"] = indicators.get("tir_anual") or 0.0
+        combined_actuals["tir_anual"] = indicators.get("tir_anual")
 
-        combined_actuals["tir_mensal"] = indicators.get("tir_mensal") or 0.0
+        combined_actuals["tir_mensal"] = indicators.get("tir_mensal")
 
         combined_actuals["mtir_anual"] = indicators.get("mtir_anual") or 0.0
 
@@ -3758,9 +3758,9 @@ def _get_tracking_details_logic(db, id: str, view_mode: str = 'consolidado'):
                     "lucro": combined_actuals.get("lucro_liq_operacional", 0.0),
                     "vso": 0.0,
                     "distrato_venda": (combined_actuals.get("distratos", 0) / combined_actuals.get("vgv_vendido", 1)) * 100 if combined_actuals.get("vgv_vendido", 0) > 0 else 0.0,
-                    "tir_anual": combined_actuals.get("tir_anual", 0.0),
+                    "tir_anual": combined_actuals.get("tir_anual"),
 
-                    "tir_mensal": combined_actuals.get("tir_mensal", 0.0),
+                    "tir_mensal": combined_actuals.get("tir_mensal"),
 
                     "mtir_anual": combined_actuals.get("mtir_anual", 0.0),
 
@@ -3832,9 +3832,9 @@ def _get_tracking_details_logic(db, id: str, view_mode: str = 'consolidado'):
                     "lucro": actuals.get("lucro_liq_operacional", 0.0),
                     "vso": 0.0,
                     "distrato_venda": (actuals.get("distratos", 0) / actuals.get("vgv_vendido", 1)) * 100 if actuals.get("vgv_vendido", 0) > 0 else 0.0,
-                    "tir_anual": actuals.get("tir_anual", 0.0),
+                    "tir_anual": actuals.get("tir_anual"),
 
-                    "tir_mensal": actuals.get("tir_mensal", 0.0),
+                    "tir_mensal": actuals.get("tir_mensal"),
 
                     "mtir_anual": actuals.get("mtir_anual", 0.0),
 
@@ -4006,7 +4006,7 @@ def _get_tracking_details_logic(db, id: str, view_mode: str = 'consolidado'):
                     "lucro": calc.get("lucro_liquido", 0.0),
                     "vso": 0.0,
                     "distrato_venda": 0.0,
-                    "tir_anual": calc.get("tir_aa", 0.0),
+                    "tir_anual": calc.get("tir_aa"),
 
                     "mtir_anual": calc.get("mtir_aa", 0.0),
 

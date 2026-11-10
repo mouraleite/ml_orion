@@ -97,7 +97,7 @@ def get_dashboard_summary(
                 proj_lucro += indicators.get("lucro_liquido", 0.0)
                 proj_vpl += indicators.get("vpl", 0.0)
                 # A TIR não pode ser somada diretamente, mas para simplificação no breakdown listamos a do baseline.
-                proj_tir = indicators.get("tir_aa", 0.0)
+                proj_tir = indicators.get("tir_aa") or 0.0
                 # Exposição máxima (menor valor no fluxo). Como são valores negativos, podemos manter o menor ou somar as curvas.
                 # A exposição consolidada real se dá pela soma dos fluxos de todos os projetos no tempo.
                 

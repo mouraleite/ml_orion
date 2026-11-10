@@ -160,10 +160,12 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
       if (viewMode === "Empreendedor" && (data as any).indicators_empreendedor) return 1;
       if (partnerNames.includes(viewMode) && (data as any).indicators_parceiros?.[viewMode]) return 1;
 
-      // Default percentages if exchangesData is not yet saved
-      const percEmpreendedor = exchangesData?.perc_parceria_empreendedor ?? 61.5;
-      const percParceiro = exchangesData?.perc_parceria_terrenista ?? 38.5;
-      const percInvestidor = exchangesData?.perc_parceria_investidor ?? 0.0;
+      // Sem a divisão cadastrada na permuta não há percentual: mostra o global
+      // (antes usava 61,5% / 38,5% inventados) e o aviso abaixo do título explica.
+      if (!exchangesData) return 1;
+      const percEmpreendedor = exchangesData.perc_parceria_empreendedor ?? 0;
+      const percParceiro = exchangesData.perc_parceria_terrenista ?? 0;
+      const percInvestidor = exchangesData.perc_parceria_investidor ?? 0;
 
       if (viewMode === "Empreendedor") return percEmpreendedor / 100;
       if (viewMode === "Parceiro") return percParceiro / 100;
@@ -190,6 +192,8 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
 
   const formatCurrency = (val: any) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
   const formatPerc = (val: any) => (Number(val) || 0).toFixed(2) + "%";
+  // TIR que não converge vem nula do motor: "n/d", nunca 0% (que parece um resultado)
+  const formatTir = (val: any) => (val === null || val === undefined || Number.isNaN(Number(val)) ? "n/d" : formatPerc(val));
   const formatDate = (val: string) => val ? new Date(val).toLocaleDateString('pt-BR', {timeZone: 'UTC'}) : "-";
   const formatArea = (val: any) => (Number(val) || 0).toLocaleString('pt-BR', {maximumFractionDigits: 2});
 
@@ -252,6 +256,11 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
         <div>
           <h2 className="text-xl font-bold text-slate-900">Dashboard de Resultados</h2>
           <p className="text-sm text-slate-500">Comparativo de Cenários, DRE e Indicadores de Rentabilidade.</p>
+          {viewMode !== "Global" && !exchangesData && !(data as any).indicators_empreendedor && (
+            <p className="mt-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-1.5 print:hidden">
+              A divisão entre empreendedor, parceiro e investidor não está cadastrada na permuta: os valores abaixo são do projeto inteiro.
+            </p>
+          )}
           {(data as any).aviso_parceiros && (
             <p className="mt-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-3 py-1.5 print:hidden">
               {(data as any).aviso_parceiros}
@@ -955,7 +964,7 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
                       <td className="py-2 px-4 border-b border-slate-100 text-slate-400 font-medium">% a.m.</td>
                       {columns.map(col => (
                            <td key={col.id} className={`py-2 px-4 border-b border-slate-100 text-right font-bold ${((col.isCurrent || (col as any).isFamily) ? 'bg-ml-green/10 text-ml-very-dark' : (col as any).isFamily ? 'bg-blue-50/50 text-ml-very-dark' : 'text-slate-900')}`}>
-                              {formatPerc(col.ind?.tir_am)}
+                              {formatTir(col.ind?.tir_am)}
                           </td>
                       ))}
                   </tr>
@@ -964,7 +973,7 @@ export function SummaryTab({ phaseId, userRole, project }: SummaryTabProps) {
                       <td className="py-2 px-4 border-b border-slate-100 text-slate-400 font-medium">% a.a.</td>
                       {columns.map(col => (
                            <td key={col.id} className={`py-2 px-4 border-b border-slate-100 text-right font-bold ${((col.isCurrent || (col as any).isFamily) ? 'bg-ml-green/10 text-ml-very-dark' : (col as any).isFamily ? 'bg-blue-50/50 text-ml-very-dark' : 'text-slate-900')}`}>
-                              {formatPerc(col.ind?.tir_aa)}
+                              {formatTir(col.ind?.tir_aa)}
                           </td>
                       ))}
                   </tr>

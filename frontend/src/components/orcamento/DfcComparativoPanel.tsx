@@ -48,7 +48,7 @@ async function exportComparativoExcel(
   ano: number,
   porMes: boolean,
 ) {
-  const XLSX = await import("xlsx");
+  const { baixarXlsx } = await import("@/lib/planilha");
   const headers = ["Código", "Descrição", "Tipo", labelA, labelB, "Var. R$", "Var. %"];
   if (porMes) {
     for (const m of MESES_STR) {
@@ -77,10 +77,7 @@ async function exportComparativoExcel(
     push(linha, "Categoria");
     for (const plano of linha.planos || []) push(plano, "Plano");
   }
-  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "DFC Comparativo");
-  XLSX.writeFile(wb, `DFC_comparativo_${ano}.xlsx`);
+  await baixarXlsx([headers, ...rows], "DFC Comparativo", `DFC_comparativo_${ano}.xlsx`);
 }
 
 function CompLine({

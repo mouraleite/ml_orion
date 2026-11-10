@@ -75,7 +75,9 @@ export default function TrackingPage() {
   const totalVendas = filteredData.reduce((acc, curr) => acc + (curr.vendas_acumuladas || 0), 0);
   const percVendido = totalVGV > 0 ? (totalVendas / totalVGV) * 100 : 0;
   const totalLucro = filteredData.reduce((acc, curr) => acc + (curr.lucro || 0), 0);
-  const tirMedia = filteredData.reduce((acc, curr) => acc + (curr.tir_anual || 0), 0) / (filteredData.length || 1);
+  // Média só das TIRs que convergiram (as "n/d" não entram como 0%)
+  const comTir = filteredData.filter((r) => r.tir_anual !== null && r.tir_anual !== undefined);
+  const tirMedia = comTir.length ? comTir.reduce((acc, curr) => acc + (curr.tir_anual as number), 0) / comTir.length : null;
   const paybackMedio = filteredData.reduce((acc, curr) => acc + (curr.payback_anos || 0), 0) / (filteredData.length || 1);
   const totalExposicao = filteredData.reduce((acc, curr) => acc + (curr.exposicao_max_caixa || 0), 0);
 

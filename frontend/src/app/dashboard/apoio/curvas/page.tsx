@@ -6,7 +6,7 @@ import { Plus, Edit2, Trash2, Save, X, Settings2, Download, Upload, AlertCircle 
 import { Button } from"@/components/ui/Button";
 import { confirmDialog } from "@/components/ui/confirmDialog";
 import { AppLoadingState } from "@/components/shared/BudgetLoadingState";
-import * as XLSX from 'xlsx';
+import { baixarXlsx, lerPrimeiraAba } from '@/lib/planilha';
 
 interface StandardCurve {
  id: number;
@@ -406,11 +406,7 @@ export default function CurvasPage() {
  for (let i = 1; i <= numMeses; i++) {
  wsData.push([i, 0]);
  }
- const ws = XLSX.utils.aoa_to_sheet(wsData);
- ws['!cols'] = [{ wch: 8 }, { wch: 16 }];
- const wb = XLSX.utils.book_new();
- XLSX.utils.book_append_sheet(wb, ws,"Modelo");
- XLSX.writeFile(wb, `modelo_curva_${formData.tipo || 'padrao'}.xlsx`);
+ void baixarXlsx(wsData, "Modelo", `modelo_curva_${formData.tipo || 'padrao'}.xlsx`, [8, 16]);
  }}
  className="text-sm"
  >
@@ -434,12 +430,9 @@ export default function CurvasPage() {
  const file = e.target.files?.[0];
  if (!file) return;
  const reader = new FileReader();
- reader.onload = (evt) => {
+ reader.onload = async (evt) => {
  try {
- const data = new Uint8Array(evt.target?.result as ArrayBuffer);
- const workbook = XLSX.read(data, { type: 'array' });
- const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
- const rows: any[][] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+ const rows: any[][] = await lerPrimeiraAba(evt.target?.result as ArrayBuffer, file.name);
  
  // Pular o header
  const dataRows = rows.slice(1).filter(r => r.length >= 2);

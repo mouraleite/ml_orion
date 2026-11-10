@@ -247,11 +247,11 @@ export default function TrackingDetailPage() {
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card className="p-4 flex flex-col items-center justify-center bg-white shadow-sm border border-slate-200">
           <span className="text-xs text-slate-500 uppercase font-semibold mb-1 text-center">TIR Mensal</span>
-          <span className="text-xl font-bold text-slate-900">{formatPercent(kpis.tir_mensal || 0)}</span>
+          <span className="text-xl font-bold text-slate-900">{kpis.tir_mensal == null ? "n/d" : formatPercent(kpis.tir_mensal)}</span>
         </Card>
         <Card className="p-4 flex flex-col items-center justify-center bg-white shadow-sm border border-slate-200">
           <span className="text-xs text-slate-500 uppercase font-semibold mb-1 text-center">TIR Anual</span>
-          <span className="text-xl font-bold text-slate-900">{formatPercent(kpis.tir_anual || 0)}</span>
+          <span className="text-xl font-bold text-slate-900">{kpis.tir_anual == null ? "n/d" : formatPercent(kpis.tir_anual)}</span>
         </Card>
         <Card className="p-4 flex flex-col items-center justify-center bg-white shadow-sm border border-slate-200">
           <span className="text-xs text-slate-500 uppercase font-semibold mb-1 text-center">MTIR Mensal</span>

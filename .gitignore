@@ -65,3 +65,17 @@ response*.json
 resp_*.txt
 tool_call_*.json
 *.bak
+
+# Dumps e planilhas com dados reais: ficam só no computador (análise 09/11/2026)
+/Modelagem mestre.xlsx
+backend/*_dump.json
+backend/debug*.json
+backend/summary_api*.json
+backend/poc_sienge_*.json
+backend/check_tracking_output.json
+backend/ccs.json
+backend/emp.json
+backend/pf.json
+backend/excel_plans*.json
+backend/sample_sienge.csv
+frontend/src/app/dashboard/orcamento/realizado/debug_vendas.json
