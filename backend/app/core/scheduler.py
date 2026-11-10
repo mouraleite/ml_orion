@@ -137,6 +137,42 @@ def daily_sienge_sync(pular_se_recente: bool = True) -> str:
             logger.exception("Falha ao liberar a trava da sincronização Sienge")
 
 
+CHAVE_RECARGA = "sync_recarga_desde"
+
+
+def recarga_pendente(db) -> str | None:
+    """Data (AAAA-MM-DD) de uma recarga agendada para o próximo sync diário, ou None.
+
+    Para agendar: system_settings key='sync_recarga_desde', value={"desde": "2026-09-01"}.
+    O sync diário usa essa data no lugar dos últimos 3 dias UMA vez e apaga a chave
+    quando termina sem erro (se falhar, tenta de novo no próximo sync).
+    """
+    from datetime import date as _date
+
+    from app.models.system_settings import SystemSettings
+
+    try:
+        s = db.query(SystemSettings).filter_by(key=CHAVE_RECARGA).first()
+    except Exception:
+        return None
+    if not s or not isinstance(s.value, dict) or not s.value.get("desde"):
+        return None
+    try:
+        d = _date.fromisoformat(str(s.value["desde"])[:10])
+    except ValueError:
+        return None
+    if d > _date.today() or (_date.today() - d).days > 400:
+        return None
+    return d.isoformat()
+
+
+def limpar_recarga_pendente(db) -> None:
+    from app.models.system_settings import SystemSettings
+
+    db.query(SystemSettings).filter_by(key=CHAVE_RECARGA).delete(synchronize_session=False)
+    db.commit()
+
+
 def _executar_sync_diario() -> None:
     db = SessionLocal()
     try:
@@ -162,10 +198,16 @@ def _executar_sync_diario() -> None:
             logger.info("Departamentos Sienge (de-para): %s registro(s).", n)
 
         _etapa("Sincronização de Departamentos Sienge", _departamentos)
-        _etapa(
-            "Sincronização Financeira Sienge",
-            lambda: sync_all_sienge_data(db, full_load=False),
-        )
+        def _financeiro():
+            desde = recarga_pendente(db)
+            if desde:
+                logger.info("Recarga pendente: sync financeiro desde %s (uma vez).", desde)
+            sync_all_sienge_data(db, full_load=False, desde=desde)
+            if desde:
+                limpar_recarga_pendente(db)
+                logger.info("Recarga desde %s concluída e retirada da fila.", desde)
+
+        _etapa("Sincronização Financeira Sienge", _financeiro)
 
         # A "Integração Formal" saiu do job diário em 09/11/2026:
         # nunca concluiu (erro em todas as execuções desde agosto), gastava 7-12 min de
