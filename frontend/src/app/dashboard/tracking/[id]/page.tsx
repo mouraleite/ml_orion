@@ -263,7 +263,7 @@ export default function TrackingDetailPage() {
         </Card>
         <Card className="p-4 flex flex-col items-center justify-center bg-white shadow-sm border border-slate-200">
           <span className="text-xs text-slate-500 uppercase font-semibold mb-1 text-center">Rentabilidade do Investimento</span>
-          <span className="text-xl font-bold text-slate-900">{formatPercent(kpis.rent_inv || 0)}</span>
+          <span className="text-xl font-bold text-slate-900">{kpis.rent_inv == null ? "—" : formatPercent(kpis.rent_inv)}</span>
         </Card>
 
         <Card className="p-4 flex flex-col items-center justify-center bg-white shadow-sm border border-slate-200">

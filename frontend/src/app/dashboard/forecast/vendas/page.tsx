@@ -39,6 +39,7 @@ import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import toast from 'react-hot-toast';
 import { MESES_VENDAS } from "@/lib/months";
 import { parseCentroNome } from "@/lib/parseCentroNome";
+import { IpcaCascataModal } from "@/components/orcamento/IpcaCascataModal";
 
 const MESES = [...MESES_VENDAS];
 
@@ -277,13 +278,18 @@ export default function ForecastVendasPage() {
     toast.success(`Valor replicado em diante.`);
   };
 
-  const aplicarIPCA = (linhaIndex: number, mesIdOrigem: number) => {
-    const percStr = window.prompt("Informe a taxa de IPCA (%) para aplicar em cascata:");
-    if (!percStr) return;
-    const perc = parseFloat(percStr.replace(',', '.'));
-    if (isNaN(perc)) return;
+  const [ipcaAlvo, setIpcaAlvo] = useState<{ linhaIndex: number; mesIdOrigem: number } | null>(null);
 
-    const multiplicador = 1 + (perc / 100);
+  const aplicarIPCA = (linhaIndex: number, mesIdOrigem: number) => {
+    setIpcaAlvo({ linhaIndex, mesIdOrigem });
+  };
+
+  const confirmarIPCA = (taxaMensal: number, descricao: string) => {
+    if (!ipcaAlvo) return;
+    const { linhaIndex, mesIdOrigem } = ipcaAlvo;
+    setIpcaAlvo(null);
+
+    const multiplicador = 1 + taxaMensal;
     const novasLinhas = [...linhas];
     const linha = novasLinhas[linhaIndex];
     const mesOrigem = linha.meses.find(m => m.mes === mesIdOrigem);
@@ -305,7 +311,7 @@ export default function ForecastVendasPage() {
     });
 
     setLinhas(novasLinhas);
-    toast.success(`IPCA de ${perc}% aplicado com sucesso!`);
+    toast.success(`IPCA de ${descricao} aplicado com sucesso!`);
   };
 
   const adicionarLinhaProduto = (produtoId: number) => {
@@ -963,6 +969,9 @@ export default function ForecastVendasPage() {
           onClose={() => setShowCriarModal(false)}
           onCreated={handleCreated}
         />
+      )}
+      {ipcaAlvo && (
+        <IpcaCascataModal onClose={() => setIpcaAlvo(null)} onConfirm={confirmarIPCA} />
       )}
     </BudgetMatrixShell>
   );

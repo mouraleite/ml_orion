@@ -46,6 +46,58 @@ from collections import defaultdict
 
 import numpy_financial as npf
 
+TMA_PADRAO = 0.12  # usada quando o centro de custo não tem viabilidade ligada
+
+
+def _tma_por_cc(db) -> dict:
+    """{cost_center_id: TMA anual em decimal} das viabilidades ligadas à obra (obra_cost_center_id).
+
+    Usa a 'Taxa VPL/AVP' cadastrada na viabilidade (a mesma do motor de viabilidade).
+    Fica guardado na sessão do banco para não repetir a consulta a cada centro de custo.
+    """
+    info = getattr(db, "info", None)
+    if isinstance(info, dict) and "_tma_por_cc" in info:
+        return info["_tma_por_cc"]
+    mapa = {}
+    try:
+        rows = (
+            db.query(Viability.obra_cost_center_id, Viability.taxa_desconto_vpl)
+            .filter(Viability.version_of_id.is_(None), Viability.obra_cost_center_id.isnot(None))
+            .order_by(Viability.id)
+            .all()
+        )
+        for cc_id, taxa in rows:
+            if taxa:
+                mapa[cc_id] = float(taxa) / 100.0  # a mais recente vence
+    except Exception:
+        mapa = {}
+    if isinstance(info, dict):
+        info["_tma_por_cc"] = mapa
+    return mapa
+
+
+RECEITA_MINIMA_RENTABILIDADE = 10_000.0
+
+
+def _rentabilidade(lucro, receita_bruta):
+    """Rentabilidade do investimento = lucro líquido operacional ÷ receita bruta (%).
+
+    None (a tela mostra "—") quando a receita bruta é menor que R$ 10 mil: com receita
+    quase zero a divisão gera números sem sentido (ex.: -861.863%)."""
+    receita = float(receita_bruta or 0.0)
+    if receita < RECEITA_MINIMA_RENTABILIDADE:
+        return None
+    return float(lucro or 0.0) / receita * 100
+
+
+def _tma_anual(db, cc_ids) -> float:
+    """TMA do primeiro centro de custo da lista que tiver viabilidade ligada; senão 12%."""
+    mapa = _tma_por_cc(db)
+    for cc_id in cc_ids:
+        if cc_id in mapa:
+            return mapa[cc_id]
+    return TMA_PADRAO
+
 import pandas as pd
 
 from datetime import datetime
@@ -1499,7 +1551,7 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
 
 
-        tma_anual = 0.12
+        tma_anual = _tma_anual(db, [cc_id])
 
         tma_mensal = (1 + tma_anual) ** (1/12) - 1
 
@@ -1561,7 +1613,8 @@ def _calc_actuals_for_cc(db: Session, cc_id: int, active_rules: dict = None, mul
 
 
 
-    rent_inv = (lucro_operacional / vgv_vendido) * 100 if vgv_vendido > 0 else 0.0
+    # Mesma fórmula do consolidado e da margem da viabilidade: lucro líquido operacional ÷ receita bruta
+    rent_inv = _rentabilidade(lucro_liq_operacional, vgv_liquido)
 
     if kpis_only:
         return {
@@ -1926,7 +1979,7 @@ def _irr_mensal_newton(cf_array):
     return None
 
 
-def _calculate_financial_indicators(cf_dict, with_irr: bool = True, irr_method: str = "numpy"):
+def _calculate_financial_indicators(cf_dict, with_irr: bool = True, irr_method: str = "numpy", tma_anual: float = TMA_PADRAO):
 
     tir_anual = None
 
@@ -2003,7 +2056,7 @@ def _calculate_financial_indicators(cf_dict, with_irr: bool = True, irr_method: 
 
 
 
-            tma_anual = 0.12
+            tma_anual = tma_anual or TMA_PADRAO
 
             tma_mensal = (1 + tma_anual) ** (1/12) - 1
 
@@ -2243,7 +2296,7 @@ def _calc_slice_actuals(db, macro_prefix, native_cc_id, pct, view_mode, cached_c
 
         
 
-    ind = _calculate_financial_indicators(slice_monthly_cf)
+    ind = _calculate_financial_indicators(slice_monthly_cf, tma_anual=_tma_anual(db, [native_cc_id]))
 
     
 
@@ -2445,7 +2498,7 @@ def _mesmo_produto_obra(produto, candidato):
     return candidato.startswith(produto + " - ") or candidato.startswith(produto + " (")
 
 
-def _kpis_do_consolidado(acts):
+def _kpis_do_consolidado(acts, tma_anual: float = TMA_PADRAO):
     """Mesmos indicadores da visão consolidada do detalhe, somando os centros do grupo."""
     vgv_vendido = 0.0
     vgv_estoque = 0.0
@@ -2459,7 +2512,7 @@ def _kpis_do_consolidado(acts):
         lucro += act.get("lucro_liq_operacional", 0.0) or 0.0
         for mes, val in (act.get("final_cf_dict") or {}).items():
             combined_cf[mes] += val
-    indicators = _calculate_financial_indicators(combined_cf or {0: 0.0}, irr_method="newton")
+    indicators = _calculate_financial_indicators(combined_cf or {0: 0.0}, irr_method="newton", tma_anual=tma_anual)
     vendas_ativas = vgv_vendido - distratos
     vgv_total = vendas_ativas + vgv_estoque
     exposicao = indicators.get("exposicao_maxima") or 0.0
@@ -2764,7 +2817,7 @@ def get_tracking_summary(db: Session = Depends(get_db), current_user: UserRespon
         raw_id = f"cg-{base_class}"
         kpis = {}
         try:
-            kpis = _kpis_do_consolidado([get_actuals(sub_cc.id) for sub_cc in ccs])
+            kpis = _kpis_do_consolidado([get_actuals(sub_cc.id) for sub_cc in ccs], tma_anual=_tma_anual(db, [main_cc.id] + [c.id for c in ccs]))
         except Exception as e:
             print(f"Error calculating details for {raw_id}: {e}")
         results_list.append({
@@ -3289,7 +3342,7 @@ def _get_tracking_details_logic(db, id: str, view_mode: str = 'consolidado'):
 
 
 
-        indicators = _calculate_financial_indicators(combined_final_cf or {0: 0.0})
+        indicators = _calculate_financial_indicators(combined_final_cf or {0: 0.0}, tma_anual=_tma_anual(db, [c.id for c in ccs if c is not None]))
 
         combined_actuals["tir_anual"] = indicators.get("tir_anual") or 0.0
 
@@ -3685,7 +3738,7 @@ def _get_tracking_details_logic(db, id: str, view_mode: str = 'consolidado'):
 
         # Calculate rent_inv
 
-        rent_inv = (combined_actuals["lucro_liq_operacional"] / combined_actuals["receita_bruta"]) * 100 if combined_actuals["receita_bruta"] > 0 else 0.0
+        rent_inv = _rentabilidade(combined_actuals["lucro_liq_operacional"], combined_actuals["receita_bruta"])
 
         
 
