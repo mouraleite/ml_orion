@@ -32,6 +32,7 @@ import { useActiveDepartmentId } from "@/lib/useActiveDepartmentId";
 import { VersionHeader } from "@/components/orcamento/VersionHeader";
 import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import { ExcelImportModal } from "@/components/orcamento/ExcelImportModal";
+import { IpcaCascataModal } from "@/components/orcamento/IpcaCascataModal";
 import { MonthSelector } from "@/components/orcamento/MonthSelector";
 import { CurrencyInput } from "@/components/ui/CurrencyInput";
 import toast from 'react-hot-toast';
@@ -258,13 +259,18 @@ export default function OrcamentoVendasPage() {
     toast.success(`Valor replicado em diante.`);
   };
 
-  const aplicarIPCA = (linhaIndex: number, mesIdOrigem: number) => {
-    const percStr = window.prompt("Informe a taxa de IPCA (%) para aplicar em cascata:");
-    if (!percStr) return;
-    const perc = parseFloat(percStr.replace(',', '.'));
-    if (isNaN(perc)) return;
+  const [ipcaAlvo, setIpcaAlvo] = useState<{ linhaIndex: number; mesIdOrigem: number } | null>(null);
 
-    const multiplicador = 1 + (perc / 100);
+  const aplicarIPCA = (linhaIndex: number, mesIdOrigem: number) => {
+    setIpcaAlvo({ linhaIndex, mesIdOrigem });
+  };
+
+  const confirmarIPCA = (taxaMensal: number, descricao: string) => {
+    if (!ipcaAlvo) return;
+    const { linhaIndex, mesIdOrigem } = ipcaAlvo;
+    setIpcaAlvo(null);
+
+    const multiplicador = 1 + taxaMensal;
     const novasLinhas = [...linhas];
     const linha = novasLinhas[linhaIndex];
     const mesOrigem = linha.meses.find(m => m.mes === mesIdOrigem);
@@ -286,7 +292,7 @@ export default function OrcamentoVendasPage() {
     });
 
     setLinhas(novasLinhas);
-    toast.success(`IPCA de ${perc}% aplicado com sucesso!`);
+    toast.success(`IPCA de ${descricao} aplicado com sucesso!`);
   };
 
   const getDiffClass = (linha: OrcamentoVendaLinha, mesId: number, campo: "ticket_medio" | "numero_vendas" | "vgv") => {
@@ -893,6 +899,9 @@ export default function OrcamentoVendasPage() {
           onClose={() => setShowCriarModal(false)}
           onCreated={handleCreated}
         />
+      )}
+      {ipcaAlvo && (
+        <IpcaCascataModal onClose={() => setIpcaAlvo(null)} onConfirm={confirmarIPCA} />
       )}
     </BudgetMatrixShell>
   );
