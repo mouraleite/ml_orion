@@ -43,3 +43,4 @@ tests/test_rotas_desativadas.py
 tests/test_sienge_busca_unica.py
 tests/test_fase2_regras.py
 tests/test_auditoria_usuario.py
+tests/test_mes_fechado_arredondamento.py

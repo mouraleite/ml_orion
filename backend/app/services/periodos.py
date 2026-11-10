@@ -17,6 +17,12 @@ def skip_linha_total_zero(item_data) -> bool:
     return total == 0 and not obs
 
 
+def mudou(novo, base, tolerancia: float = 0.005) -> bool:
+    """True se o valor mudou de fato. Ignora diferença de arredondamento (meio centavo)
+    e trata vazio como zero: a tela devolve 1234.5600000001 e o banco tem 1234.56."""
+    return abs(float(novo or 0.0) - float(base or 0.0)) > tolerancia
+
+
 def mes_fechado_alterado(item_data, atual, meses_fechados: list[int]) -> str | None:
     """Nome do primeiro mês fechado cujo valor mudou, ou None.
 
