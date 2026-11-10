@@ -41,6 +41,7 @@ def get_current_user(
             is_active = True
             departamentos = []
         current_user_id.set(9999)
+        db.info["audit_user_id"] = 9999
         return MockUser()
 
     try:
@@ -62,8 +63,11 @@ def get_current_user(
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado.")
         
-    # Atribui ao contexto para a auditoria
+    # Auditoria: o ContextVar não chega ao endpoint (FastAPI roda dependência e
+    # endpoint síncronos em threads diferentes), então o usuário vai na sessão do
+    # banco, que é a mesma do endpoint na requisição.
     current_user_id.set(user.id)
+    db.info["audit_user_id"] = user.id
     return user
 
 def get_current_active_user(
