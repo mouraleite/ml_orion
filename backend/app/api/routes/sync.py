@@ -23,7 +23,7 @@ def get_sync_status(db: Session = Depends(get_db)):
         pass
     return {"last_sync_at": None}
 
-def _run_sienge_sync_job(full_load: bool, desde: str | None = None) -> None:
+def _run_sienge_sync_job(full_load: bool) -> None:
     """Abre sessão própria: a do request já fecha antes do background task.
     Usa a mesma trava do sync agendado: dois syncs nunca rodam juntos."""
     from app.core.scheduler import run_with_sync_lock
@@ -33,7 +33,7 @@ def _run_sienge_sync_job(full_load: bool, desde: str | None = None) -> None:
         db = SessionLocal()
         try:
             with manter_acordado():
-                sync_all_sienge_data(db, full_load, desde=desde)
+                sync_all_sienge_data(db, full_load)
         finally:
             db.close()
 
@@ -44,31 +44,19 @@ def _run_sienge_sync_job(full_load: bool, desde: str | None = None) -> None:
 def trigger_sienge_sync(
     background_tasks: BackgroundTasks,
     full_load: bool = False,
-    desde: str | None = None,
     current_user: UserResponse = Depends(deps.get_current_active_user),
 ):
     """
     Dispara o sincronismo manual com as APIs do Sienge (Vendas, Entradas, Saídas).
-    Incremental (3 dias): qualquer usuário ativo.
-    Carga completa ou recarga a partir de uma data (desde=AAAA-MM-DD): só administrador.
+    Incremental (3 dias): qualquer usuário ativo. Carga completa: só administrador.
     """
-    from datetime import date as _date
-
     from app.core.roles import is_admin_user
 
-    if (full_load or desde) and not is_admin_user(current_user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Carga completa ou recarga: apenas administrador.")
-    if desde:
-        try:
-            d = _date.fromisoformat(desde[:10])
-        except ValueError:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="desde deve ser AAAA-MM-DD.")
-        if d > _date.today() or (_date.today() - d).days > 400:
-            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="desde deve estar entre hoje e 400 dias atrás.")
-        desde = d.isoformat()
-    background_tasks.add_task(_run_sienge_sync_job, full_load, desde)
+    if full_load and not is_admin_user(current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Carga completa: apenas administrador.")
+    background_tasks.add_task(_run_sienge_sync_job, full_load)
 
-    return {"message": "Sincronismo com Sienge iniciado em background.", "full_load": full_load, "desde": desde}
+    return {"message": "Sincronismo com Sienge iniciado em background.", "full_load": full_load}
 
 
 @router.post("/cron")
