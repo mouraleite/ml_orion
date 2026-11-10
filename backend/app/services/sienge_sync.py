@@ -31,6 +31,27 @@ def _fetch_paginated_bulk(url: str):
     # strict: se uma página falhar, levanta erro e a transação é desfeita (nada é apagado com leitura parcial)
     yield from get_default_client().paginate_bulk(url, strict=True)
 
+def _existentes_por_source_id(db: Session, cost_center_id: int, source_ids, *filtros) -> dict:
+    """Carrega só os lançamentos do CC cujos source_id vieram nesta busca.
+
+    Antes, sync_incomes/sync_outcomes carregavam TODOS os lançamentos do CC
+    (até ~83 mil nos maiores) para atualizar 3 dias; no Render gratuito
+    (512 MB) isso derrubou o serviço em loop em 10/11/2026.
+    """
+    ids = sorted({sid for sid in source_ids if sid})
+    out: dict = {}
+    for i in range(0, len(ids), 500):
+        lote = ids[i:i + 500]
+        q = db.query(ActualTransaction).filter(
+            ActualTransaction.cost_center_id == cost_center_id,
+            ActualTransaction.source_id.in_(lote),
+            *filtros,
+        )
+        for r in q.all():
+            out[r.source_id] = r
+    return out
+
+
 def sync_all_sienge_data(db: Session, full_load: bool = False):
     """
     Roda o sincronismo de Vendas, Recebimentos e Pagamentos.
@@ -361,45 +382,46 @@ def sync_outcomes(db: Session, cc: CostCenter, start_date: str, end_date: str):
         ).delete(synchronize_session=False)
         db.flush()
 
-    existing = {
-        r.source_id: r
-        for r in db.query(ActualTransaction).filter_by(
-            cost_center_id=cc.id, transaction_type="OUTCOME"
-        ).all()
-        if r.source_id
-        and r.source_id.startswith("OUT-")
-        and ("-PMT-" in r.source_id or "-RET-" in r.source_id)
-    }
-
+    linhas = []
     for page in _fetch_paginated_bulk(url):
         for item in page:
             for line in iter_outcome_realizado_lines(item, str(cc.id_sienge)):
-                date_str = line["payment_date"]
                 try:
-                    dtx = dt_cls.strptime(date_str[:10], "%Y-%m-%d").date()
+                    dtx = dt_cls.strptime(line["payment_date"][:10], "%Y-%m-%d").date()
                 except Exception:
                     continue
+                linhas.append((line, dtx))
 
-                source_id = line["source_id"]
-                record = existing.get(source_id)
-                if not record:
-                    record = ActualTransaction(
-                        cost_center_id=cc.id,
-                        source_id=source_id,
-                        transaction_type="OUTCOME",
-                    )
-                    db.add(record)
-                    existing[source_id] = record
+    existing = {
+        sid: r
+        for sid, r in _existentes_por_source_id(
+            db, cc.id, [l["source_id"] for l, _ in linhas],
+            ActualTransaction.transaction_type == "OUTCOME",
+        ).items()
+        if sid.startswith("OUT-") and ("-PMT-" in sid or "-RET-" in sid)
+    }
 
-                record.transaction_date = dtx
-                record.value = line["value"]
-                record.category = line["category_name"]
-                record.bill_id = str(line["bill_id"]) if line["bill_id"] else None
-                record.creditor_name = line["creditor_name"]
-                record.document_name = line["document_name"]
-                record.document_number = line["document_number"]
-                record.authorization_name = line.get("authorization_name")
-                record.is_forecast = False
+    for line, dtx in linhas:
+        source_id = line["source_id"]
+        record = existing.get(source_id)
+        if not record:
+            record = ActualTransaction(
+                cost_center_id=cc.id,
+                source_id=source_id,
+                transaction_type="OUTCOME",
+            )
+            db.add(record)
+            existing[source_id] = record
+
+        record.transaction_date = dtx
+        record.value = line["value"]
+        record.category = line["category_name"]
+        record.bill_id = str(line["bill_id"]) if line["bill_id"] else None
+        record.creditor_name = line["creditor_name"]
+        record.document_name = line["document_name"]
+        record.document_number = line["document_number"]
+        record.authorization_name = line.get("authorization_name")
+        record.is_forecast = False
 
     db.commit()
 
@@ -898,49 +920,45 @@ def sync_incomes(db: Session, cc: CostCenter, start_date: str, end_date: str):
         ).delete(synchronize_session=False)
         db.flush()
 
-    existing = {
-        r.source_id: r
-        for r in db.query(ActualTransaction)
-        .filter(
-            ActualTransaction.cost_center_id == cc.id,
-            or_(
-                ActualTransaction.source_id.like("INC-%"),
-                ActualTransaction.source_id.like("OUT-TARIFA-%"),
-            ),
-        )
-        .all()
-        if r.source_id
-    }
-
+    linhas = []
     for page in _fetch_paginated_bulk(url):
         for item in page:
             for line in iter_income_bank_lines(item, str(cc.id_sienge)):
-                date_str = line["payment_date"]
                 try:
-                    dtx = dt_cls.strptime(date_str[:10], "%Y-%m-%d").date()
+                    dtx = dt_cls.strptime(line["payment_date"][:10], "%Y-%m-%d").date()
                 except Exception:
                     continue
+                linhas.append((line, dtx))
 
-                source_id = line["source_id"]
-                record = existing.get(source_id)
-                if not record:
-                    record = ActualTransaction(
-                        cost_center_id=cc.id,
-                        source_id=source_id,
-                        transaction_type=line["transaction_type"],
-                    )
-                    db.add(record)
-                    existing[source_id] = record
+    existing = _existentes_por_source_id(
+        db, cc.id, [l["source_id"] for l, _ in linhas],
+        or_(
+            ActualTransaction.source_id.like("INC-%"),
+            ActualTransaction.source_id.like("OUT-TARIFA-%"),
+        ),
+    )
 
-                record.transaction_type = line["transaction_type"]
-                record.transaction_date = dtx
-                record.value = line["value"]
-                record.category = line["category_name"]
-                record.bill_id = str(line["bill_id"]) if line["bill_id"] else None
-                record.creditor_name = line["creditor_name"]
-                record.document_name = line["document_name"]
-                record.document_number = line["document_number"]
-                record.is_forecast = False
+    for line, dtx in linhas:
+        source_id = line["source_id"]
+        record = existing.get(source_id)
+        if not record:
+            record = ActualTransaction(
+                cost_center_id=cc.id,
+                source_id=source_id,
+                transaction_type=line["transaction_type"],
+            )
+            db.add(record)
+            existing[source_id] = record
+
+        record.transaction_type = line["transaction_type"]
+        record.transaction_date = dtx
+        record.value = line["value"]
+        record.category = line["category_name"]
+        record.bill_id = str(line["bill_id"]) if line["bill_id"] else None
+        record.creditor_name = line["creditor_name"]
+        record.document_name = line["document_name"]
+        record.document_number = line["document_number"]
+        record.is_forecast = False
 
     db.commit()
 
