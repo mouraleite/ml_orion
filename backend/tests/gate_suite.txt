@@ -45,3 +45,4 @@ tests/test_fase2_regras.py
 tests/test_auditoria_usuario.py
 tests/test_mes_fechado_arredondamento.py
 tests/test_tir_nd.py
+tests/test_parecer_gemini.py
