@@ -51,4 +51,5 @@ tests/test_recarga_agendada.py
 tests/test_mes_fechado_oficial.py
 tests/test_resposta_rapida.py
 tests/test_dfc_mix_copia.py
+tests/test_realizado_so_chaves.py
 tests/test_cache_respostas.py

@@ -767,8 +767,11 @@ def get_realizado_despesas(
     Ledger de parcelas pagas (Contas a Pagar — Sienge OUT-*).
     Usado no drill do Analítico I e na tela Realizado Detalhado.
     """
+    # Só as opções de filtro: o realizado somado não é usado aqui (evita buscar
+    # as parcelas do ano duas vezes — 11/11/2026).
     desp_data = get_acompanhamento_despesas(
-        ano, consolidado, holding_mldu, db, dept, current_user, forecast_id=None
+        ano, consolidado, holding_mldu, db, dept, current_user, forecast_id=None,
+        realizado_so_chaves=True,
     )
     produtos_permitidos = [p["id"] for p in desp_data.get("opcoes_produtos", [])]
     prod_map = {p["id"]: p["nome"] for p in desp_data.get("opcoes_produtos", [])}
