@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from app.db.database import Base
+from app.db.tipos import Dinheiro
 from app.models.unit import Unit
 
 class ActualTransaction(Base):
@@ -28,7 +29,7 @@ class ActualTransaction(Base):
     transaction_date = Column(Date, index=True)
     
     # Valor total da transao
-    value = Column(Float, default=0.0)
+    value = Column(Dinheiro, default=0.0)
 
     # Vínculo opcional com a Unidade (para Vendas)
     unit_id = Column(Integer, ForeignKey("units.id", ondelete="SET NULL"), nullable=True)

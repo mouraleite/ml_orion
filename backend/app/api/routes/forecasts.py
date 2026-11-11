@@ -18,6 +18,7 @@ from app.schemas.forecast import ForecastCreateRequest, ForecastDespesasSaveRequ
 from app.core.roles import is_admin_user
 from app.services.auth_matrix import validate_budget_allocation
 from app.services.periodos import MESES_STR, mudou, skip_linha_total_zero
+from app.services.forecast_mes_fechado import valor_mes_fechado
 from app.services.budget_shared import (
     STATUS_ORCAMENTO_BLOQUEADO,
     build_empresas_map,
@@ -50,7 +51,14 @@ from app.services.budget_status import (
 router = APIRouter()
 
 
-def _descricao_forecast_rolling(ano: int) -> str:
+def _descricao_forecast_rolling(ano: int, db: Optional[Session] = None) -> str:
+    """Nome "Forecast - N+M". N = meses fechados na tela Fechamento (regra oficial,
+    11/11/2026); sem fechamento cadastrado no ano, usa o calendário como antes."""
+    from app.services.forecast_mes_fechado import corte_por_fechamento
+
+    corte = corte_por_fechamento(db, ano) if db is not None else None
+    if corte is not None:
+        return f"Forecast - {corte}+{12 - corte}"
     hoje = datetime.now()
     if ano == hoje.year:
         meses_realizados = hoje.month - 1
@@ -60,6 +68,20 @@ def _descricao_forecast_rolling(ano: int) -> str:
     else:
         meses_realizados, meses_projetados = 0, 12
     return f"Forecast - {meses_realizados}+{meses_projetados}"
+
+
+def _realizado_para_salvar(db: Session, ano: int, tipo: str, itens, meses_fechados_idx, dept):
+    """Realizado das linhas que estão sendo salvas, para gravar nos meses fechados."""
+    if not meses_fechados_idx:
+        return {}
+    from app.services.forecast_mes_fechado import realizado_por_linha
+
+    def _get(x, k):
+        return x.get(k) if isinstance(x, dict) else getattr(x, k, None)
+
+    produtos = {_get(i, "produto_id") for i in itens}
+    planos = {_get(i, "plano_financeiro_id") for i in itens}
+    return realizado_por_linha(db, ano, tipo, produtos, planos, dept=dept)
 
 
 def _exigir_vendas(current_user, dept: Departamento) -> None:
@@ -212,7 +234,7 @@ def criar_forecast_de_base(
     if not data.produto_id:
         raise HTTPException(status_code=400, detail="Centro de Custo (Empreendimento) é obrigatório para criação de Forecast.")
 
-    descricao = _descricao_forecast_rolling(data.ano)
+    descricao = _descricao_forecast_rolling(data.ano, db)
     docs = _docs_forecast_versao(db, data.ano, tipo, dept.id, descricao)
     nome = _nome_empreendimento(db, data.produto_id)
     if data.produto_id in _produtos_nos_forecasts(db, docs, tipo):
@@ -459,6 +481,13 @@ def get_forecast_despesas(
 
     meses_fechados_db = db.query(ClosedMonth).filter(ClosedMonth.ano == ano).all()
     meses_fechados = [mf.mes for mf in meses_fechados_db]
+    # Mês fechado mostra o realizado do Sienge (forecast N+M = N realizados + M previstos)
+    if meses_fechados:
+        from app.services.forecast_mes_fechado import aplicar_realizado_nos_fechados, realizado_por_linha
+        realizado = realizado_por_linha(
+            db, ano, "DESPESAS", [p.id for p in produtos_finais], [p.id for p in planos_finais], dept=dept
+        )
+        itens = aplicar_realizado_nos_fechados(itens, realizado, meses_fechados)
 
     versoes_disponiveis = list_forecast_versoes_disponiveis(db, ano, "DESPESAS", dept.id)
 
@@ -534,6 +563,7 @@ def salvar_forecast_despesas(
 
         db.query(ForecastItem).filter(ForecastItem.forecast_id == fc.id).delete()
     
+    _realizado_fechado = _realizado_para_salvar(db, ano, "DESPESAS", data.itens, meses_fechados_idx, dept)
     novos_itens = []
     for item_data in data.itens:
         if skip_linha_total_zero(item_data):
@@ -554,10 +584,10 @@ def salvar_forecast_despesas(
         for mes_idx, mes_str in enumerate(MESES_STR, start=1):
             valor_novo = getattr(item_data, mes_str)
             if mes_idx in meses_fechados_idx:
-                valor_base = getattr(linha_base, mes_str) if linha_base else 0.0
-                if mudou(valor_novo, valor_base):
-                    raise HTTPException(403, f"Mês {mes_str} está fechado, não pode ser alterado.")
-                item_final[mes_str] = valor_base
+                # Mês fechado = realizado do Sienge (não o que veio da tela nem a versão base)
+                item_final[mes_str] = valor_mes_fechado(
+                    _realizado_fechado, item_data.produto_id, item_data.plano_financeiro_id, mes_str
+                )
             else:
                 item_final[mes_str] = valor_novo
                 
@@ -665,6 +695,13 @@ def get_forecast_receitas(
         forecast, current_user.id, lock_user_label="Usuário"
     )
     meses_fechados = [mf.mes for mf in db.query(ClosedMonth).filter(ClosedMonth.ano == ano).all()]
+    # Mês fechado mostra o realizado do Sienge (forecast N+M = N realizados + M previstos)
+    if meses_fechados:
+        from app.services.forecast_mes_fechado import aplicar_realizado_nos_fechados, realizado_por_linha
+        realizado = realizado_por_linha(
+            db, ano, "RECEITAS", [p.id for p in produtos_finais], [p.id for p in planos_finais]
+        )
+        itens = aplicar_realizado_nos_fechados(itens, realizado, meses_fechados)
 
     return maybe_apply_holding_mldu(
         db,
@@ -737,6 +774,7 @@ def salvar_forecast_receitas(
             ForecastItem.is_auto_generated == False,  # noqa: E712
         ).delete(synchronize_session=False)
 
+    _realizado_fechado = _realizado_para_salvar(db, ano, "RECEITAS", data.itens, meses_fechados_idx, None)
     novos_itens = []
     for item_data in data.itens:
         key = (item_data.produto_id, item_data.plano_financeiro_id)
@@ -759,10 +797,10 @@ def salvar_forecast_receitas(
         for mes_idx, mes_str in enumerate(MESES_STR, start=1):
             valor_novo = getattr(item_data, mes_str)
             if mes_idx in meses_fechados_idx:
-                valor_base = getattr(linha_base, mes_str) if linha_base else 0.0
-                if mudou(valor_novo, valor_base):
-                    raise HTTPException(403, f"Mês {mes_str} está fechado, não pode ser alterado.")
-                item_final[mes_str] = valor_base
+                # Mês fechado = realizado do Sienge (não o que veio da tela nem a versão base)
+                item_final[mes_str] = valor_mes_fechado(
+                    _realizado_fechado, item_data.produto_id, item_data.plano_financeiro_id, mes_str
+                )
             else:
                 item_final[mes_str] = valor_novo
         novos_itens.append(ForecastItem(
@@ -1361,7 +1399,7 @@ async def importar_excel(
     if tipo == "VENDAS":
         _exigir_vendas(current_user, dept)
 
-    descricao = _descricao_forecast_rolling(ano)
+    descricao = _descricao_forecast_rolling(ano, db)
     docs = _docs_forecast_versao(db, ano, tipo, dept.id, descricao)
     outros = (
         db.query(Forecast)
@@ -1480,6 +1518,9 @@ async def importar_excel(
             else:
                 db.query(ForecastItem).filter(ForecastItem.forecast_id == fc.id).delete()
 
+        _realizado_fechado = _realizado_para_salvar(
+            db, ano, tipo, linhas_validas, meses_fechados_idx, dept if tipo == "DESPESAS" else None
+        )
         novos_itens = []
         for linha in linhas_validas:
             key = (linha["produto_id"], linha["plano_financeiro_id"])
@@ -1491,11 +1532,8 @@ async def importar_excel(
             for mes_idx, mes_str in enumerate(MESES_STR, start=1):
                 valor_novo = linha.get(mes_str, 0.0) or 0.0
                 if mes_idx in meses_fechados_idx:
-                    valor_base = getattr(linha_base, mes_str) if linha_base else 0.0
-                    if mudou(valor_novo, valor_base):
-                        db.rollback()
-                        raise HTTPException(status_code=403, detail=f"Mês {mes_str} está fechado, não pode ser alterado.")
-                    item_final[mes_str] = valor_base
+                    # Mês fechado = realizado do Sienge (o valor da planilha é ignorado)
+                    item_final[mes_str] = valor_mes_fechado(_realizado_fechado, key[0], key[1], mes_str)
                 else:
                     item_final[mes_str] = valor_novo
             novos_itens.append(ForecastItem(
@@ -1551,7 +1589,7 @@ def gerar_forecasts_em_lote(
     if tipo == "VENDAS":
         _exigir_vendas(current_user, dept)
 
-    descricao = _descricao_forecast_rolling(ano)
+    descricao = _descricao_forecast_rolling(ano, db)
 
     orcamentos_base = db.query(Orcamento).filter(
         Orcamento.ano == ano,
