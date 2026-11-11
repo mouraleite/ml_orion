@@ -30,6 +30,14 @@ else:
         pool_pre_ping=True,
         pool_size=5,
         max_overflow=10,
+        # Conexões paradas por minutos (sync) eram derrubadas pelo Neon (11/11/2026).
+        pool_recycle=300,
+        connect_args={
+            "keepalives": 1,
+            "keepalives_idle": 30,
+            "keepalives_interval": 10,
+            "keepalives_count": 5,
+        },
     )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

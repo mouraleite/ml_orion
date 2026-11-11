@@ -2,6 +2,7 @@ from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Boo
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.db.database import Base
+from app.db.tipos import Dinheiro
 
 class Orcamento(Base):
     __tablename__ = "orcamentos"
@@ -55,20 +56,20 @@ class OrcamentoItem(Base):
     plano_financeiro_id = Column(Integer, ForeignKey("planos_financeiros.id"))
     
     # Valores mensais
-    jan = Column(Float, default=0.0)
-    fev = Column(Float, default=0.0)
-    mar = Column(Float, default=0.0)
-    abr = Column(Float, default=0.0)
-    mai = Column(Float, default=0.0)
-    jun = Column(Float, default=0.0)
-    jul = Column(Float, default=0.0)
-    ago = Column(Float, default=0.0)
-    set = Column(Float, default=0.0)
-    out = Column(Float, default=0.0)
-    nov = Column(Float, default=0.0)
-    dez = Column(Float, default=0.0)
+    jan = Column(Dinheiro, default=0.0)
+    fev = Column(Dinheiro, default=0.0)
+    mar = Column(Dinheiro, default=0.0)
+    abr = Column(Dinheiro, default=0.0)
+    mai = Column(Dinheiro, default=0.0)
+    jun = Column(Dinheiro, default=0.0)
+    jul = Column(Dinheiro, default=0.0)
+    ago = Column(Dinheiro, default=0.0)
+    set = Column(Dinheiro, default=0.0)
+    out = Column(Dinheiro, default=0.0)
+    nov = Column(Dinheiro, default=0.0)
+    dez = Column(Dinheiro, default=0.0)
 
-    total_anual = Column(Float, default=0.0)
+    total_anual = Column(Dinheiro, default=0.0)
     observacao = Column(String, nullable=True)
 
     orcamento = relationship("Orcamento", back_populates="itens_despesa")
@@ -87,9 +88,9 @@ class OrcamentoVendaItem(Base):
     ano = Column(Integer)
     
     juros_mensal = Column(Float, default=0.0)
-    ticket_medio = Column(Float, default=0.0)
+    ticket_medio = Column(Dinheiro, default=0.0)
     numero_vendas = Column(Integer, default=0)
-    vgv = Column(Float, default=0.0)
+    vgv = Column(Dinheiro, default=0.0)
     origem_venda = Column(String, nullable=True)
     
     observacao = Column(String, nullable=True)

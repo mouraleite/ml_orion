@@ -78,6 +78,24 @@ def centros_do_sync(db: Session) -> list:
     )
 
 
+def _sync_cc_com_reconexao(db: Session, cc, start_date: str, end_date: str) -> None:
+    """Sincroniza um CC e, se a conexão com o banco cair, repete uma vez.
+
+    11/11/2026: no 1º CC a busca única baixa todos os meses do Sienge (minutos)
+    com a sessão parada; o Neon derrubou a conexão ("SSL connection has been
+    closed unexpectedly") e o CC 10100 ficou sem dados. O download fica em
+    cache, então a segunda tentativa é rápida e usa uma conexão nova.
+    """
+    from sqlalchemy.exc import OperationalError
+
+    try:
+        sync_single_cc_sienge_data(db, cc, start_date, end_date, include_engineering=False)
+    except OperationalError as exc:
+        print(f"[Sienge Sync] Conexão caiu no CC {cc.id_sienge}; tentando de novo: {exc}")
+        db.rollback()
+        sync_single_cc_sienge_data(db, cc, start_date, end_date, include_engineering=False)
+
+
 def sync_all_sienge_data(db: Session, full_load: bool = False, desde: Optional[str] = None):
     """
     Roda o sincronismo de Vendas, Recebimentos e Pagamentos.
@@ -106,7 +124,7 @@ def sync_all_sienge_data(db: Session, full_load: bool = False, desde: Optional[s
             if not cc.id_sienge:
                 continue
             try:
-                sync_single_cc_sienge_data(db, cc, start_date, end_date, include_engineering=False)
+                _sync_cc_com_reconexao(db, cc, start_date, end_date)
             except Exception as exc:
                 db.rollback()
                 falhas.append(f"{cc.id_sienge}: {exc}")

@@ -190,6 +190,7 @@ def agregar_realizado_despesas_sienge(
 
     planos_id_by_name, planos_redutora = build_planos_maps(db)
     planos_permitidos_set = set(planos_permitidos)
+    tocadas: set = set()
     relax_planos = dept is not None and (eh_todos(dept) or eh_residual_leitura(dept))
 
     consulta = _consulta_contas_pagar(db, ano, produtos_permitidos, dept=dept)
@@ -214,6 +215,16 @@ def agregar_realizado_despesas_sienge(
         mes_str = MESES_STR[mes_num - 1]
         val = -soma_abs if _eh_redutora(plano_id, category, planos_redutora) else soma
         matriz[(cc_id, plano_id)]["realizado"][mes_str] += val
+        tocadas.add((cc_id, plano_id))
+    _arredondar_realizado(matriz, tocadas)
+
+
+def _arredondar_realizado(matriz: dict, chaves) -> None:
+    """Etapa 2 dos centavos: o realizado somado fica em centavos exatos (fecha com o Sienge)."""
+    for k in chaves:
+        r = matriz[k]["realizado"]
+        for m in list(r.keys()):
+            r[m] = round(r[m], 2)
 
 
 def _linhas_realizado(q, agrupado: bool, *extra_cols):
@@ -334,6 +345,7 @@ def agregar_realizado_receitas_sienge(
     """Soma recebimentos INC-* + BM-* na matriz (produto_id, plano_id) × mês."""
     planos_id_by_name, planos_redutora = build_planos_maps(db)
     planos_permitidos_set = set(planos_permitidos)
+    tocadas: set = set()
 
     q = _consulta_recebimentos(db, ano, produtos_permitidos)
     if q is None:
@@ -348,3 +360,5 @@ def agregar_realizado_receitas_sienge(
         mes_str = MESES_STR[mes_num - 1]
         val = -soma_abs if _eh_redutora(plano_id, category, planos_redutora) else soma
         matriz[(cc_id, plano_id)]["realizado"][mes_str] += val
+        tocadas.add((cc_id, plano_id))
+    _arredondar_realizado(matriz, tocadas)
