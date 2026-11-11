@@ -54,3 +54,53 @@ def test_outro_erro_nao_repete(monkeypatch):
     with pytest.raises(ValueError):
         sienge_sync._sync_cc_com_reconexao(_DbFalso(), SimpleNamespace(id_sienge="1"), "a", "b")
     assert chamadas == [1]
+
+
+def test_repete_quando_a_queda_vem_como_pending_rollback(monkeypatch):
+    from sqlalchemy.exc import PendingRollbackError
+
+    chamadas = []
+
+    def falso(db, cc, ini, fim, include_engineering=False):
+        chamadas.append(1)
+        if len(chamadas) == 1:
+            raise PendingRollbackError(
+                "This Session's transaction has been rolled back due to a previous exception during flush. "
+                "Original exception was: (psycopg2.OperationalError) SSL connection has been closed unexpectedly"
+            )
+
+    monkeypatch.setattr(sienge_sync, "sync_single_cc_sienge_data", falso)
+    db = _DbFalso()
+    sienge_sync._sync_cc_com_reconexao(db, SimpleNamespace(id_sienge="10100"), "a", "b")
+    assert chamadas == [1, 1] and db.rollbacks == 1
+
+
+def test_repete_quando_a_causa_e_queda(monkeypatch):
+    chamadas = []
+
+    def falso(db, cc, ini, fim, include_engineering=False):
+        chamadas.append(1)
+        if len(chamadas) == 1:
+            try:
+                raise _queda()
+            except OperationalError as e:
+                raise RuntimeError("gravação falhou") from e
+
+    monkeypatch.setattr(sienge_sync, "sync_single_cc_sienge_data", falso)
+    sienge_sync._sync_cc_com_reconexao(_DbFalso(), SimpleNamespace(id_sienge="1"), "a", "b")
+    assert chamadas == [1, 1]
+
+
+def test_pending_rollback_sem_queda_nao_repete(monkeypatch):
+    from sqlalchemy.exc import PendingRollbackError
+
+    chamadas = []
+
+    def falso(db, cc, ini, fim, include_engineering=False):
+        chamadas.append(1)
+        raise PendingRollbackError("rolled back due to a previous exception: IntegrityError duplicate key")
+
+    monkeypatch.setattr(sienge_sync, "sync_single_cc_sienge_data", falso)
+    with pytest.raises(PendingRollbackError):
+        sienge_sync._sync_cc_com_reconexao(_DbFalso(), SimpleNamespace(id_sienge="1"), "a", "b")
+    assert chamadas == [1]
