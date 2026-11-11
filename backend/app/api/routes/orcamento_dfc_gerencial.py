@@ -1,7 +1,6 @@
 """Rota do DFC gerencial. Não altera o DFC atual — só lê as mesmas fontes."""
 from __future__ import annotations
 
-import copy
 from typing import Optional
 
 from fastapi import APIRouter, Depends
@@ -36,7 +35,8 @@ def _itens_mldu(db: Session, payload: dict, itens: list, item_kind: str) -> tupl
     scaled = maybe_apply_holding_mldu(
         db,
         True,
-        {**payload, "itens": copy.deepcopy(itens)},
+        # A camada MLDU copia cada linha (acom_*); não precisa copiar antes.
+        {**payload, "itens": itens},
         item_kind=item_kind,
     )
     return scaled.get("itens", []), list(scaled.get("holding_avisos") or [])

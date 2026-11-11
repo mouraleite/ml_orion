@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import copy
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -16,6 +15,19 @@ from app.services.periodos import MESES_STR
 
 MONTHLY_KEYS = list(MESES_STR) + ["total_anual", "total"]
 
+
+
+def _copia(obj):
+    """Cópia profunda de dados em formato JSON (dict/list), bem mais rápida que deepcopy.
+
+    11/11/2026: deepcopy era ~1/3 do tempo da DFC gerencial. As linhas aqui só
+    têm dicts, listas e valores simples; o resto é imutável e pode ser reaproveitado.
+    """
+    if isinstance(obj, dict):
+        return {k: _copia(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_copia(v) for v in obj]
+    return obj
 
 def _cc_is_parceria(nome: str | None) -> bool:
     """CC de parceria (ex.: '... - PARCERIA GAP'): caixa 100% do parceiro, MLDU = 0."""
@@ -223,7 +235,7 @@ def _scale_acom_despesas_for_ctx(ctx: HoldingContext, item: dict, payload: dict)
     ano = _payload_ano(payload, item)
     if not (ano and ctx.produto_is_temporal(pid)):
         return scale_acompanhamento_despesas_item(item, ctx.factor_for_produto(pid))
-    out = copy.deepcopy(item)
+    out = _copia(item)
     for bucket in ("orcado", "forecast", "realizado"):
         for i, m in enumerate(MESES_STR, start=1):
             out[bucket][m] = _scale_number(out[bucket].get(m), ctx.factor_for_produto_mes(pid, ano, i))
@@ -249,7 +261,7 @@ def _scale_acom_receitas_for_ctx(ctx: HoldingContext, item: dict, payload: dict)
     ano = _payload_ano(payload, item)
     if not (ano and ctx.produto_is_temporal(pid)):
         return scale_acompanhamento_receitas_item(item, ctx.factor_for_produto(pid))
-    out = copy.deepcopy(item)
+    out = _copia(item)
     for bucket in ("orcado", "forecast", "realizado"):
         for i, m in enumerate(MESES_STR, start=1):
             out[bucket][m] = _scale_number(out[bucket].get(m), ctx.factor_for_produto_mes(pid, ano, i))
@@ -286,7 +298,7 @@ def scale_venda_grouped_row(row: dict, factor: float) -> dict:
 
 
 def scale_acompanhamento_despesas_item(item: dict, factor: float) -> dict:
-    out = copy.deepcopy(item)
+    out = _copia(item)
     for bucket in ("orcado", "forecast", "realizado"):
         for m in MESES_STR + ["total"]:
             out[bucket][m] = _scale_number(out[bucket].get(m), factor)
@@ -307,7 +319,7 @@ def scale_acompanhamento_despesas_item(item: dict, factor: float) -> dict:
 
 
 def scale_acompanhamento_receitas_item(item: dict, factor: float) -> dict:
-    out = copy.deepcopy(item)
+    out = _copia(item)
     for bucket in ("orcado", "forecast", "realizado"):
         for m in MESES_STR + ["total"]:
             out[bucket][m] = _scale_number(out[bucket].get(m), factor)
@@ -334,7 +346,7 @@ def _scale_venda_bucket_month(bucket: dict, factor: float) -> None:
 
 
 def scale_acompanhamento_vendas_item(item: dict, factor: float) -> dict:
-    out = copy.deepcopy(item)
+    out = _copia(item)
     for subcat in ("vendas", "distratos"):
         for source in ("orcado", "forecast", "realizado"):
             for m in MESES_STR:
