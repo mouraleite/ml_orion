@@ -1,7 +1,6 @@
 """Rota de despesas por empreendimento. Não altera orçado/realizado/forecast — só lê."""
 from __future__ import annotations
 
-import copy
 from typing import Optional
 
 from fastapi import APIRouter, Depends
@@ -29,7 +28,8 @@ def _itens_mldu(db: Session, payload: dict, itens: list) -> tuple[list, list]:
     scaled = maybe_apply_holding_mldu(
         db,
         True,
-        {**payload, "itens": copy.deepcopy(itens)},
+        # A camada MLDU copia cada linha (acom_*); não precisa copiar antes.
+        {**payload, "itens": itens},
         item_kind="acom_despesas",
     )
     return scaled.get("itens", []), list(scaled.get("holding_avisos") or [])

@@ -60,12 +60,25 @@ def _by_prod_plan(itens: List[dict]) -> Dict[Tuple[Any, Any], Dict[str, Dict[str
     return out
 
 
-def _produto_meta(opcoes_produtos: List[dict], produto_id: Any) -> Dict[str, Any]:
-    by_id = {}
+_MAPA_PRODUTOS: Tuple[Any, Dict[Any, dict]] = (None, {})
+
+
+def _mapa_produtos(opcoes_produtos: List[dict]) -> Dict[Any, dict]:
+    """id → produto, montado uma vez por lista (antes era refeito a cada linha)."""
+    global _MAPA_PRODUTOS
+    ref, mapa = _MAPA_PRODUTOS
+    if ref is opcoes_produtos:
+        return mapa
+    mapa = {}
     for p in opcoes_produtos or []:
         if isinstance(p, dict) and p.get("id") is not None:
-            by_id[p["id"]] = p
-    p = by_id.get(produto_id) or {}
+            mapa[p["id"]] = p
+    _MAPA_PRODUTOS = (opcoes_produtos, mapa)
+    return mapa
+
+
+def _produto_meta(opcoes_produtos: List[dict], produto_id: Any) -> Dict[str, Any]:
+    p = _mapa_produtos(opcoes_produtos).get(produto_id) or {}
     emp_id = str(p.get("id_empresa") or "").strip() or "_sem"
     emp_nome = str(p.get("nome_empresa") or "").strip() or "Sem empresa"
     cc_nome = str(p.get("nome") or "").strip() or f"CC {produto_id}"
@@ -78,12 +91,17 @@ def _produto_meta(opcoes_produtos: List[dict], produto_id: Any) -> Dict[str, Any
 
 
 def _mix(key, rec_map, desp_map, serie: str) -> Dict[str, float]:
-    acc = _empty_meses()
-    if key in rec_map:
-        acc = _add_meses(acc, _signed(rec_map[key][serie], SENTIDO_ENTRADA))
-    if key in desp_map:
-        acc = _add_meses(acc, _signed(desp_map[key][serie], SENTIDO_SAIDA))
-    return acc
+    """Entradas − saídas por mês, numa passada só (mesmo resultado de antes)."""
+    rec = rec_map[key][serie] if key in rec_map else None
+    desp = desp_map[key][serie] if key in desp_map else None
+    if rec is None and desp is None:
+        return _empty_meses()
+    if desp is None:
+        return {m: 0.0 + float(rec.get(m, 0.0) or 0.0) for m in MESES_STR}
+    if rec is None:
+        return {m: 0.0 - float(desp.get(m, 0.0) or 0.0) for m in MESES_STR}
+    # "0.0 +" mantém o zero sem sinal, como na soma original.
+    return {m: (0.0 + float(rec.get(m, 0.0) or 0.0)) - float(desp.get(m, 0.0) or 0.0) for m in MESES_STR}
 
 
 def _leaf_amounts(
