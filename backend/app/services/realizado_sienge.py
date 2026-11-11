@@ -150,12 +150,37 @@ def query_parcelas_contas_pagar(
     if consulta is None:
         return []
     q, filtra_dept = consulta
-    rows = q.order_by(ActualTransaction.transaction_date.desc()).all()
+    # Linhas leves (só as colunas usadas), sem montar um objeto ORM por parcela:
+    # no Realizado de despesas são ~76 mil parcelas no ano (11/11/2026).
+    rows = q.with_entities(*_COLUNAS_PARCELA).order_by(ActualTransaction.transaction_date.desc()).all()
     if filtra_dept:
         from app.services.departamento_leitura import parcela_pertence_ao_dept
 
-        return [r for r in rows if parcela_pertence_ao_dept(db, r.authorization_name, dept)]
+        pertence: Dict[Optional[str], bool] = {}
+        saida = []
+        for r in rows:
+            auth = r.authorization_name
+            if auth not in pertence:
+                pertence[auth] = parcela_pertence_ao_dept(db, auth, dept)
+            if pertence[auth]:
+                saida.append(r)
+        return saida
     return rows
+
+
+_COLUNAS_PARCELA = (
+    ActualTransaction.id,
+    ActualTransaction.source_id,
+    ActualTransaction.cost_center_id,
+    ActualTransaction.category,
+    ActualTransaction.transaction_date,
+    ActualTransaction.value,
+    ActualTransaction.creditor_name,
+    ActualTransaction.document_name,
+    ActualTransaction.document_number,
+    ActualTransaction.bill_id,
+    ActualTransaction.authorization_name,
+)
 
 
 def build_planos_maps(db: Session) -> Tuple[Dict[str, int], Dict[int, Any]]:
@@ -175,12 +200,15 @@ def agregar_realizado_despesas_sienge(
     planos_permitidos: List[int],
     dept=None,
     agrupado: bool = False,
+    somente_chaves: bool = False,
 ) -> None:
     """Soma parcelas OUT-* na matriz (produto_id, plano_id) × mês.
 
     Padrão: parcela a parcela, na ordem da lista. ``agrupado`` soma no banco
     (mais rápido) e pode mudar o centavo quando o total cai em meio centavo
     (ex.: 2278,575) — aceito só no DFC.
+    ``somente_chaves``: só cria as linhas (produto, plano) que têm parcela, sem
+    somar valores — para quem precisa apenas das opções de filtro (11/11/2026).
     """
     from app.services.departamento_leitura import (
         eh_residual_leitura,
@@ -198,6 +226,36 @@ def agregar_realizado_despesas_sienge(
         return
     q, filtra_dept = consulta
     pertence: Dict[Optional[str], bool] = {}
+
+    if somente_chaves:
+        combinacoes = (
+            q.with_entities(
+                ActualTransaction.cost_center_id,
+                ActualTransaction.category,
+                ActualTransaction.authorization_name,
+                func.max(ActualTransaction.transaction_date),
+            )
+            .group_by(
+                ActualTransaction.cost_center_id,
+                ActualTransaction.category,
+                ActualTransaction.authorization_name,
+            )
+            .order_by(func.max(ActualTransaction.transaction_date).desc())
+            .all()
+        )
+        for cc_id, category, auth, _ultima in combinacoes:
+            plano_id = planos_id_by_name.get(category)
+            if not plano_id:
+                continue
+            if plano_id not in planos_permitidos_set and not relax_planos:
+                continue
+            if filtra_dept:
+                if auth not in pertence:
+                    pertence[auth] = parcela_pertence_ao_dept(db, auth, dept)
+                if not pertence[auth]:
+                    continue
+            init_key(cc_id, plano_id)
+        return
 
     linhas = _linhas_realizado(q, agrupado, ActualTransaction.authorization_name)
     for cc_id, category, auth, mes_num, soma, soma_abs in linhas:

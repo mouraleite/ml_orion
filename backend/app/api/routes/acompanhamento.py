@@ -47,7 +47,10 @@ def get_acompanhamento_despesas(
     current_user = Depends(get_current_user),
     forecast_id: Optional[int] = None,
     realizado_agrupado: bool = False,
+    realizado_so_chaves: bool = False,
 ):
+    # realizado_so_chaves: uso interno (Realizado de despesas) — o realizado fica
+    # zerado; só as linhas/opções de filtro são montadas (11/11/2026).
     consolidado = False  # Onda A: legado (todos dept.) desativado
     is_consolidado = False
     if consolidado and is_gestor_user(current_user):
@@ -159,7 +162,7 @@ def get_acompanhamento_despesas(
 
     agregar_realizado_despesas_sienge(
         matriz, init_key, db, ano, produtos_permitidos, planos_permitidos, dept=dept,
-        agrupado=realizado_agrupado,
+        agrupado=realizado_agrupado, somente_chaves=realizado_so_chaves,
     )
 
     resultado = []
