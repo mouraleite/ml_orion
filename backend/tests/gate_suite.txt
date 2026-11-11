@@ -49,3 +49,4 @@ tests/test_parecer_gemini.py
 tests/test_formulas_a_mao.py
 tests/test_recarga_agendada.py
 tests/test_mes_fechado_oficial.py
+tests/test_resposta_rapida.py
