@@ -86,14 +86,38 @@ def _sync_cc_com_reconexao(db: Session, cc, start_date: str, end_date: str) -> N
     closed unexpectedly") e o CC 10100 ficou sem dados. O download fica em
     cache, então a segunda tentativa é rápida e usa uma conexão nova.
     """
-    from sqlalchemy.exc import OperationalError
-
     try:
         sync_single_cc_sienge_data(db, cc, start_date, end_date, include_engineering=False)
-    except OperationalError as exc:
+    except Exception as exc:  # noqa: BLE001
+        if not _queda_de_conexao(exc):
+            raise
         print(f"[Sienge Sync] Conexão caiu no CC {cc.id_sienge}; tentando de novo: {exc}")
         db.rollback()
         sync_single_cc_sienge_data(db, cc, start_date, end_date, include_engineering=False)
+
+
+def _queda_de_conexao(exc: BaseException) -> bool:
+    """A exceção (ou a causa dela) é a conexão com o banco que caiu.
+
+    11/11/2026, sync das 14h: a queda aconteceu durante uma gravação e o erro
+    chegou como "transaction has been rolled back due to a previous exception
+    during flush" (PendingRollbackError), com a OperationalError só como
+    "Original exception" — por isso a checagem olha a cadeia e a mensagem.
+    """
+    from sqlalchemy.exc import DBAPIError, OperationalError, PendingRollbackError
+
+    vistos = set()
+    atual: Optional[BaseException] = exc
+    while atual is not None and id(atual) not in vistos:
+        vistos.add(id(atual))
+        if isinstance(atual, OperationalError):
+            return True
+        if isinstance(atual, DBAPIError) and getattr(atual, "connection_invalidated", False):
+            return True
+        if isinstance(atual, PendingRollbackError) and "OperationalError" in str(atual):
+            return True
+        atual = atual.__cause__ or atual.__context__
+    return False
 
 
 def sync_all_sienge_data(db: Session, full_load: bool = False, desde: Optional[str] = None):
