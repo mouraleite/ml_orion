@@ -30,7 +30,9 @@ class VisionNode(Base):
     vision = relationship("Vision", back_populates="nodes")
 
     # Vínculos com planos financeiros nesta visão
-    plan_links = relationship("FinancialPlanVisionLink", back_populates="vision_node", cascade="all, delete-orphan")
+    # selectin: carrega os vínculos de todos os nós numa consulta só (antes, uma por nó;
+    # com o Render no Oregon e o Neon na Virgínia, ~70 ms cada — 250 consultas por tela).
+    plan_links = relationship("FinancialPlanVisionLink", back_populates="vision_node", cascade="all, delete-orphan", lazy="selectin")
 
 
 class FinancialPlanVisionLink(Base):
@@ -43,5 +45,5 @@ class FinancialPlanVisionLink(Base):
     vision_node_id = Column(Integer, ForeignKey("vision_nodes.id"), nullable=True)
 
     # Relacionamentos
-    financial_plan = relationship("FinancialPlan", back_populates="vision_links")
+    financial_plan = relationship("FinancialPlan", back_populates="vision_links", lazy="selectin")
     vision_node = relationship("VisionNode", back_populates="plan_links")
