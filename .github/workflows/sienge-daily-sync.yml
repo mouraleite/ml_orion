@@ -37,7 +37,7 @@ jobs:
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
         run: |
           set -euo pipefail
-          URL="https://erp-ml-api-b04m.onrender.com"
+          URL="https://erp-ml-api-va.onrender.com"
           echo "Acordando a API..."
           up=0
           for i in 1 2 3 4 5 6 8 10; do
