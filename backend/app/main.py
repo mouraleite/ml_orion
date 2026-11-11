@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from app.core.config import settings, cors_allow_origins
 from app.api.routes import auth, users, governance, viabilities, curves, snapshots, actuals, documents, dashboard, orcamento_dfc_gerencial, orcamento_despesas_empreendimento, apoio, analysis, market_indices, tracking, tracking_dfc, sync, partnership, system, matriz_permissoes, tax_regimes, orcamentos, fechamento, forecasts, auditoria, integracao, migration, acompanhamento, sienge, access_profiles, holding
 from app.api.module_write_middleware import ModuleWriteMiddleware
@@ -38,6 +39,8 @@ app = FastAPI(
 )
 
 _cors_origins = cors_allow_origins()
+# Respostas grandes (DFC ~2,8 MB) vão comprimidas; nível 5 poupa CPU no plano free.
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
 app.add_middleware(ModuleWriteMiddleware)
 app.add_middleware(
     CORSMiddleware,

@@ -7,6 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.core.resposta_rapida import RespostaJSON
 from app.api.deps import get_active_department, get_current_user, get_db
 from app.api.routes.acompanhamento import get_acompanhamento_despesas
 from app.api.routes.dashboard import _ids_forecast_dfc, _versoes_forecast_dfc, _visao_padrao_spec
@@ -114,7 +115,7 @@ def get_despesas_empreendimento(
     if descricao and not desp_id_ref:
         avisos.append(f"Não há forecast de despesas em {ano_ref} com a descrição «{descricao}».")
 
-    return {
+    return RespostaJSON({
         "ano": ano,
         "ano_ref": ano_ref,
         "visao": (
@@ -129,4 +130,4 @@ def get_despesas_empreendimento(
         **arvore,
         "opcoes_produtos": opcoes_produtos,
         "holding_avisos": avisos,
-    }
+    })

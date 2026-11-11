@@ -7,6 +7,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.core.resposta_rapida import RespostaJSON
 from app.api.deps import get_active_department, get_current_user, get_db
 from app.api.routes.acompanhamento import (
     get_acompanhamento_despesas,
@@ -116,7 +117,7 @@ def get_orcamento_dfc_gerencial(
 
     avisos = list(dict.fromkeys(avisos_desp + avisos_rec + avisos_desp_n1 + avisos_rec_n1))
 
-    return {
+    return RespostaJSON({
         "ano": ano,
         "ano_anterior": ano - 1,
         "meses_selecionados": meses_validos,
@@ -147,4 +148,4 @@ def get_orcamento_dfc_gerencial(
             rec_n1_mldu=rec_n1_mldu,
             desp_n1_mldu=desp_n1_mldu,
         ),
-    }
+    })
