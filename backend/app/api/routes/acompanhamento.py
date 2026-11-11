@@ -29,6 +29,12 @@ from app.services.realizado_sienge import (
 
 router = APIRouter()
 
+
+def _ordem_chave(chave):
+    """Ordem fixa das linhas (antes vinha da ordem de leitura do banco, que varia)."""
+    partes = chave if isinstance(chave, tuple) else (chave,)
+    return tuple((0, p, "") if isinstance(p, (int, float)) else (1, 0, str(p)) for p in partes)
+
 def get_produtos_permitidos(db: Session, dept) -> List[int]:
     from app.services.departamento_leitura import produtos_ids_leitura
     return produtos_ids_leitura(db, dept)
@@ -166,7 +172,7 @@ def get_acompanhamento_despesas(
     )
 
     resultado = []
-    for k, v in matriz.items():
+    for k, v in sorted(matriz.items(), key=lambda kv: _ordem_chave(kv[0])):
         v["orcado"]["total"] = sum(v["orcado"][m] for m in MESES_STR)
         v["forecast"]["total"] = sum(v["forecast"][m] for m in MESES_STR)
         v["realizado"]["total"] = sum(v["realizado"][m] for m in MESES_STR)
@@ -330,7 +336,7 @@ def get_acompanhamento_receitas(
     )
 
     resultado = []
-    for k, v in matriz.items():
+    for k, v in sorted(matriz.items(), key=lambda kv: _ordem_chave(kv[0])):
         v["orcado"]["total"] = sum(v["orcado"][m] for m in MESES_STR)
         v["forecast"]["total"] = sum(v["forecast"][m] for m in MESES_STR)
         v["realizado"]["total"] = sum(v["realizado"][m] for m in MESES_STR)
@@ -500,7 +506,7 @@ def get_acompanhamento_vendas(
             matriz[real.cost_center_id]["distratos"]["realizado"][mes_str]["raw_vgv"] += abs(real.value or 0.0)
 
     resultado = []
-    for k, v in matriz.items():
+    for k, v in sorted(matriz.items(), key=lambda kv: _ordem_chave(kv[0])):
         # Calcular os totais PRIMEIRO para poder usar os tickets médios anuais como fallback
         for subcat in ["vendas", "distratos"]:
             for tipo in ["orcado", "forecast", "realizado"]:

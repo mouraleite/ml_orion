@@ -15,7 +15,7 @@ mais o realizado das telas de acompanhamento.
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
-from sqlalchemy import extract, func, or_
+from sqlalchemy import Numeric, cast, extract, func, or_
 
 from app.models.actual_transaction import ActualTransaction
 from app.models.financial_plan import FinancialPlan
@@ -152,7 +152,7 @@ def query_parcelas_contas_pagar(
     q, filtra_dept = consulta
     # Linhas leves (só as colunas usadas), sem montar um objeto ORM por parcela:
     # no Realizado de despesas são ~76 mil parcelas no ano (11/11/2026).
-    rows = q.with_entities(*_COLUNAS_PARCELA).order_by(ActualTransaction.transaction_date.desc()).all()
+    rows = q.with_entities(*_COLUNAS_PARCELA).order_by(ActualTransaction.transaction_date.desc(), ActualTransaction.id.desc()).all()
     if filtra_dept:
         from app.services.departamento_leitura import parcela_pertence_ao_dept
 
@@ -297,8 +297,10 @@ def _linhas_realizado(q, agrupado: bool, *extra_cols):
         rows = (
             q.with_entities(
                 *chaves,
-                func.coalesce(func.sum(ActualTransaction.value), 0.0),
-                func.coalesce(func.sum(func.abs(ActualTransaction.value)), 0.0),
+                # Soma em decimal exato: em ponto flutuante o resultado dependia da ordem
+                # em que o banco somava e o centavo podia oscilar entre chamadas (11/11/2026).
+                func.coalesce(func.sum(cast(ActualTransaction.value, Numeric)), 0),
+                func.coalesce(func.sum(func.abs(cast(ActualTransaction.value, Numeric))), 0),
             )
             .group_by(*chaves)
             .all()
@@ -321,7 +323,7 @@ def _linhas_leves(q, *extra_cols):
             ActualTransaction.transaction_date,
             ActualTransaction.value,
         )
-        .order_by(ActualTransaction.transaction_date.desc())
+        .order_by(ActualTransaction.transaction_date.desc(), ActualTransaction.id.desc())
         .all()
     )
 
@@ -338,7 +340,7 @@ def query_recebimentos_contas_receber(
     q = _consulta_recebimentos(db, ano, produtos_permitidos, produto_id, mes, busca)
     if q is None:
         return []
-    rows = q.order_by(ActualTransaction.transaction_date.desc()).all()
+    rows = q.order_by(ActualTransaction.transaction_date.desc(), ActualTransaction.id.desc()).all()
     return [r for r in rows if not categoria_excluida_receita_realizado(r.category)]
 
 
