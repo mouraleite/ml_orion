@@ -32,8 +32,14 @@ def hoje_brasilia(hoje: date | datetime | None = None) -> date:
     return hoje
 
 
-def corte_caixa(ano: int, hoje: date | datetime | None = None) -> int:
-    """Último mês fechado no ano civil. 0 = o ano inteiro ainda é YTG."""
+def corte_caixa(ano: int, hoje: date | datetime | None = None, cortes: Optional[Dict[int, Optional[int]]] = None) -> int:
+    """Último mês fechado no ano. 0 = o ano inteiro ainda é YTG.
+
+    Regra oficial (11/11/2026): a tabela da tela Fechamento (``cortes`` = {ano: último
+    mês fechado em sequência}). Ano sem fechamento cadastrado usa o calendário.
+    """
+    if cortes and cortes.get(ano) is not None:
+        return int(cortes[ano])
     d = hoje_brasilia(hoje)
     if ano < d.year:
         return 12
@@ -267,6 +273,9 @@ def payload_geracao_caixa(
     precisa_mldu = holding_mldu or rec_n_mldu is not None
     snaps_mldu = saldos_31_12(db, ids_empresa=ids, mldu=True) if precisa_mldu else {}
     snaps_principal = snaps_mldu if holding_mldu else snaps_cheio
+    from app.services.forecast_mes_fechado import corte_por_fechamento
+
+    cortes = {a: corte_por_fechamento(db, a) for a in (ano, ano - 1)}
     bloco = montar_bloco_geracao(
         ano=ano,
         nodes=nodes,
@@ -276,6 +285,7 @@ def payload_geracao_caixa(
         desp_n1=desp_n1,
         snapshots=snaps_principal,
         hoje=hoje,
+        cortes=cortes,
     )
     if rec_n_mldu is not None:
         bloco["mldu"] = montar_bloco_geracao(
@@ -287,6 +297,7 @@ def payload_geracao_caixa(
             desp_n1=desp_n1_mldu or [],
             snapshots=snaps_mldu,
             hoje=hoje,
+            cortes=cortes,
         )
     else:
         bloco["mldu"] = None
@@ -303,11 +314,12 @@ def montar_bloco_geracao(
     desp_n1: List[dict],
     snapshots: Dict[int, float],
     hoje: date | datetime | None = None,
+    cortes: Optional[Dict[int, Optional[int]]] = None,
 ) -> Dict[str, Any]:
     real_n, orc_n = serie_liquido_visao(nodes, rec_n, desp_n)
     real_n1, orc_n1 = serie_liquido_visao(nodes, rec_n1, desp_n1)
-    fluxo_n = fluxo_ytd_ytg(real_n, orc_n, corte_caixa(ano, hoje))
-    fluxo_n1 = fluxo_ytd_ytg(real_n1, orc_n1, corte_caixa(ano - 1, hoje))
+    fluxo_n = fluxo_ytd_ytg(real_n, orc_n, corte_caixa(ano, hoje, cortes))
+    fluxo_n1 = fluxo_ytd_ytg(real_n1, orc_n1, corte_caixa(ano - 1, hoje, cortes))
     fluxos = {ano: fluxo_n, ano - 1: fluxo_n1}
     n = _bloco_ano(ano=ano, fluxo=fluxo_n, snapshots=snapshots, fluxos_cadeia=fluxos)
     n1 = _bloco_ano(ano=ano - 1, fluxo=fluxo_n1, snapshots=snapshots, fluxos_cadeia=fluxos)

@@ -176,7 +176,7 @@ class TestForecastCopiaETotais:
         assert fi.fev == 40.0
         assert fi.total_anual == 50.0
 
-    def test_mes_fechado_nao_altera_valor(self, client, db_session):
+    def test_mes_fechado_grava_o_realizado(self, client, db_session):
         ano = 2046
         oid = _criar_orcamento_despesas(client, ano)
         client.post(f"/api/v1/orcamentos/despesas/{ano}/salvar", json={
@@ -207,7 +207,13 @@ class TestForecastCopiaETotais:
                 "total_anual": 21.0,
             }]
         })
-        assert r2.status_code == 403, r2.text
+        # Regra de 11/11/2026: mês fechado grava o realizado do Sienge (aqui não há
+        # realizado, então 0) e ignora o valor que veio da tela, sem recusar o salvamento.
+        assert r2.status_code == 200, r2.text
+        from app.models.forecast import ForecastItem
+        db_session.expire_all()
+        item = db_session.query(ForecastItem).filter(ForecastItem.produto_id == 1, ForecastItem.plano_financeiro_id == 1).order_by(ForecastItem.id.desc()).first()
+        assert item.jan == 0.0 and item.fev == 20.0
 
 
 class TestAcompanhamentoTresBandas:
