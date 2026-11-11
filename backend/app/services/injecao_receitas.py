@@ -20,7 +20,7 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Dict, Iterable, Optional
 
-from sqlalchemy import and_, extract, func, or_
+from sqlalchemy import Numeric, and_, cast, extract, func, or_
 from sqlalchemy.orm import Session
 
 from app.models.actual_transaction import ActualTransaction
@@ -145,7 +145,7 @@ def realizado_e_em_aberto(db: Session, ano: int, produtos: Iterable[int], plano:
                 ActualTransaction.cost_center_id,
                 mes_col,
                 ActualTransaction.is_forecast,
-                func.sum(ActualTransaction.value),
+                func.sum(cast(ActualTransaction.value, Numeric)),  # decimal exato (11/11/2026)
             )
             .filter(
                 ActualTransaction.transaction_type == "INCOME",
